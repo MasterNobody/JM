@@ -1,19 +1,20 @@
-/**************************************************************************************
-**************************************************************************************
-* Filehandle.c	 Handles the operations how to read
-*								 symbols of the interim file format or some
-*								 other specified input formats
-*
-* Main contributors (see contributors.h for copyright, address and affiliation details)
-*
-* Thomas Stockhammer			<stockhammer@ei.tum.de>
-* Detlev Marpe                  <marpe@hhi.de>
-***************************************************************************************
-***************************************************************************************/
+/*!
+ **************************************************************************************
+ * \file
+ *    filehandle.c
+ * \brief
+ *    Handles the operations how to write
+ *    the generated symbols on the interim file format or some
+ *    other specified output formats
+ * \author
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
+ *      - Thomas Stockhammer            <stockhammer@ei.tum.de>
+ *      - Detlev Marpe                  <marpe@hhi.de>
+ ***************************************************************************************
+ */
 
 #include "contributors.h"
 
-#include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
@@ -23,63 +24,78 @@
 #include "global.h"
 #include "elements.h"
 #if TRACE
-#include <string.h>    /* strncpy */
+#include <string.h>    // strncpy
 #endif
 
-/************************************************************************
-*
-*  Routine      void error(char *text)
-*
-*  Description: Error Handling Procedure
-*
-************************************************************************/
-
-void error(char *text)
+/*!
+ ************************************************************************
+ * \brief
+ *    Error handling procedure. Print error message to stderr and exit
+ *    with supplied code.
+ * \param text
+ *    Error message
+ ************************************************************************
+ */
+void error(char *text, int code)
 {
-	fprintf(stderr, "%s\n", errortext);
-	exit(1);
+  fprintf(stderr, "%s\n", text);
+  exit(code);
 }
 
 
-
-/************************************************************************
-*
-*  Routine      int start_slice()
-*
-*  Description: This function initializes the appropriate methods for 
-*               decoding a slice in the given symbol mode
-*			
-*
-************************************************************************/
-
+/*!
+ ************************************************************************
+ *  \brief
+ *     This function generates the appropriate slice
+ *     header
+ ************************************************************************
+ */
 void start_slice(struct img_par *img, struct inp_par *inp)
 {
-	Slice *currSlice = img->currentSlice;
-	
-	switch(inp->of_mode)
-	{
-		case PAR_OF_26L:
-			
-			if (inp->symbol_mode == UVLC)
-			{
-				/* Current TML File Format */
-				nal_startcode_follows = uvlc_startcode_follows;
-				currSlice->readSlice = readSliceUVLC;
-				currSlice->partArr[0].readSyntaxElement = readSyntaxElement_UVLC; 
-			}
-			else
-			{
-				/* CABAC File Format */
-				nal_startcode_follows = cabac_startcode_follows;
-				currSlice->readSlice = readSliceCABAC;
-				currSlice->partArr[0].readSyntaxElement = readSyntaxElement_CABAC;
-			}
-			break;
-		default: 
-			sprintf(errortext, "Output File Mode %d not supported", inp->of_mode);
-			error(errortext);
-			break;
-	}							
+  Slice *currSlice = img->currentSlice;
+  int i;
+
+  switch(inp->of_mode)
+  {
+    case PAR_OF_26L:
+
+      if (inp->symbol_mode == UVLC)
+      {
+        // Current TML File Format
+        nal_startcode_follows = uvlc_startcode_follows;
+        currSlice->readSlice = readSliceUVLC;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_UVLC;
+      }
+      else
+      {
+        // CABAC File Format
+        nal_startcode_follows = cabac_startcode_follows;
+        currSlice->readSlice = readSliceCABAC;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_CABAC;
+      }
+      break;
+    case PAR_OF_SLICE:
+      if (inp->symbol_mode == UVLC)
+      {
+        nal_startcode_follows = uvlc_startcode_follows;
+        currSlice->readSlice = readSliceSLICE;
+        for (i=0; i<currSlice->max_part_nr; i++)
+          currSlice->partArr[i].readSyntaxElement = readSyntaxElement_SLICE;
+      }
+      else
+      {
+        // CABAC File Format
+        nal_startcode_follows = cabac_startcode_follows;
+        currSlice->readSlice = readSliceSLICE;
+        for (i=0; i<currSlice->max_part_nr; i++)
+          currSlice->partArr[i].readSyntaxElement = readSyntaxElement_CABAC;
+      }
+      break;
+    default:
+      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", inp->of_mode);
+      error(errortext,1);
+      break;
+  }
 }
 
 

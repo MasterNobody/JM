@@ -1,19 +1,18 @@
-/***************************************************************************
+/*!
+ ***************************************************************************
+ * \file
+ *    biariencode.h
  *
- * Module      :  biariencode.h
+ * \brief
+ *    Headerfile for binary arithmetic encoding routines
  *
- * Authors     :  Detlev Marpe 
- *								Gabi Blättermann 
- *              
+ * \author
+ *    Detlev Marpe,
+ *    Gabi Blättermann                                                     \n
+ *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
  *
- * Date        :  21. Oct 2000
- *
- * Description :  Headerfile for 
- *								binary arithmetic
- *                encoding routines 
- *                
- *      Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
- *
+ * \date
+ *    21. Oct 2000
  **************************************************************************
  */
 
@@ -22,7 +21,7 @@
 #define _BIARIENCOD_H_
 
 
-#define AAC_FRAC_TABLE 0  /* replaces division in the AC by a table lookup */
+#define AAC_FRAC_TABLE 0  //!< replaces division in the AC by a table lookup
 
 
 /************************************************************************
@@ -30,29 +29,29 @@
  ***********************************************************************
  */
 
-/* precision for arithmetic */
+//! precision for arithmetic
 #define CODE_VALUE_BITS 16
 
-/* 1/4  2/4  3/4  of interval */
-#define FIRST_QTR 0x4000 //(1<<(CODE_VALUE_BITS-2))
-#define HALF      0x8000 //(FIRST_QTR+FIRST_QTR)
-#define THIRD_QTR 0xC000 //(HALF+FIRST_QTR)
+// 1/4  2/4  3/4  of interval
+#define FIRST_QTR 0x4000 //!< (1<<(CODE_VALUE_BITS-2))
+#define HALF      0x8000 //!< (FIRST_QTR+FIRST_QTR)
+#define THIRD_QTR 0xC000 //!< (HALF+FIRST_QTR)
 
-/* maximum value of range */
-#define TOP_VALUE 0xFFFF //((1<<CODE_VALUE_BITS)-1)    
+//! maximum value of range
+#define TOP_VALUE 0xFFFF //!< ((1<<CODE_VALUE_BITS)-1)
 
 #ifdef AAC_FRAC_TABLE
 
-// ARITH_CUM_FREQ_TABLE[i]=(unsigned int)((pow(2,26)/i)+0.5);
+//! ARITH_CUM_FREQ_TABLE[i]=(unsigned int)((pow(2,26)/i)+0.5);
 const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 {
-       0,        0, 33554432,  22369621,  16777216,  13421773,  11184811,  9586981,  8388608,  7456540,  
- 6710886,  6100806,  5592405,   5162220,   4793490,   4473924,   4194304,  3947580,  3728270,  3532045,  
- 3355443,  3195660,  3050403,   2917777,   2796203,   2684355,   2581110,  2485513,  2396745,  2314099,  
- 2236962,  2164802,  2097152,   2033602,   1973790,   1917396,   1864135,  1813753,  1766023,  1720740,  
- 1677722,  1636802,  1597830,   1560671,   1525201,   1491308,   1458888,  1427848,  1398101,  1369569,  
- 1342177,  1315860,  1290555,   1266205,   1242757,   1220161,   1198373,  1177348,  1157049,  1137438,  
- 1118481,  1100145,  1082401,   1065220,   1048576,   1032444,   1016801,  1001625,   986895,   972592,  
+       0,        0, 33554432,  22369621,  16777216,  13421773,  11184811,  9586981,  8388608,  7456540,
+ 6710886,  6100806,  5592405,   5162220,   4793490,   4473924,   4194304,  3947580,  3728270,  3532045,
+ 3355443,  3195660,  3050403,   2917777,   2796203,   2684355,   2581110,  2485513,  2396745,  2314099,
+ 2236962,  2164802,  2097152,   2033602,   1973790,   1917396,   1864135,  1813753,  1766023,  1720740,
+ 1677722,  1636802,  1597830,   1560671,   1525201,   1491308,   1458888,  1427848,  1398101,  1369569,
+ 1342177,  1315860,  1290555,   1266205,   1242757,   1220161,   1198373,  1177348,  1157049,  1137438,
+ 1118481,  1100145,  1082401,   1065220,   1048576,   1032444,   1016801,  1001625,   986895,   972592,
   958698,   945195,   932068,    919300,    906877,    894785,    883011,   871544,   860370,   849479,
   838861,   828504,   818401,    808541,    798915,    789516,    780336,   771366,   762601,   754032,
   745654,   737460,   729444,    721601,    713924,    706409,    699051,   691844,   684784,   677867,
@@ -68,7 +67,7 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
  ***********************************************************************
  */
 
-/* some definitions to increase the readability of the source code  */
+// some definitions to increase the readability of the source code
 
 #define Elow            (eep->Elow)
 #define Ehigh           (eep->Ehigh)
@@ -79,6 +78,4 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 #define Ecodestrm_len   (eep->Ecodestrm_len)
 
 
-#endif  /* BIARIENCOD_H */
-
-
+#endif  // BIARIENCOD_H

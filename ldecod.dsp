@@ -127,7 +127,15 @@ SOURCE=.\ldecod\src\ldecod.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\loopFilter.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\macroblock.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\nal_part.c
 # End Source File
 # Begin Source File
 
@@ -143,7 +151,7 @@ SOURCE=.\ldecod\src\uvlc.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\ldecod\inc\B_frame.h
+SOURCE=.\ldecod\inc\b_frame.h
 # End Source File
 # Begin Source File
 
@@ -194,5 +202,9 @@ SOURCE=.\ldecod\inc\macroblock.h
 SOURCE=.\ldecod\inc\uvlc.h
 # End Source File
 # End Group
+# Begin Source File
+
+SOURCE=.\bin\decoder.cfg
+# End Source File
 # End Target
 # End Project

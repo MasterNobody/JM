@@ -1,19 +1,22 @@
-/************************************************************************
-*
-*  BitSBuf.h for H.26L decoder: Bit Stream Buffer handling. 
-*  
-************************************************************************/
+/*!
+ *************************************************************************************
+ * \file bitsbuf.h
+ *
+ * \brief
+ *    Bit Stream Buffer handling.
+ *
+ *************************************************************************************
+ */
 
-#ifndef _BITSBUF_H
-#define _BITSBUF_H
+#ifndef _BITSBUF_H_
+#define _BITSBUF_H_
 
 
 void InitializeSourceBitBuffer();
-int GetOneSliceIntoSourceBitBuffer(byte *Buf);
-int OpenBitstreamFile (char *fn);
+int  GetOneSliceIntoSourceBitBuffer(byte *Buf);
+int  OpenBitstreamFile (char *fn);
 void CloseBitstreamFile();
-
-
+void get_last_mb(struct img_par *img, struct inp_par *inp);
 
 #endif
 

@@ -1,23 +1,29 @@
-/****************************************************************
+/*!
+ *************************************************************************************
+ * \file b_frame.h
  *
- *  File b_frame.h :	Header file for B picture decoding 
+ * \brief
+ *    Header file for B picture coding
  *
- *	Main contributor and Contact Information
- *
- *		Byeong-Moon Jeon			<jeonbm@lge.com>
- *      LG Electronics Inc., Digital Media Research Lab.
+ * \author
+ *    Main contributor and Contact Information
+ *    - Byeong-Moon Jeon      <jeonbm@lge.com>                                      \n
+ *      LG Electronics Inc., Digital Media Research Lab.                            \n
  *      16 Woomyeon-Dong, Seocho-Gu, Seoul, 137-724, Korea
- *
- *****************************************************************/
+ *************************************************************************************
+ */
+#ifndef _B_FRAME_H_
+#define _B_FRAME_H_
 
-#define		SINGLE_SCAN 0
-#define		DOUBLE_SCAN 1
+
+#define   SINGLE_SCAN 0
+#define   DOUBLE_SCAN 1
 
 
 extern int ONE_FOURTH_TAP[3][2];
 extern const byte NCBP[48][2];
 extern byte PRED_IPRED[7][7][6];
-extern const byte IPRED_ORDER[36][2]; 
+extern const byte IPRED_ORDER[36][2];
 extern const int BLOCK_STEP[8][2];
 extern const byte SNGL_SCAN[16][2];
 extern const int JQ1[];
@@ -32,7 +38,8 @@ extern int seven[6][6];
 
 int **fw_refFrArr, ** bw_refFrArr;
 
-int ***dfMV;  //[92][72][2] 
-int ***dbMV;  //[92][72][2] 
+int ***dfMV;  // [92][72][2]
+int ***dbMV;  // [92][72][2]
 
 
+#endif

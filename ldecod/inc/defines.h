@@ -1,17 +1,18 @@
-/***************************************************************************
+/*!
+ **************************************************************************
+ * \file defines.h
  *
- * Modul       :  defines.h
+ * \brief
+ *    Headerfile containing some useful global definitions
  *
- * Author      :  Detlev Marpe
+ * \author
+ *    Detlev Marpe                                                        \n
+ *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
  *
- * Date        :  21. March 2001
- *
- * Description :  Headerfile containing some useful global definitions
- *                
- *      Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
- *		  
- **************************************************************************/
-
+ * \date
+ *    21. March 2001
+ **************************************************************************
+ */
 
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
@@ -19,51 +20,55 @@
 
 #define _ADAPT_LAST_GROUP_
 
-#define  MAX_INFO_WORD  300000       /* for one frame */
-#define MAX_CODED_FRAME_SIZE 200000	// bytes for one frame
-#define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20	// UVLC codewordsper combined picture/slice header maximum
-
-#define TRACE           0       /* 0:Trace off 1:Trace on*/
-
+#define MAX_INFO_WORD  300000               //!< for one frame
+#define MAX_CODED_FRAME_SIZE 200000         //!< bytes for one frame
+#define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
 #define UMV
+#define LOOP_FILTER_MB
 
-#define absm(A) ((A)<(0) ? (-(A)):(A)) /* abs macro, faster than procedure */
-#define MAX_VALUE       999999   /* used for start value for some variables */
+
+#define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
+#define MAX_VALUE       999999              //!< used for start value for some variables
 
 #define INTER_IMG_1     0
 #define INTER_IMG_MULT  1
 #define INTRA_IMG       2
 
 // B pictures
-#define B_IMG_1		3
-#define B_IMG_MULT	4
+#define B_IMG_1   3
+#define B_IMG_MULT  4
 
-/* coding of MBtypes */
+// SP Pictures
+#define SP_IMG_1  5
+#define SP_IMG_MULT 6
+
+// coding of MBtypes
 #define INTRA_CODED_MB  0
 #define INTER_CODED_MB  1
 
-/* inter MB modes */
-#define COPY_MB         0        /* just copy last MB, no motion vectors */
-#define M16x16_MB       1        /* 16 x 16 block */
+// inter MB modes
+#define COPY_MB         0        //!< just copy last MB, no motion vectors
+#define M16x16_MB       1        //!< 16 x 16 block
 #define M16x8_MB        2
 #define M8x16_MB        3
 #define M8x8_MB         4
 #define M8x4_MB         5
 #define M4x8_MB         6
 #define M4x4_MB         7
-#define INTRA_MB        8                       /* intra coded MB in inter frame */
+#define INTRA_MB        8        //!< intra coded MB in inter frame
 
 // B pictures : MB mode
 #define INTRA_MB_B      16
 
 
 
-/* imod constants */
-#define INTRA_MB_OLD    0       /* new intra prediction mode in inter frame         */
-#define INTRA_MB_NEW    1       /* 'old' intra prediction mode in inter frame       */
-#define INTRA_MB_INTER  2       /* Intra MB in inter frame, use the constants above */
+// imod constants
+#define INTRA_MB_OLD    0        //!< new intra prediction mode in inter frame
+#define INTRA_MB_NEW    1        //!< 'old' intra prediction mode in inter frame
+#define INTRA_MB_INTER  2        //!< Intra MB in inter frame, use the constants above
 
-/* B pictures : img->imod */
+// B pictures : img->imod
 #define B_Forward       3
 #define B_Backward      4
 #define B_Bidirect      5
@@ -72,8 +77,8 @@
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
 
-#define NO_INTRA_PMODE  6        /* #intra prediction modes */
-/* 4x4 intra prediction modes */
+#define NO_INTRA_PMODE  6        //!< #intra prediction modes
+// 4x4 intra prediction modes
 #define DC_PRED         0
 #define DIAG_PRED_RL    1
 #define VERT_PRED       2
@@ -81,53 +86,42 @@
 #define HOR_PRED        4
 #define DIAG_PRED_LR    5
 
-/* 16x16 intra prediction modes */
+// 16x16 intra prediction modes
 #define VERT_PRED_16    0
 #define HOR_PRED_16     1
 #define DC_PRED_16      2
 #define PLANE_16        3
 
-/* image formats, added by HG, deleted by StW*/
-/* 
-#define SUB_QCIF        0       
-#define QCIF            1
-#define CIF             2
-#define CIF_4           3       
-#define CIF_16          4       
-#define CUSTOM          5       
-*/
-
-/* QCIF format */
+// QCIF format
 #define IMG_WIDTH       176
 #define IMG_HEIGHT      144
 #define IMG_WIDTH_CR    88
 #define IMG_HEIGHT_CR   72
 
 #define INIT_FRAME_RATE 30
-#define LEN_STARTCODE   31        /* length of start code */
-//#define MAX_MULT_PRED   (5+1)         /* max number of frames to make inter prediction from, + one B-frame */
-#define EOS             1         /* End Of Sequence */
-#define SOP             2         /* Start Of Picture */
-#define SOS             3         /* Start Of Slice */
+#define LEN_STARTCODE   31                      //!< length of start code
+#define EOS             1                       //!< End Of Sequence
+#define SOP             2                       //!< Start Of Picture
+#define SOS             3                       //!< Start Of Slice
 
-#define EOS_MASK        0x01                    /* mask for end of sequence (bit 1)         */
-#define ICIF_MASK       0x02                    /* mask for image format (bit 2)            */
-#define QP_MASK         0x7C                    /* mask for quant.parameter (bit 3->7)      */
-#define TR_MASK         0x7f80                  /* mask for temporal referance (bit 8->15)  */
+#define EOS_MASK        0x01                    //!< mask for end of sequence (bit 1)
+#define ICIF_MASK       0x02                    //!< mask for image format (bit 2)
+#define QP_MASK         0x7C                    //!< mask for quant.parameter (bit 3->7)
+#define TR_MASK         0x7f80                  //!< mask for temporal referance (bit 8->15)
 
 #define DECODING_OK     0
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
 
-#define MIN_PIX_VAL     0                       /* lowest legal values for 8 bit sample     */
-#define MAX_PIX_VAL     255                     /* highest legal values for 8 bit sample    */
+#define MIN_PIX_VAL     0                       //!< lowest legal values for 8 bit sample
+#define MAX_PIX_VAL     255                     //!< highest legal values for 8 bit sample
 
 #ifndef WIN32
-#define max(a, b)      ((a) > (b) ? (a) : (b)) /* Macro returning max value                */
-#define min(a, b)      ((a) < (b) ? (a) : (b)) /* Macro returning min value                */
+#define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value
+#define min(a, b)      ((a) < (b) ? (a) : (b))  //!< Macro returning min value
 #endif
-#define mmax(a, b)      ((a) > (b) ? (a) : (b)) /* Macro returning max value                */
-#define mmin(a, b)      ((a) < (b) ? (a) : (b)) /* Macro returning min value                */
+#define mmax(a, b)      ((a) > (b) ? (a) : (b)) //!< Macro returning max value
+#define mmin(a, b)      ((a) < (b) ? (a) : (b)) //!< Macro returning min value
 
 
 #define MVPRED_MEDIAN   0
@@ -135,18 +129,16 @@
 #define MVPRED_U        2
 #define MVPRED_UR       3
 
-/* GB */
 #define DECODE_COPY_MB  0
 #define DECODE_MB       1
 #define DECODE_MB_BFRAME 2
 
-#define	BLOCK_MULTIPLE			(MB_BLOCK_SIZE/BLOCK_SIZE)
+#define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
 
-#define MAX_SYMBOLS_PER_MB	600	/* Maximum number of different syntax elements for one MB */
+#define MAX_SYMBOLS_PER_MB  600  //!< Maximum number of different syntax elements for one MB
 
-#define MAX_PART_NR			8	/* Maximum number of different data partitions */ 
-													/* Some reasonable number which should reflect */
-													/* what is currently defined in the SE2Partition map (elements.h) */
-#endif 	
-
-
+#define MAX_PART_NR     8        /*!< Maximum number of different data partitions.
+                                      Some reasonable number which should reflect
+                                      what is currently defined in the SE2Partition
+                                      map (elements.h) */
+#endif
