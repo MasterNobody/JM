@@ -1,6 +1,6 @@
 /*
 ***********************************************************************
-*  COPYRIGHT  AND  WARRANTY INFORMATION
+* COPYRIGHT AND WARRANTY INFORMATION
 *
 * Copyright 2001, International Telecommunications Union, Geneva
 *
@@ -30,39 +30,23 @@
 ************************************************************************
 */
 
-/*
- *************************************************************************************
+/*!
+ **************************************************************************************
  * \file
- *    golomb_dec.h
- *
+ *    annexb.h
  * \brief
- *    Description
- *
+ *    Byte stream operations support
+ *    This code reflects JVT version xxx
+ *  \date 7 December 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     -  Achim Dahlhoff      <dahlhoff@ient.rwth-aachen.de>
- *
- * \date
- *    Fri Mar 8 2002
- *
- *  copyright : (C) 2002      Institut und Lehrstuhl für Nachrichtentechnik
- *                            RWTH Aachen University
- *                            52072 Aachen
- *                            Germany
- *************************************************************************************
+ *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
+ ***************************************************************************************
  */
 
-#ifndef GOLOMB_H
-#define GOLOMB_H
+#include <stdio.h>
+#include "nalucommon.h"
 
-#include "global.h"
-
-unsigned int decode_golomb_word(const unsigned char **buffer,unsigned int *bitoff,unsigned int grad0,unsigned int max_levels);
-unsigned int decode_multilayer_golomb_word(const unsigned char **buffer,unsigned int *bitoff,const unsigned int *grad0,const unsigned int *max_levels);
-
-
-
-int  readSyntaxElement_GOLOMB(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
-
-
-#endif
+int WriteAnnexbNALU (NALU_t *n);
+void CloseAnnexbFile();
+void OpenAnnexbFile (char *Filename);

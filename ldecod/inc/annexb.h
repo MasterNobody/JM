@@ -1,6 +1,6 @@
 /*
 ***********************************************************************
-*  COPYRIGHT  AND  WARRANTY INFORMATION
+* COPYRIGHT AND WARRANTY INFORMATION
 *
 * Copyright 2001, International Telecommunications Union, Geneva
 *
@@ -30,41 +30,24 @@
 ************************************************************************
 */
 
-/*
+/*!
  *************************************************************************************
- * \file
- *    golomb.h
+ * \file bitsbuf.h
  *
  * \brief
- *    Description
+ *    Annex B byte stream buffer handling.
  *
- * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     -  Achim Dahlhoff      <dahlhoff@ient.rwth-aachen.de>
- *
- * \date
- *    Fri Mar 8 2002
- *
- *  copyright : (C) 2002      Institut und Lehrstuhl für Nachrichtentechnik
- *                            RWTH Aachen University
- *                            52072 Aachen
- *                            Germany
  *************************************************************************************
  */
 
-#ifndef GOLOMB_H
-#define GOLOMB_H
+#ifndef _ANNEXB_H_
+#define _ANNEXB_H_
 
-#include "global.h"
+#include "nalucommon.h"
 
-void encode_golomb_word(unsigned int symbol,unsigned int grad0,unsigned int max_levels,unsigned int *res_bits,unsigned int *res_len); //returns symbol coded. (might be cropped if max_levels is too small)
-void encode_multilayer_golomb_word(unsigned int symbol,const unsigned int *grad,const unsigned int *max_levels,unsigned int *res_bits,unsigned int *res_len); //terminate using a max_levels value of 30UL.
-
-unsigned int decode_golomb_word(const unsigned char **buffer,unsigned int *bitoff,unsigned int grad0,unsigned int max_levels);
-unsigned int decode_multilayer_golomb_word(const unsigned char **buffer,unsigned int *bitoff,const unsigned int *grad0,const unsigned int *max_levels);
-
-
-int writeSyntaxElement_GOLOMB(SyntaxElement *se, DataPartition *this_dataPart);
-
+int  GetAnnexbNALU (NALU_t *nalu);
+void OpenBitstreamFile (char *fn);
+void CloseBitstreamFile();
 
 #endif
+
