@@ -49,6 +49,7 @@
 #include <math.h>
 #include <memory.h>
 #include "rdopt.h"
+#include "refbuf.h"
 
 extern const byte PRED_IPRED[7][7][6];
 extern       int  QP2QUANT  [32];
@@ -539,7 +540,7 @@ RDCost_Macroblock (RateDistortion  *rd,
       refidx = (img->number-1) % img->buf_cycle; // reference frame index
       for   (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
         for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
-          rd->distortion += img->quad [abs (imgY_org[j][i] - mref[refidx][j<<2][i<<2])];
+          rd->distortion += img->quad [abs (imgY_org[j][i] - FastPelY_14(mref[refidx], j<<2, i<<2))];
     }
     else
     {
@@ -768,7 +769,7 @@ RDCost_Macroblock (RateDistortion  *rd,
   if (copy)
     for   (j=0; j<MB_BLOCK_SIZE; j++)
       for (i=0; i<MB_BLOCK_SIZE; i++)
-        rdopt->rec_mb_Y[j][i] = mref[refidx][(img->pix_y+j)<<2][(img->pix_x+i)<<2];
+        rdopt->rec_mb_Y[j][i] = FastPelY_14(mref[refidx], (img->pix_y+j)<<2, (img->pix_x+i)<<2);
   else
     for   (j=0; j<MB_BLOCK_SIZE; j++)
       for (i=0; i<MB_BLOCK_SIZE; i++)
@@ -897,12 +898,18 @@ RD_Mode_Decision ()
   double qp = (double)img->qp;
 
   rdopt->lambda_mode = 5.0 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);
-  if (img->type == B_IMG)
+  
+  if (img->type == B_IMG || img->types == SP_IMG)
     rdopt->lambda_mode *= 4;
 
   rdopt->lambda_motion = sqrt (rdopt->lambda_mode);
   rdopt->lambda_intra  = rdopt->lambda_mode;
 
+  if (input->rdopt == 2)
+  {
+    rdopt->lambda_mode=(1.0-input->LossRate/100.0)*rdopt->lambda_mode;
+    rdopt->lambda_motion = sqrt (1.0-input->LossRate/100.0) * rdopt->lambda_motion;
+  }
 
   //--- cost values ---
   rdopt->best_mode   = -1;

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 8.6
+ *     TML 9.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -120,8 +120,8 @@
 #include "erc_api.h"
 #endif
 
-#define TML         "8"
-#define VERSION     "8.60"
+#define TML         "9"
+#define VERSION     "9.00"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"

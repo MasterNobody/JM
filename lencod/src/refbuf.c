@@ -62,7 +62,7 @@
  */
 void PutPel_14 (pel_t **Pic, int y, int x, pel_t val)
 {
-  Pic [y][x] = val;
+  Pic [IMG_PAD_SIZE*4+y][IMG_PAD_SIZE*4+x] = val;
 }
 
 void PutPel_11 (pel_t *Pic, int y, int x, pel_t val)
@@ -142,7 +142,7 @@ pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
  */
 pel_t FastPelY_12 (pel_t **Pic, int y, int x)
 {
-  return Pic [y<<1][x<<1];
+  return Pic [IMG_PAD_SIZE*4+(y<<1)][IMG_PAD_SIZE*4+(x<<1)];
 }
 
 
@@ -160,39 +160,41 @@ pel_t UMVPelY_12 (pel_t **Pic, int y, int x)
  */
 pel_t UMVPelY_14 (pel_t **Pic, int y, int x)
 {
-  int width4  = (img->width<<2)-1;
-  int height4 = (img->height<<2)-1;
+  int width4  = ((img->width+2*IMG_PAD_SIZE-1)<<2);
+  int height4 = ((img->height+2*IMG_PAD_SIZE-1)<<2);
+
+  x = x + IMG_PAD_SIZE*4;
+  y = y + IMG_PAD_SIZE*4;
 
   if (x < 0)
   {
     if (y < 0)
-      return Pic [0][0];
+      return Pic [y&3][x&3];
     if (y > height4)
-      return Pic [height4][0];
-    return Pic [y][0];
+      return Pic [height4+y&3][x&3];
+    return Pic [y][x&3];
   }
 
   if (x > width4)
   {
     if (y < 0)
-      return Pic [0][width4];
+      return Pic [y&3][width4+x&3];
     if (y > height4)
-      return Pic [height4][width4];
-    return Pic [y][width4];
+      return Pic [height4+y&3][width4+x&3];
+    return Pic [y][width4+x&3];
   }
 
   if (y < 0)    // note: corner pixels were already processed
-    return Pic [0][x];
+    return Pic [y&3][x];
   if (y > height4)
-    return Pic [height4][x];
-
+    return Pic [height4+y&3][x];
 
   return Pic [y][x];
 }
 
-pel_t FastPelY_14 (pel_t**Pic, int y, int x)
+pel_t FastPelY_14 (pel_t **Pic, int y, int x)
 {
-  return Pic [y][x];
+  return Pic [IMG_PAD_SIZE*4+y][IMG_PAD_SIZE*4+x];
 }
 
 
@@ -202,184 +204,156 @@ pel_t FastPelY_14 (pel_t**Pic, int y, int x)
  *    Reference buffer, 1/8th pel
  ************************************************************************
  */
-pel_t UMVPelY_18_old (pel_t **Pic, int y, int x)
+pel_t	UMVPelY_18 (pel_t **Pic, int y, int x)
 {
-  byte out;
-  int yfloor, xfloor, x_max, y_max;
+	byte out;
+	int yfloor, xfloor, xq, yq;
 
-  x = max (0, min (x, (img->width *8-2)));
-  y = max (0, min (y, (img->height*8-2)));
+  /* Maximum values (padding included) */
+  int maxx8 = (img->width +2*IMG_PAD_SIZE-2)*8;
+	int maxy8 = (img->height+2*IMG_PAD_SIZE-2)*8;
 
-  xfloor=x/2;
-  yfloor=y/2;
+  /* Compensate for frame padding */
+  x = x + IMG_PAD_SIZE*8;
+  y = y + IMG_PAD_SIZE*8;
 
+	if (x < 0)
+    x = x&7;
+  else if (x > maxx8)
+    x = maxx8 + (x&7);
 
-  x_max=img->width *4-1;
-  y_max=img->height*4-1;
+	if (y < 0)
+    y = y&7;
+  else if (y > maxy8)
+    y = maxy8 + (y&7);
 
-  if(xfloor<0 || xfloor > x_max)
-  {
-    printf("\n WARNING(get_eigthpix_pel): xfloor = %d is out of range",xfloor);
-    xfloor=min(x_max,max(0,xfloor));
-    printf(", set to %d\n",xfloor);
-  }
+	xfloor = x>>1;
+	yfloor = y>>1;
 
-  if(yfloor<0 || yfloor > y_max)
-  {
-    printf("\n WARNING(get_eigthpix_pel): yfloor = %d is out of range",yfloor);
-    yfloor=min(y_max,max(0,yfloor));
-    printf(", set to %d\n",yfloor);
+	if( (x&1) && (y&1) )
+	{
+    xq = x&7; 
+    yq = y&7;
 
-  }
-
-
-  if( y == img->height*8-1 )
-  {
-    if (x%2 && x != img->width*8-1)
-    {
-      out=( Pic[yfloor  ][xfloor  ] +
-          Pic[yfloor  ][xfloor+1] + 1 ) / 2;
+    // I & IV QUARTER
+    if ((xq<4 && yq<4) || (xq>=4 && yq>=4)){
+      if (xq==3 && yq==3){
+        out=(Pic[yfloor-1][xfloor-1] + 3*Pic[yfloor+1][xfloor+1] + 2) / 4;
+      }
+      else if (xq==5 && yq==5){
+        out=(3*Pic[yfloor][xfloor] + Pic[yfloor+2][xfloor+2] + 2) / 4;
+      }
+      else if ((xq==3 && yq==1) || (xq==7 && yq==5)){
+        out=(3*Pic[yfloor][xfloor+1] + Pic[yfloor+2][xfloor-1] + 2) / 4;
+      }
+      else if ((xq==1 && yq==3) || (xq==5 && yq==7)){
+        out=(3*Pic[yfloor+1][xfloor] + Pic[yfloor-1][xfloor+2] + 2) / 4;
+      }
+      else {
+        out=(Pic[yfloor+1][xfloor] + Pic[yfloor][xfloor+1]) / 2;
+      }
     }
-    else
-      out=  Pic[yfloor  ][xfloor  ];
-
-  }
-  else  if( x == img->width*8-1 )
-  {
-    if (y%2)
-    {
-      out=( Pic[yfloor  ][xfloor  ] +
-          Pic[yfloor+1][xfloor  ] + 1 ) / 2;
+     // II & III QUARTER
+    else{
+      if (xq==5 && yq==3){
+        out=(3*Pic[yfloor+1][xfloor] + Pic[yfloor-1][xfloor+2] + 2) / 4;
+      }
+      else if (xq==3 && yq==5){
+        out=(3*Pic[yfloor][xfloor+1]+Pic[yfloor+2][xfloor-1] + 2) / 4;
+      }
+      else if ((xq==1 && yq==5) || (xq==5 && yq==1)){
+        out=(3*Pic[yfloor][xfloor]+Pic[yfloor+2][xfloor+2] + 2) / 4;
+      }
+      else if ((xq==3 && yq==7) || (xq==7 && yq==3)){
+        out=(3*Pic[yfloor+1][xfloor+1]+Pic[yfloor-1][xfloor-1] + 2) / 4;
+      }
+      else{
+        out=( Pic[yfloor][xfloor] + Pic[yfloor+1][xfloor+1] ) / 2;
+      }
     }
-    else
-      out=  Pic[yfloor  ][xfloor  ];
+	}
+	else if (x&1)
+	{
+		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor  ][xfloor+1] ) / 2;
+	}
+	else if (y&1)
+	{
+		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor+1][xfloor  ] ) / 2;
+	}
+	else
+		out=  Pic[yfloor  ][xfloor  ];
 
-  }
-  else if( x%2 && y%2 )
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-      Pic[yfloor+1][xfloor  ] +
-      Pic[yfloor  ][xfloor+1] +
-      Pic[yfloor+1][xfloor+1] + 2 ) / 4;
-  }
-  else if (x%2)
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-      Pic[yfloor  ][xfloor+1] + 1 ) / 2;
-  }
-  else if (y%2)
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-      Pic[yfloor+1][xfloor  ] + 1 ) / 2;
-  }
-  else
-    out=  Pic[yfloor  ][xfloor  ];
-
-  return(out);
-
-}
-
-pel_t UMVPelY_18 (pel_t **Pic, int y, int x)
-{
-  byte out;
-  int yfloor, xfloor;
-
-  int width8  = (img->width<<3) - 2;    // Width and Height of the 1/4 buffer, measure in 1/8 pel
-  int height8 = (img->height<<3) -2;    // the -2 is for the bound checking, since arrays start at 0
-
-
-  // The following two are macros and not variables, because they need to be calculated only
-  // rarely, and hence variables that are always evaluated would be inappropriate.  The macros
-  // are more easily readable.
-
-#define width4  ((img->width<<2)-1)
-#define height4 ((img->height<<2)-1)
-
-  if (x < 0)
-  {
-    if (y < 0)
-      return Pic [0][0];
-    if (y > height8)
-      return Pic [height4][0];
-    x=0;
-  }
-
-  if (x > width8)
-  {
-    if (y < 0)
-      return Pic [0][width4];
-    if (y > height8)
-      return Pic [height4][width4];
-    x=width8;
-  }
-
-  if (y < 0)    // note: corner pixels were already processed
-    y=0;
-  if (y > height8)
-    y=height8;
-
-#undef width4
-#undef height4
-
-
-  xfloor=x>>1;
-  yfloor=y>>1;
-
-  if( x%2 && y%2 )
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-          Pic[yfloor+1][xfloor  ] +
-        Pic[yfloor  ][xfloor+1] +
-        Pic[yfloor+1][xfloor+1] + 2 ) / 4;
-  }
-  else if (x%2)
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-        Pic[yfloor  ][xfloor+1] + 1 ) / 2;
-  }
-  else if (y%2)
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-          Pic[yfloor+1][xfloor  ] + 1 ) / 2;
-  }
-  else
-    out=  Pic[yfloor  ][xfloor  ];
-
-  return(out);
-
+	return(out);
 }
 
 pel_t FastPelY_18 (pel_t **Pic, int y, int x)
-{
-  byte out;
-  int yfloor, xfloor;
+{	
+	byte out;
+	int yfloor, xfloor, xq, yq;
 
-  xfloor=x>>1;
-  yfloor=y>>1;
+  /* Compensate for frame padding */
+  x = x + IMG_PAD_SIZE*8;
+  y = y + IMG_PAD_SIZE*8;
 
-  if( x%2 && y%2 )
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-          Pic[yfloor+1][xfloor  ] +
-        Pic[yfloor  ][xfloor+1] +
-        Pic[yfloor+1][xfloor+1] + 2 ) / 4;
-  }
-  else if (x%2)
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-        Pic[yfloor  ][xfloor+1] + 1 ) / 2;
-  }
-  else if (y%2)
-  {
-    out=( Pic[yfloor  ][xfloor  ] +
-          Pic[yfloor+1][xfloor  ] + 1 ) / 2;
-  }
-  else
-    out=  Pic[yfloor  ][xfloor  ];
+	xfloor = x>>1;
+	yfloor = y>>1;
 
-  return(out);
+	if( (x&1) && (y&1) )
+	{
+    xq = x&7; 
+    yq = y&7;
 
+    // I & IV QUARTER
+    if ((xq<4 && yq<4) || (xq>=4 && yq>=4)){
+      if (xq==3 && yq==3){
+        out=(Pic[yfloor-1][xfloor-1] + 3*Pic[yfloor+1][xfloor+1] + 2) / 4;
+      }
+      else if (xq==5 && yq==5){
+        out=(3*Pic[yfloor][xfloor] + Pic[yfloor+2][xfloor+2] + 2) / 4;
+      }
+      else if ((xq==3 && yq==1) || (xq==7 && yq==5)){
+        out=(3*Pic[yfloor][xfloor+1] + Pic[yfloor+2][xfloor-1] + 2) / 4;
+      }
+      else if ((xq==1 && yq==3) || (xq==5 && yq==7)){
+        out=(3*Pic[yfloor+1][xfloor] + Pic[yfloor-1][xfloor+2] + 2) / 4;
+      }
+      else {
+        out=(Pic[yfloor+1][xfloor] + Pic[yfloor][xfloor+1]) / 2;
+      }
+    }
+     // II & III QUARTER
+    else{
+      if (xq==5 && yq==3){
+        out=(3*Pic[yfloor+1][xfloor] + Pic[yfloor-1][xfloor+2] + 2) / 4;
+      }
+      else if (xq==3 && yq==5){
+        out=(3*Pic[yfloor][xfloor+1]+Pic[yfloor+2][xfloor-1] + 2) / 4;
+      }
+      else if ((xq==1 && yq==5) || (xq==5 && yq==1)){
+        out=(3*Pic[yfloor][xfloor]+Pic[yfloor+2][xfloor+2] + 2) / 4;
+      }
+      else if ((xq==3 && yq==7) || (xq==7 && yq==3)){
+        out=(3*Pic[yfloor+1][xfloor+1]+Pic[yfloor-1][xfloor-1] + 2) / 4;
+      }
+      else{
+        out=( Pic[yfloor][xfloor] + Pic[yfloor+1][xfloor+1] ) / 2;
+      }
+    }
+	}
+	else if (x&1)
+	{
+		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor  ][xfloor+1] ) / 2;
+	}
+	else if (y&1)
+	{
+		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor+1][xfloor  ] ) / 2;
+	}
+	else
+		out=  Pic[yfloor  ][xfloor  ];
+
+	return(out);
 }
+
 
 void InitRefbuf ()
 {
@@ -412,8 +386,8 @@ void copy2mref()
   img->frame_cycle=img->number % img->buf_cycle;  /*GH img->no_multpred used insteadof MAX_MULT_PRED
                                                     frame buffer size = img->no_multpred+1*/
   // Luma
-  for (j=0; j < img->height*4; j++)
-    memcpy(mref[img->frame_cycle][j],mref_P[j], img->width*4);
+  for (j=0; j < (img->height+2*IMG_PAD_SIZE)*4; j++)
+    memcpy(mref[img->frame_cycle][j],mref_P[j], (img->width+2*IMG_PAD_SIZE)*4);
 
 
   //  Chroma:

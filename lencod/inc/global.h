@@ -346,7 +346,6 @@ byte  ***imgUV_pf;           //!< Post filter croma image
 byte  ***mref;               //!< 1/4 pix luma
 byte ****mcef;               //!< pix chroma
 int    **img4Y_tmp;          //!< for quarter pel interpolation
-byte   **img8Y_tmp;          //!< for 1/8 pel interpolation
 byte   **imgY_tmp;           //!< for loop filter
 byte  ***imgUV_tmp;
 int   ***tmp_mv;             //!< motion vector buffer

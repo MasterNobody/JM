@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 8.6
+ *     TML 9.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -79,8 +79,8 @@
 #include "global.h"
 #include "configfile.h"
 
-#define TML     "8"
-#define VERSION "8.60"
+#define TML     "9"
+#define VERSION "9.00"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -1050,7 +1050,6 @@ void report()
   // B pictures
   free(stat->mode_use_Bframe);
   free(stat->bit_use_mode_Bframe);
-// getchar();
 }
 
 /*!
@@ -1179,7 +1178,7 @@ int get_mem4global_buffers()
   // rows and cols for croma component mcef[ref][croma][4x][4y] are switched
   // compared to luma mref[ref][4y][4x] for whatever reason
   // number of reference frames increased by one for next P-frame
-  memory_size += get_mem3D(&mref, img->buf_cycle+1, img->height*4, img->width*4);
+  memory_size += get_mem3D(&mref, img->buf_cycle+1, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
   if((mcef = (byte****)calloc(img->buf_cycle+1,sizeof(byte***))) == NULL)
     no_mem_exit("get_mem4global_buffers: mcef");
   for(j=0;j<img->buf_cycle+1;j++)
@@ -1194,7 +1193,7 @@ int get_mem4global_buffers()
   // is currently also used in oneforthpix_1() and _2() for coding without B-frames
   //byte mref[1152][1408];  */   /* 1/4 pix luma
   //byte mcef[2][352][288]; */   /* pix chroma
-  memory_size += get_mem2D(&mref_P, img->height*4, img->width*4);
+  memory_size += get_mem2D(&mref_P, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
   memory_size += get_mem3D(&mcef_P, 2, img->width_cr*2, img->height_cr*2);
 
   if(input->successive_Bframe!=0)
@@ -1218,10 +1217,7 @@ int get_mem4global_buffers()
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
-  memory_size += get_mem2Dint(&img4Y_tmp, img->height*2, img->width*2);
-
-  // allocate memory for temp 1/8-pel luma frame buffer: img8Y_tmp
-  memory_size += get_mem2D(&img8Y_tmp, 4*img->width, img->height);
+  memory_size += get_mem2Dint(&img4Y_tmp, img->height+2*IMG_PAD_SIZE, (img->width+2*IMG_PAD_SIZE)*4);
 
   // allocate memory for tmp loop filter frame buffers: imgY_tmp, imgUV_tmp
   // byte imgY_tmp[288][352];
@@ -1363,8 +1359,6 @@ void free_mem4global_buffers()
   free(tmp_mv);
   free(img4Y_tmp[0]);    // free temp quarter pel frame buffer
   free(img4Y_tmp);
-  free(img8Y_tmp[0]);    // free temp 1/8 pel frame buffer
-  free(img8Y_tmp);
   free(imgY_tmp[0]);    // free temp loop filter frame buffer
   free(imgY_tmp);
   free(imgUV_tmp[0][0]);

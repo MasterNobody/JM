@@ -75,11 +75,14 @@ void proceed2nextMacroblock()
 
 #if TRACE
   int i;
-  if(use_bitstream_backing)
-    fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
-  // Write out the tracestring for each symbol
-  for (i=0; i<currMB->currSEnr; i++)
-    trace2out(&(img->MB_SyntaxElements[i]));
+  if (p_trace)
+  {
+    if(use_bitstream_backing)
+      fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
+   // Write out the tracestring for each symbol
+     for (i=0; i<currMB->currSEnr; i++)
+       trace2out(&(img->MB_SyntaxElements[i]));
+  }
 #endif
 
   // Update the statistics
@@ -776,11 +779,11 @@ void LumaResidualCoding_P()
             jj4=(img->pix_y+block_y)*4+tmp_mv[1][pic_block_y][pic_block_x+4];
             for (j=0;j<4;j++)
             {
-              j2 = max (0, min(img->mvert,jj4+j*4));
+              j2 = jj4+j*4;
               for (i=0;i<4;i++)
               {
-                i2 = max(0, min(img->mhor, ii4+i*4));
-                img->mpr[i+block_x][j+block_y]=FastPelY_14 (mref[img->multframe_no], j2, i2);
+                i2 = ii4+i*4;
+                img->mpr[i+block_x][j+block_y]=UMVPelY_14 (mref[img->multframe_no], j2, i2);
 
               }
             }
@@ -1303,24 +1306,23 @@ int writeMotionInfo2NAL_Pframe()
           for (l=0; l < step_v; l++)
             for (m=0; m < step_h; m++)
               currMB->mvd[0][j+l][i+m][k] =  curr_mvd;
-            currSE->value2 = k; // identifies the component; only used for context determination
-            currSE->type = SE_MVD;
-            if (input->symbol_mode == UVLC)
-              currSE->mapping = mvd_linfo2;
-            else
-              currSE->writing = writeMVD2Buffer_CABAC;
-            dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-            dataPart->writeSyntaxElement( currSE, dataPart);
-            bitCount[BITS_INTER_MB]+=currSE->len;
-            no_bits += currSE->len;
+          currSE->value2 = k; // identifies the component; only used for context determination
+          currSE->type = SE_MVD;
+          if (input->symbol_mode == UVLC)
+            currSE->mapping = mvd_linfo2;
+          else
+            currSE->writing = writeMVD2Buffer_CABAC;
+          dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+          dataPart->writeSyntaxElement( currSE, dataPart);
+          bitCount[BITS_INTER_MB]+=currSE->len;
+          no_bits += currSE->len;
 #if TRACE
-            snprintf(currSE->tracestring, TRACESTRING_SIZE, " MVD(%d) = %3d",k, curr_mvd);
+          snprintf(currSE->tracestring, TRACESTRING_SIZE, " MVD(%d) = %3d",k, curr_mvd);
 #endif
 
-            // proceed to next SE
-            currSE++;
-            currMB->currSEnr++;
-
+          // proceed to next SE
+          currSE++;
+          currMB->currSEnr++;
         }
       }
     }

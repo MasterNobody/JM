@@ -128,5 +128,8 @@
       P.O. Box 88
       33721 Tampere, Finland
 
+      Yann Le Maguet                  <yann.lemaguet@philips.com>
+      Philips Research France
+
     \endverbatim
 */

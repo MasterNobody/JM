@@ -520,7 +520,6 @@ int  readSliceUVLC(struct img_par *img, struct inp_par *inp);
 byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
 byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
 byte get_eighthpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
-byte interpolate(byte container[8],int modus);
 void copy2mref(struct img_par *img);
 void copy2mref_1(struct img_par *img);
 void copy2mref_2(struct img_par *img);

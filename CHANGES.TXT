@@ -1,8 +1,22 @@
+Changes for Version 9.0 to Version 8.7
+--------------------------------------
+New Features
+* Complexity reduced interpolation filer (AH)
+* Interpolation outside the picture (AH)
+
+Bug Fixes
+* Fix the trace file bug (KS)
+* add line breaks for CABAC trace file output (KS)
+* Intra frame period fixes (YL)
+* Some more bug fixes for the new added EC mode (TO/TSt/DK)
+* correct picture numbers for B-frames (TO)
+
+
 Changes for Version 8.7 to Version 8.6
 --------------------------------------
 
 * Code cleanups (KS)
-  - removed old Loopfilter Code (#if !defined LOOP_FILTER_MB)
+  - removed old Loop filter Code (#if !defined LOOP_FILTER_MB)
   - removed non UMV code (#if !defined UMV)
 * Bug fixing (KS)
   - correct SP frame coding for RTP file format
@@ -14,12 +28,12 @@ Changes for Version 8.7 to Version 8.6
 Encoder:
 
 * Removed the Interim File Format (TO)
-* Bugfixes for Slice Mode 2 in case of small slices (TO)
-* Bugfixes for Loopfilter and Slice Mode 2 (TS)
+* Bug fixes for Slice Mode 2 in case of small slices (TO)
+* Bug fixes for Loop filter and Slice Mode 2 (TS)
 * RTP-File Format added (SW)
   - currently only one partition per slice is allowed
   - Support for multiple (3) partitions per slice will follow
-* RD Optimization for error prone channles added (DK)
+* RD Optimization for error prone channels added (DK)
 * Minor cleanups (cosmetical work) (TO)
 * Added new parameters to the Configfile (DK)
 * Added headerbits to the statistics 
@@ -30,7 +44,7 @@ Decoder
   - currently only one partition per slice is allowed
   - Support for multiple (3) partitions per slice will follow
 * Changes in find_snr for case of slice losses (TO)
-* Some Bugfixes for the new added EC mode (TO)
+* Some Bug fixes for the new added EC mode (TO)
 * Modifications to detect slice/frame losses in RTP File Format (TO)
 * Some modifications to enhance the robustness to loss of slices (TO)
 * Changes in the Configfile for the new RTP File Mode (SW)
@@ -190,6 +204,7 @@ Changes for Version 8.0 relative to Version 6.1
 People:
 KS      Karsten Sühring         suehring@hhi.de
 
+AH      Antti Hallapuro         antti.hallapuro@nokia.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 GB      Gabi Blättermann        blaetter@hhi.de
@@ -208,4 +223,3 @@ TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 VV	Viktor Varsa		viktor.varsa@nokia.com
 WYK	Ye-Kui Wang		wangy@cs.tut.fi
 YL      Yann Lemaguet		yann.lemaguet@philips.com
-YW      Ye-Kui Wang             wangy@cs.tut.fi

@@ -46,7 +46,8 @@
  *    - Byeong-Moon Jeon                <jeonbm@lge.com>
  *    - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *    - Gabi Blaettermann               <blaetter@hhi.de>
- *    - Ye-Kui Wang                       <wangy@cs.tut.fi>
+ *    - Ye-Kui Wang                     <wangy@cs.tut.fi>
+ *    - Antti Hallapuro                 <antti.hallapuro@nokia.com>
  ***********************************************************************
  */
 
@@ -233,14 +234,14 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
         frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
 
   fflush(stdout);
-  // getchar();
-  if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictres
-    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
-  else if(img->type == SP_IMG_1 || img->type == SP_IMG_MULT) // SP pictres
-    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
-  else // I or B pictures
-    write_frame(img,inp->postfilter,p_out);         // write image to output YUV file
 
+  if(img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // I or P pictures
+    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
+  else if(img->type == SP_IMG_1 || img->type == SP_IMG_MULT) // SP pictures
+    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
+  else // B pictures
+    write_frame(img,inp->postfilter,p_out);         // write image to output YUV file
+  
   //! TO 19.11.2001 Known Problem: for init_frame we have to know the picture type of the actual frame
   //! in case the first slice of the P-Frame following the I-Frame was lost we decode this P-Frame but 
   //! do not write it because it was assumed to be an I-Frame in init_frame. So we force the decoder to
@@ -450,356 +451,362 @@ byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
 
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Interpolation of 1/4 subpixel
+ ************************************************************************
+ */
 byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
 {
 
-  int dx=0, x=0;
-  int dy=0, y=0;
-  int maxold_x=0,maxold_y=0;
+  int dx, x;
+  int dy, y;
+  int maxold_x,maxold_y;
 
-  int result=0;
-  int pres_x=0;
-  int pres_y=0;
+  int result = 0, result1, result2;
+  int pres_x;
+  int pres_y; 
+
+  int tmp_res[6];
+
+  static const int COEF[6] = {
+    1, -5, 20, 20, -5, 1
+  };
 
 
-  x_pos = max (0, min (x_pos, img->width *4-1));
-  y_pos = max (0, min (y_pos, img->height*4-1));
+  dx = x_pos&3;
+  dy = y_pos&3;
+  x_pos = (x_pos-dx)/4;
+  y_pos = (y_pos-dy)/4;
+  maxold_x = img->width-1;
+  maxold_y = img->height-1;
 
+  if (dx == 0 && dy == 0) { /* fullpel position */
+    result = mref[ref_frame][max(0,min(maxold_y,y_pos))][max(0,min(maxold_x,x_pos))];
+  }
+  else if (dx == 3 && dy == 3) { /* funny position */
+    result = (mref[ref_frame][max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos))  ]+
+              mref[ref_frame][max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos+1))]+
+              mref[ref_frame][max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos+1))]+
+              mref[ref_frame][max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos))  ]+2)/4;
+  }
+  else { /* other positions */
 
-  //********************
-  //  applied filters
-  //
-  //  X  2  3  2  X
-  //  2  6  7  6
-  //  3  7  5  7
-  //  2  6  7  6
-  //  X           X
-  //
-  //  X-fullpel positon
-  //
-  //********************
+    if (dy == 0) {
 
- dx = x_pos%4;
- dy = y_pos%4;
- maxold_x=img->width-1;
- maxold_y=img->height-1;
+      pres_y = max(0,min(maxold_y,y_pos));
+      for(x=-2;x<4;x++) {
+        pres_x = max(0,min(maxold_x,x_pos+x));
+        result += mref[ref_frame][pres_y][pres_x]*COEF[x+2];
+      }
 
- if(dx==0&&dy==0) // fullpel position
-   {
-     pres_y=y_pos/4;
-     pres_x=x_pos/4;
-     result=mref[ref_frame][pres_y][pres_x];
-     return result;
-   }
- else if(dx==3&&dy==3) // funny position
-   {
-     pres_y=y_pos/4;
-     pres_x=x_pos/4;
-     result=(mref[ref_frame][pres_y                ][pres_x                ]+
-       mref[ref_frame][pres_y                ][min(maxold_x,pres_x+1)]+
-       mref[ref_frame][min(maxold_y,pres_y+1)][min(maxold_x,pres_x+1)]+
-       mref[ref_frame][min(maxold_y,pres_y+1)][pres_x                ]+2)/4;
-     return result;
-   }
- else // other positions
-  {
-    if(x_pos==img->width*4-1)
-      dx=2;
-    if(y_pos==img->height*4-1)
-      dy=2;
+      result = max(0, min(255, (result+16)/32));
 
-    if(dx==1&&dy==0)
-      {
-  pres_y=y_pos/4;
-  for(x=-2;x<4;x++)
-    {
-      pres_x=max(0,min(maxold_x,x_pos/4+x));
-      result+=mref[ref_frame][pres_y][pres_x]*two[x+2];
+      if (dx == 1) {
+        result = (result + mref[ref_frame][pres_y][max(0,min(maxold_x,x_pos))])/2;
+      }
+      else if (dx == 3) {
+        result = (result + mref[ref_frame][pres_y][max(0,min(maxold_x,x_pos+1))])/2;
+      }
     }
-      }
-    else if(dx==0&&dy==1)
-      {
-  pres_x=x_pos/4;
-  for(y=-2;y<4;y++)
-    {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      result+=mref[ref_frame][pres_y][pres_x]*two[y+2];
-    }
-      }
-    else if(dx==2&&dy==0)
-      {
-  pres_y=y_pos/4;
-  for(x=-2;x<4;x++)
-    {
-      pres_x=max(0,min(maxold_x,x_pos/4+x));
-      result+=mref[ref_frame][pres_y][pres_x]*three[x+2];
-    }
-      }
-    else if(dx==0&&dy==2)
-      {
-  pres_x=x_pos/4;
-  for(y=-2;y<4;y++)
-    {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      result+=mref[ref_frame][pres_y][pres_x]*three[y+2];
-    }
-      }
-    else if(dx==3&&dy==0)
-      {
-  pres_y=y_pos/4;
-  for(x=-2;x<4;x++)
-    {
-      pres_x=max(0,min(maxold_x,x_pos/4+x));
-      result+=mref[ref_frame][pres_y][pres_x]*two[3-x];   // four
-    }
-      }
-    else if(dx==0&&dy==3)
-      {
-  pres_x=x_pos/4;
-  for(y=-2;y<4;y++)
-    {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      result+=mref[ref_frame][pres_y][pres_x]*two[3-y];   // four
-    }
-      }
-    else if(dx==1&&dy==1)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*six[y+2][x+2];
-        }
-      }
-      }
-    else if(dx==2&&dy==1)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*seven[y+2][x+2];
-        }
-      }
-      }
-    else if(dx==1&&dy==2)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*seven[x+2][y+2]; // eight
-        }
-      }
-      }
-    else if(dx==3&&dy==1)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*six[y+2][3-x];   // nine
-        }
-      }
-      }
-    else if(dx==1&&dy==3)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*six[3-y][x+2];   // ten
-        }
-      }
-      }
-    else if(dx==2&&dy==2)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*five[y+2][x+2];
-        }
-      }
-      }
-    else if(dx==3&&dy==2)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*seven[3-x][3-y]; // eleven
-        }
-      }
-      }
-    else if(dx==2&&dy==3)
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*seven[3-y][x+2]; // twelve
-        }
-      }
-      }
-    else if(dx==3&&dy==3) // not used if funny position is on
-      {
-    for(y=-2;y<4;y++)
-      {
-      pres_y=max(0,min(maxold_y,y_pos/4+y));
-      for(x=-2;x<4;x++)
-        {
-        pres_x=max(0,min(maxold_x,x_pos/4+x));
-        result+=mref[ref_frame][pres_y][pres_x]*six[3-y][3-x]; // thirteen
-        }
-      }
+    else if (dx == 0) {
+
+      pres_x = max(0,min(maxold_x,x_pos));
+      for(y=-2;y<4;y++) {
+        pres_y = max(0,min(maxold_y,y_pos+y));
+        result += mref[ref_frame][pres_y][pres_x]*COEF[y+2];
       }
 
+      result = max(0, min(255, (result+16)/32));
+
+      if (dy == 1) {
+        result = (result + mref[ref_frame][max(0,min(maxold_y,y_pos))][pres_x])/2;
+      }
+      else if (dy == 3) {
+        result = (result + mref[ref_frame][max(0,min(maxold_y,y_pos+1))][pres_x])/2;
+      }
+    }
+    else if (dx == 2) {
+
+      for(y=-2;y<4;y++) {
+        result = 0;
+        pres_y = max(0,min(maxold_y,y_pos+y));
+        for(x=-2;x<4;x++) {
+          pres_x = max(0,min(maxold_x,x_pos+x));
+          result += mref[ref_frame][pres_y][pres_x]*COEF[x+2];
+        }
+        tmp_res[y+2] = result;
+      }
+
+      result = 0;
+      for(y=-2;y<4;y++) {
+        result += tmp_res[y+2]*COEF[y+2];
+      }
+
+      result = max(0, min(255, (result+512)/1024));
+
+      if (dy == 1) {
+        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
+      }
+      else if (dy == 3) {
+        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+      }
+    }
+    else if (dy == 2) {
+
+      for(x=-2;x<4;x++) {
+        result = 0;
+        pres_x = max(0,min(maxold_x,x_pos+x));
+        for(y=-2;y<4;y++) {
+          pres_y = max(0,min(maxold_y,y_pos+y));
+          result += mref[ref_frame][pres_y][pres_x]*COEF[y+2];
+        }
+        tmp_res[x+2] = result;
+      }
+
+      result = 0;
+      for(x=-2;x<4;x++) {
+        result += tmp_res[x+2]*COEF[x+2];
+      }
+
+      result = max(0, min(255, (result+512)/1024));
+
+      if (dx == 1) {
+        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
+      }
+      else {
+        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+      }
+    }
+    else {
+
+      result = 0;
+      pres_y = dy == 1 ? y_pos : y_pos+1;
+      pres_y = max(0,min(maxold_y,pres_y));
+
+      for(x=-2;x<4;x++) {
+        pres_x = max(0,min(maxold_x,x_pos+x));
+        result += mref[ref_frame][pres_y][pres_x]*COEF[x+2];
+      }
+
+      result1 = max(0, min(255, (result+16)/32));
+
+      result = 0;
+      pres_x = dx == 1 ? x_pos : x_pos+1;
+      pres_x = max(0,min(maxold_x,pres_x));
+
+      for(y=-2;y<4;y++) {
+        pres_y = max(0,min(maxold_y,y_pos+y));
+        result += mref[ref_frame][pres_y][pres_x]*COEF[y+2];
+      }
+
+      result2 = max(0, min(255, (result+16)/32));
+      result = (result1+result2)/2;
+    }
   }
 
- return max(0,min(255,(result+2048)/4096));
-
+  return result;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Interpolation of 1/8 subpixel
+ ************************************************************************
+ */
+
+static int interpolaX(int ref_frame, int pres_x, int pres_y, const int *coefx, int max_x, int max_y)
+{
+  int x, result = 0;
+
+  pres_y = max(0,min(max_y,pres_y));
+  for(x=-3;x<5;x++)
+    result += mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))]*coefx[x+3];
+
+  return max(0, min(255, (result+128)/256));
+}
+
+static int interpolaY(int ref_frame, int pres_x, int pres_y, const int *coefy, int max_x, int max_y)
+{
+  int y, result = 0;
+
+  pres_x = max(0,min(max_x,pres_x));
+  for(y=-3;y<5;y++)
+    result += mref[ref_frame][max(0,min(pres_y+y,max_y))][pres_x]*coefy[y+3];
+
+  return max(0, min(255, (result+128)/256));
+}
+
+static int interpola2D(int ref_frame, int x_pos, int y_pos, const int *coefx, const int *coefy, int max_x, int max_y)
+{
+  int x, y;
+  int pres_y;
+  int result = 0;
+  int tmp[8]; 
+
+  for(y=-3;y<5;y++) {
+
+    pres_y = max(0,min((y_pos>>3)+y,max_y));
+
+    for(tmp[y+3]=0, x=-3;x<5;x++)
+      tmp[y+3] += mref[ref_frame][pres_y][max(0,min((x_pos>>3)+x,max_x))]*coefx[x+3];
+  }
+
+  for(y=-3;y<5;y++)
+    result += tmp[y+3]*coefy[y+3];
+
+  return max(0, min(255, (result+32768)/65536));
+}
+ 
 byte get_eighthpel_pixel(int ref_frame,int x_pos,int y_pos, struct img_par *img)
 {
- int dx=0, x=0;
- int dy=0, y=0;
- int pres_x=0;
- int pres_y=0;
- int max_x=0,max_y=0;
+  static const int COEF[3][8] = {
+    {-3, 12, -37, 229,  71, -21,  6, -1},
+    {-3, 12, -39, 158, 158, -39, 12, -3},
+    {-1,  6, -21,  71, 229, -37, 12, -3}
+  };
 
- byte tmp1[8];
- byte tmp2[8];
- byte tmp3[8];
+  int dx=0, x=0;
+  int dy=0, y=0;
+  int pres_x=0;
+  int pres_y=0;
+  int max_x=0,max_y=0;
 
- double result=0;
+  int tmp[8]; 
+  int result, result1, result2;
 
- x_pos = max (0, min (x_pos, (img->width *8-2)));
- y_pos = max (0, min (y_pos, (img->height*8-2)));
 
- dx = x_pos%8;
- dy = y_pos%8;
- pres_x=x_pos/8;
- pres_y=y_pos/8;
- max_x=img->width-1;
- max_y=img->height-1;
+  dx = x_pos&7;
+  dy = y_pos&7;
+  pres_x = x_pos>>3;
+  pres_y = y_pos>>3;
+  max_x = img->width-1;
+  max_y = img->height-1;
 
- // choose filter depending on subpel position
- if(dx==0 && dy==0)                 // fullpel position
-   {
-     return(mref[ref_frame][pres_y][pres_x]);
-   }
- else if(dx%2==0 && dy==0)
-   {
-     for(x=-3;x<5;x++)
-       {
-     tmp3[x+3]= mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))];
-       }
-     return(interpolate(tmp3,dx/2) );
-   }
- else if(dx==0 && dy%2==0)
-   {
-     for(y=-3;y<5;y++)
-       {
-     tmp1[y+3]= mref[ref_frame][max(0,min(pres_y+y,max_y))][pres_x];
-       }
-     return( interpolate(tmp1,dy/2) );
-   }
- else if(dx%2==0 && dy%2==0)
-   {
-     for(y=-3;y<5;y++)
-       {
-     for(x=-3;x<5;x++)
-     {
-         tmp3[x+3]=mref[ref_frame][max(0,min(pres_y+y,max_y))][max(0,min(pres_x+x,max_x))];
-     }
-     tmp1[y+3]= interpolate(tmp3,dx/2);
-       }
-     return( interpolate(tmp1,dy/2) );
-   }
- else if((dx==1 && dy==0)||(dx==7 && dy==0))
-   {
-     for(x=-3;x<5;x++)
-     {
-    tmp1[x+3]= mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))];
-     }
-     if(dx==1)
-       return( (byte) ((interpolate(tmp1,1) + mref[ref_frame][pres_y][pres_x] +1)/2 ));
-     else
-       return( (byte) ((interpolate(tmp1,3) + mref[ref_frame][pres_y][max(0,min(pres_x+1,max_x))] +1)/2 ));
-   }
- else
-   {
-     for(y=-3;y<5;y++)
-       {
-     for(x=-3;x<5;x++)
-     {
-      tmp3[x+3]= mref[ref_frame][max(0,min(pres_y+y,max_y))][max(0,min(pres_x+x,max_x))];
-     }
-     tmp1[y+3]= interpolate(tmp3,dx/2);
-     tmp2[y+3]= interpolate(tmp3,(dx+1)/2);
-       }
-     return( (byte) (( interpolate(tmp1,dy/2) + interpolate(tmp2,dy/2) + interpolate(tmp1,(dy+1)/2) + interpolate(tmp2,(dy+1)/2) + 2 )/4 ));
-   }
+  /* choose filter depending on subpel position */
+  if(dx==0 && dy==0) {                /* fullpel position */
+    return (mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x,max_x))]);
+  }
+  else if(dy == 0) {
+    if (dx == 1)
+      result1 = mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x,max_x))];
+    else
+      result1 = interpolaX(ref_frame, pres_x, pres_y, COEF[dx/2-1], max_x, max_y);
+
+    if ((dx&1) == 0)
+      result = result1;
+    else {
+      if (dx == 7)
+        result2 = mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x+1,max_x))];
+      else
+        result2 = interpolaX(ref_frame, pres_x, pres_y, COEF[dx/2], max_x, max_y);
+
+      result = (result1+result2)/2;
+    }
+  }
+  else if (dx == 0) {
+    if (dy == 1)
+      result1 = mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x,max_x))];
+    else
+      result1 = interpolaY(ref_frame, pres_x, pres_y, COEF[dy/2-1], max_x, max_y);
+
+    if ((dy&1) == 0)
+      result = result1;
+    else {
+      if (dy == 7)
+        result2 = mref[ref_frame][max(0,min(pres_y+1,max_y))][max(0,min(pres_x,max_x))];
+      else
+        result2 = interpolaY(ref_frame, pres_x, pres_y, COEF[dy/2], max_x, max_y);
+
+      result = (result1+result2)/2;
+    }
+  }
+  else if ((dx&1) == 0) {
+
+    for(y=-3;y<5;y++) {
+      pres_y = max(0,min((y_pos>>3)+y,max_y));
+      for(tmp[y+3]=0, x=-3;x<5;x++) {
+        tmp[y+3] += mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))]*COEF[dx/2-1][x+3];
+      }
+    }
+
+    if (dy == 1)
+      result1 = tmp[3]*256;
+    else {
+      for(result1=0, y=-3;y<5;y++) {
+        result1 += tmp[y+3]*COEF[dy/2-1][y+3];
+      }
+    }
+    result1 = max(0, min(255, (result1+32768)/65536));
+
+    if ((dy&1) == 0)
+      result = result1;
+    else {
+      if (dy == 7)
+        result2 = tmp[4]*256;
+      else {
+        for(result2=0, y=-3;y<5;y++) {
+          result2 += tmp[y+3]*COEF[dy/2][y+3];
+        }
+      }
+      result2 = max(0, min(255, (result2+32768)/65536));
+
+      result = (result1+result2)/2;
+    }
+  }
+  else if ((dy&1) == 0) {
+
+    for(x=-3;x<5;x++) {
+      pres_x = max(0,min((x_pos>>3)+x,max_x));
+      for(tmp[x+3]=0, y=-3;y<5;y++) {
+        tmp[x+3] += mref[ref_frame][max(0,min(pres_y+y,max_y))][pres_x]*COEF[dy/2-1][y+3];
+      }
+    }
+
+    if (dx == 1)
+      result1 = tmp[3]*256;
+    else {
+      for(result1=0, x=-3;x<5;x++) {
+        result1 += tmp[x+3]*COEF[dx/2-1][x+3];
+      }
+    }
+    result1 = max(0, min(255, (result1+32768)/65536));
+
+    if (dx == 7)
+      result2 = tmp[4]*256;
+    else {
+      for(result2=0, x=-3;x<5;x++) {
+        result2 += tmp[x+3]*COEF[dx/2][x+3];
+      }
+    }
+    result2 = max(0, min(255, (result2+32768)/65536));
+
+    result = (result1+result2)/2;
+  }
+  else if ((dx == 1 || dx == 7) && (dy == 1 || dy == 7)) {
+    result1 = interpolaX(ref_frame, pres_x, (y_pos+1)>>3, COEF[(dx+1)/4], max_x, max_y);
+    result2 = interpolaY(ref_frame, (x_pos+1)>>3, pres_y, COEF[(dy+1)/4], max_x, max_y);
+    result = (result1+result2)/2;
+  }
+  else if (dx == 1 || dx == 7 || dy == 1 || dy == 7) {
+
+    result1 = interpolaX(ref_frame, pres_x, (y_pos+3)>>3, COEF[1], max_x, max_y);
+    result2 = interpolaY(ref_frame, (x_pos+3)>>3, pres_y, COEF[1], max_x, max_y);
+
+    if (dx == 1 || dx == 7)
+      result = (result1 + 3*result2 + 2)/4;
+    else
+      result = (3*result1 + result2 + 2)/4;
+  }
+  else {
+    result1 = interpola2D(ref_frame, x_pos, y_pos, COEF[1], COEF[1], max_x, max_y);
+    result2 = mref[ref_frame][max(0,min(max_y,(y_pos+3)>>3))][max(0,min(max_x,(x_pos+3)>>3))];
+    result = (3*result1 + result2 + 2)/4;
+  }
+
+  return (byte)result;
 }
-
-byte interpolate(byte container[8],int modus)
-{
-
- int i=0;
- int sum=0;
-
- static int h1[8] = {  -3,    12,   -37,   229,   71,   -21,     6,    -1 };
- static int h2[8] = {  -3,    12,   -39,   158,  158,   -39,    12,    -3 };
- static int h3[8] = {  -1,     6,   -21,    71,  229,   -37,    12,    -3 };
-
- switch(modus)
-   {
-   case 0:
-     return(container[3]);
-   case 1:
-     for(i=0;i<8;i++)
-       {
-         sum+=h1[i]*container[i];
-       }
-     return( (byte) max(0,min((sum+128)/256,255)) );
-   case 2:
-     for(i=0;i<8;i++)
-       {
-         sum+=h2[i]*container[i];
-       }
-     return ((byte) max(0,min((sum+128)/256,255)) );
-   case 3:
-     for(i=0;i<8;i++)
-       {
-     sum+=h3[i]*container[i];
-       }
-     return((byte) max(0,min((sum+128)/256,255)) );
-   case 4:
-     return( (byte) container[4] );
-
-   default: return(-1);
-   }
-
-}
-
 
 
 /*!
@@ -857,7 +864,11 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     }
   }
   
-  if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // P pictures
+  if (img->number == 0) // first picture
+  {
+    nextP_tr=prevP_tr=img->tr;
+  }
+  else if(img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // I or P pictures
   {
 #ifdef _ADAPT_LAST_GROUP_
     for (i = img->buf_cycle-1; i > 0; i--)
@@ -865,24 +876,15 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     last_P_no[0] = nextP_tr;
 #endif
     nextP_tr=img->tr;
-  }
-  else if(img->type==INTRA_IMG) // I picture
-    nextP_tr=prevP_tr=img->tr;
-
-  if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
-  {
-
+    
     if(first_P) // first P picture
     {
       first_P = FALSE;
       P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
     }
-    else // all other P pictures
-    {
-      write_prev_Pframe(img, p_out);  // imgY_prev, imgUV_prev -> file
-    }
+    write_prev_Pframe(img, p_out);  // imgY_prev, imgUV_prev -> file
   }
-
+  
   if (img->type > SP_IMG_MULT)
   {
     set_ec_flag(SE_PTYPE);

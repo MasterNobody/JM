@@ -60,6 +60,8 @@
 #define _CHANGE_QP_
 #define _ADDITIONAL_REFERENCE_FRAME_
 
+#define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
+
 #define TRACE           1        //!< 0:Trace off 1:Trace on
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure

@@ -135,9 +135,9 @@ void decode_one_macroblock(int decoder, int mode, int ref)
           for (j=0;j<BLOCK_SIZE;j++)
             for (i=0;i<BLOCK_SIZE;i++)
             {
-              if (RefBlock[j][i] != mref[ref_inx]
-                                        [max(0,min(img->mvert,(block_y*4+j)*4+mv[1][block_y-img->block_y][block_x-img->block_x]))]
-                                        [max(0,min(img->mhor,(block_x*4+i)*4+mv[0][block_y-img->block_y][block_x-img->block_x]))])
+              if (RefBlock[j][i] != UMVPelY_14 (mref[ref_inx],
+                                                (block_y*4+j)*4+mv[1][block_y-img->block_y][block_x-img->block_x],
+                                                (block_x*4+i)*4+mv[0][block_y-img->block_y][block_x-img->block_x]))
               ref_inx = (img->number-ref-1)%img->no_multpred;
               decY[decoder][block_y*BLOCK_SIZE + j][block_x*BLOCK_SIZE + i] = 
                                   resY_tmp[(block_y-img->block_y)*BLOCK_SIZE + j]
@@ -210,128 +210,156 @@ void Get_Reference_Block(byte **imY,
  *    we just upsample when it is necessary.
  *************************************************************************************
  */
-byte Get_Reference_Pixel(byte **imY, int y, int x)
+byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
 {
-  int is,is2,a;
-   const int ONE_FOURTH_TAP[3][2] =
-  {
-    {20,20},
-    {-5,-4},
-    { 1, 0},
+
+  int dx, x;
+  int dy, y;
+  int maxold_x,maxold_y;
+
+  int result = 0, result1, result2;
+  int pres_x;
+  int pres_y; 
+
+  int tmp_res[6];
+
+  static const int COEF[6] = {
+    1, -5, 20, 20, -5, 1
   };
 
 
-  if (y%4==0)
-  {
-    if (x%4==0)
-    {
-      return (imY[y/4][x/4]);
-    }
-    else if (x%2==0)
-    {
-      return ((byte)max(0,min(255,(int)((Half_Upsample(imY, y/2, x/2)+512)/1024)))); 
-    }
-    else
-    {
-      a=2*img->width-2;
-      return ((byte)
-              (max(0,  min(255,(int)(Half_Upsample(imY, y/2, (x-1)/2) 
-                + Half_Upsample(imY, y/2, min(a+1, (x+1)/2)) +1024)/2048))));
-    }
-  }
-  else if (y%2==0)
-  {
-    if (x%2==0)
-    {
-      a=2*img->height-2;
-      is= (ONE_FOURTH_TAP[0][0]*
-              (Half_Upsample(imY,max(0,y/2-1),x/2)+Half_Upsample(imY,min(a,y/2+1),x/2))+
-            ONE_FOURTH_TAP[1][0]*
-              (Half_Upsample(imY,max(0,y/2-3),x/2)+Half_Upsample(imY,min(a,y/2+3),x/2))+
-            ONE_FOURTH_TAP[2][0]*
-              (Half_Upsample(imY,max(0,y/2-5),x/2)+Half_Upsample(imY,min(a,y/2+5),x/2)))/32;
-      return((byte)max(0,min(255,(int)((is+512)/1024))));
-    }
-    else
-    {
-      a=2*(img->width-1);
-      return((byte)(max(0,min(255,(int)(Half_Upsample(imY, y/2, (x-1)/2) + 
-              Half_Upsample(imY, y/2, min(a+1, (x+1)/2)) +1024)/2048))));
-    }
-  }
-  else 
-  {
-    if (x%2==0)
-    {
-      a=2*(img->height-1);
-      return((byte)max(0,min(255,(int)(Half_Upsample(imY,(y-1)/2,x/2) + 
-                Half_Upsample(imY, min(a+1,(y+1)/2), x/2) + 1024)/2048)));
-    }
-    else if (y%4==3 && x%4==3)
-    {
-      is=2*(img->width-1);
-      is2=2*(img->height-1);
-      a = max(0,min(255,(int)((Half_Upsample(imY, (y-3)/2, (x-3)/2)+512)/1024)));
-      a += max(0,min(255,(int)((Half_Upsample(imY, min(is2,(y+1)/2), (x-3)/2)+512)/1024)));
-      a += max(0,min(255,(int)((Half_Upsample(imY, (y-3)/2, min(is,(x+1)/2))+512)/1024)));
-      a += max(0,min(255,(int)((Half_Upsample(imY, min(is2,(y+1)/2), min(is,(x+1)/2))+512)/1024)));
-      return((byte) ((a+2)/4));
-    }
-    else
-    {
-      is=2*(img->width-1);
-      is2=2*(img->height-1);
-      a = Half_Upsample(imY, (y-1)/2, x/2);
-      a += Half_Upsample(imY, min(is2+1,(y+1)/2), x/2);
-      a += Half_Upsample(imY, (y-1)/2, min(is+1,x/2+1));
-      a += Half_Upsample(imY, min(is2+1,(y+1)/2), min(is+1,x/2+1));
-      return((byte)max(0,min(255,(int)(a + 2048)/4096)));
-    }
-  }
-}
+  dx = x_pos&3;
+  dy = y_pos&3;
+  x_pos = (x_pos-dx)/4;
+  y_pos = (y_pos-dy)/4;
+  maxold_x = img->width-1;
+  maxold_y = img->height-1;
 
-/*! 
- *************************************************************************************
- * \brief
- *    Part of the upsampling at the decoders 
- * \param imY
- *    The image to be upsampled
- * \param j
- *    The pixel of the (upsampled) frame that we need (row)
- * \param i
- *    The pixel of the (upsampled) frame that we need (column)
- *************************************************************************************
- */
-int Half_Upsample(byte **imY, int j, int i)
-{
-  int a;
-  const int ONE_FOURTH_TAP[3][2] =
-  {
-    {20,20},
-    {-5,-4},
-    { 1, 0},
-  };
+  if (dx == 0 && dy == 0) { /* fullpel position */
+    result = imY[max(0,min(maxold_y,y_pos))][max(0,min(maxold_x,x_pos))];
+  }
+  else if (dx == 3 && dy == 3) { /* funny position */
+    result = (imY[max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos))  ]+
+              imY[max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos+1))]+
+              imY[max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos+1))]+
+              imY[max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos))  ]+2)/4;
+  }
+  else { /* other positions */
 
-  if (j%2==1)
-  {
-    a = 2*img->height-2;
-    return ((ONE_FOURTH_TAP[0][0]*
-              (Half_Upsample(imY, j-1, i) + Half_Upsample(imY, min(a,j+1),i))+
-            ONE_FOURTH_TAP[1][0]*
-              (Half_Upsample(imY, max(0,j-3), i) + Half_Upsample(imY, min(a,j+3),i))+
-            ONE_FOURTH_TAP[2][0]*
-              (Half_Upsample(imY, max(0,j-5), i) + Half_Upsample(imY, min(a,j+5),i)))/32);
+    if (dy == 0) {
+
+      pres_y = max(0,min(maxold_y,y_pos));
+      for(x=-2;x<4;x++) {
+        pres_x = max(0,min(maxold_x,x_pos+x));
+        result += imY[pres_y][pres_x]*COEF[x+2];
+      }
+
+      result = max(0, min(255, (result+16)/32));
+
+      if (dx == 1) {
+        result = (result + imY[pres_y][max(0,min(maxold_x,x_pos))])/2;
+      }
+      else if (dx == 3) {
+        result = (result + imY[pres_y][max(0,min(maxold_x,x_pos+1))])/2;
+      }
+    }
+    else if (dx == 0) {
+
+      pres_x = max(0,min(maxold_x,x_pos));
+      for(y=-2;y<4;y++) {
+        pres_y = max(0,min(maxold_y,y_pos+y));
+        result += imY[pres_y][pres_x]*COEF[y+2];
+      }
+
+      result = max(0, min(255, (result+16)/32));
+
+      if (dy == 1) {
+        result = (result + imY[max(0,min(maxold_y,y_pos))][pres_x])/2;
+      }
+      else if (dy == 3) {
+        result = (result + imY[max(0,min(maxold_y,y_pos+1))][pres_x])/2;
+      }
+    }
+    else if (dx == 2) {
+
+      for(y=-2;y<4;y++) {
+        result = 0;
+        pres_y = max(0,min(maxold_y,y_pos+y));
+        for(x=-2;x<4;x++) {
+          pres_x = max(0,min(maxold_x,x_pos+x));
+          result += imY[pres_y][pres_x]*COEF[x+2];
+        }
+        tmp_res[y+2] = result;
+      }
+
+      result = 0;
+      for(y=-2;y<4;y++) {
+        result += tmp_res[y+2]*COEF[y+2];
+      }
+
+      result = max(0, min(255, (result+512)/1024));
+
+      if (dy == 1) {
+        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
+      }
+      else if (dy == 3) {
+        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+      }
+    }
+    else if (dy == 2) {
+
+      for(x=-2;x<4;x++) {
+        result = 0;
+        pres_x = max(0,min(maxold_x,x_pos+x));
+        for(y=-2;y<4;y++) {
+          pres_y = max(0,min(maxold_y,y_pos+y));
+          result += imY[pres_y][pres_x]*COEF[y+2];
+        }
+        tmp_res[x+2] = result;
+      }
+
+      result = 0;
+      for(x=-2;x<4;x++) {
+        result += tmp_res[x+2]*COEF[x+2];
+      }
+
+      result = max(0, min(255, (result+512)/1024));
+
+      if (dx == 1) {
+        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
+      }
+      else {
+        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+      }
+    }
+    else {
+
+      result = 0;
+      pres_y = dy == 1 ? y_pos : y_pos+1;
+      pres_y = max(0,min(maxold_y,pres_y));
+
+      for(x=-2;x<4;x++) {
+        pres_x = max(0,min(maxold_x,x_pos+x));
+        result += imY[pres_y][pres_x]*COEF[x+2];
+      }
+
+      result1 = max(0, min(255, (result+16)/32));
+
+      result = 0;
+      pres_x = dx == 1 ? x_pos : x_pos+1;
+      pres_x = max(0,min(maxold_x,pres_x));
+
+      for(y=-2;y<4;y++) {
+        pres_y = max(0,min(maxold_y,y_pos+y));
+        result += imY[pres_y][pres_x]*COEF[y+2];
+      }
+
+      result2 = max(0, min(255, (result+16)/32));
+      result = (result1+result2)/2;
+    }
   }
 
-  else if (i%2==0)
-    return(imY[j/2][i/2]*1024);
-  else 
-    return ((ONE_FOURTH_TAP[0][0]*
-              (imY[j/2][max(0,(i-1)/2)] + imY[j/2][min(img->width-1,(i+1)/2)])+
-            ONE_FOURTH_TAP[1][0]*
-              (imY[j/2][max(0,(i-3)/2)] + imY[j/2][min(img->width-1,(i+3)/2)])+
-            ONE_FOURTH_TAP[2][0]*
-              (imY[j/2][max(0,(i-5)/2)] + imY[j/2][min(img->width-1,(i+5)/2)]))*32);
+  return result;
 }
   
 /*! 
@@ -417,7 +445,7 @@ void Build_Status_Map(byte **s_map)
   for (j=0 ; j<jj; j++)
     for (i=0 ; i<ii; i++)
     {
-      if (img->mb_data[mb].slice_nr != slice) /* new slice */
+      if (!input->slice_mode || img->mb_data[mb].slice_nr != slice) /* new slice */
       {
         if ((double)rand()/(double)RAND_MAX*100 < input->LossRate)
           packet_lost=1;
@@ -471,16 +499,17 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY)
 {
   int i,j;
   int ref_inx = (img->number-1)%img->no_multpred;
+  int pos_y = mb_y*MB_BLOCK_SIZE, pos_x = mb_x*MB_BLOCK_SIZE;
   if (img->number)
   {
     for (j=0;j<MB_BLOCK_SIZE;j++)
       for (i=0;i<MB_BLOCK_SIZE;i++)
-        inY[mb_y+j][mb_x+i] = refY[ref_inx][mb_y+j][mb_x+i];
+        inY[pos_y+j][pos_x+i] = refY[ref_inx][pos_y+j][pos_x+i];
   }
   else
   {
     for (j=0;j<MB_BLOCK_SIZE;j++)
       for (i=0;i<MB_BLOCK_SIZE;i++)
-        inY[mb_y+j][mb_x+i] = 127;
+        inY[pos_y+j][pos_x+i] = 127;
   }
 }

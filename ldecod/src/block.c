@@ -431,7 +431,7 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     predicted_block[i][3]=m5[3]*7-m5[2]*17;
   }
 
-  Fq1q2=(JQQ*JQ[img->qpsp])/JQ[img->qp];
+  Fq1q2=(JQQ*JQ[img->qpsp]+JQ[img->qp]/2)/JQ[img->qp];
 
   for (j=0;j<BLOCK_SIZE;j++)
     for (i=0;i<BLOCK_SIZE;i++)

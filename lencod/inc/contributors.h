@@ -114,5 +114,8 @@
       80290 Munich
       Germany
 
+      Yann Le Maguet                  <yann.lemaguet@philips.com>
+      Philips Research France
+
     \endverbatim
  */
