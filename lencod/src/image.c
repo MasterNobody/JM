@@ -19,10 +19,14 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <string.h>
+#include <assert.h>
 
 #include "global.h"
 #include "elements.h"
 #include "image.h"
+
+
+static int ReadSourcePicture (FILE *in, struct img_par *img, int frame);
 
 /************************************************************************
 *
@@ -36,11 +40,10 @@ void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct
 	int multpred;
 	int len,info;
 	int i,j;	
-	int uv;
 
 	/* B pictures */
 	int B_interval, Bframe_to_code;
-	int status, k;
+	int k;
 
 	time_t ltime1;   // for time measurement 
 	time_t ltime2;
@@ -144,7 +147,16 @@ void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct
 	stat->bit_use_head_mode[img->type] += len;
 
 	/* Read one new frame */
+
+/* Old Telenor code, buggy, prevents source sequence looping */
+/* also there was a missunderstanding of fseek() semantics: */
+/* fseek() can seek beyond the EOF, and fgetc() returns then -1 */
+/* hence the pink pictures after the end of the sequence */
+/* fixed and optimized: Stephan Wenger, 11.03.2001 */
+
 	frame_no = img->number*(inp->jumpd+1);
+
+/*	
 	rewind (p_in);
 	status = fseek (p_in, frame_no*img->height*img->width*3/2, 0);
 	if (status != 0) {
@@ -158,7 +170,14 @@ void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct
 		for (j=0; j < img->height_cr ; j++) 
 			for (i=0; i < img->width_cr; i++) 
 				imgUV_org[uv][j][i]=fgetc(p_in);  
-  
+*/
+	
+	if (ReadSourcePicture (p_in, img, frame_no)) {
+		printf ("Error while reading picture %d\n", frame_no);
+		exit (-1);
+	}
+
+   
 	/* Intra and P pictures : Loops for coding of all macro blocks in a frame */
 	for (img->mb_y=0; img->mb_y < img->height/MB_BLOCK_SIZE; ++img->mb_y)
 	{
@@ -897,4 +916,73 @@ int loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma)
   }
 
   return 0;
+}
+
+	
+static int ReadSourcePicture (FILE *in, struct img_par *img, int frame) {
+
+	static int FileSizeInPictures = -1;
+	static unsigned char *ybuf, *uvbuf, *p;
+
+	int ysize, uvsize, n, i, j, uv;
+	long FileSizeInBytes; 
+
+	// Determine the File size, but only once
+	if (FileSizeInPictures < 0)	{	// first time
+		
+		if (0 != fseek (in, 0, SEEK_END)) {
+			printf ("Problems in determining original sequence file size (fseek), exit\n");
+			return -3;
+		}
+		FileSizeInBytes = ftell (in);
+		n = FileSizeInBytes / img->height;
+		n /= img->width;
+		n *= 2;
+		FileSizeInPictures = n / 3;
+		if (FileSizeInPictures < 1)
+			return -2;
+	}
+
+	ysize = img->height * img->width;
+	uvsize = img->height * img->width / 2;
+
+	if (NULL == (ybuf = malloc (ysize))) {
+		printf ("Cannot malloc %d bytes for ybuf, exit\n", ysize);
+		exit (-10);
+	}
+	if (NULL == (uvbuf = malloc (uvsize))) {
+		printf ("Cannot malloc %d bytes for uvbuf, exit\n", uvsize);
+		exit (-10);
+	}
+
+	frame %= FileSizeInPictures;	// allow sequence looping
+
+	fseek (in, frame * (ysize + uvsize), SEEK_SET);
+	if (1 != fread (ybuf, ysize, 1, in)) {
+		printf ("Problems reading input sequence Y, frame %d, FileSizeInPictures %d\n", frame, FileSizeInPictures);
+		getchar();
+		return -1;
+	}
+	if (1 != fread (uvbuf, uvsize, 1, in)) {
+		printf ("Problems reading input sequence Y, frame %d, FileSizeInPictures %d\n", frame, FileSizeInPictures);
+		getchar();
+		return -1;
+	}
+		
+	// Now copy the data in whatever weird format is used in imgY_org and imgUV_org
+
+	p = ybuf;
+	for (j=0; j < img->height; j++) 
+		for (i=0; i < img->width; i++) 
+			imgY_org[j][i]=*p++;
+	p = uvbuf;
+	for (uv=0; uv < 2; uv++) 
+		for (j=0; j < img->height_cr ; j++) 
+			for (i=0; i < img->width_cr; i++) 
+				imgUV_org[uv][j][i]=*p++;  
+
+
+	free (ybuf);
+	free (uvbuf);
+	return 0;
 }

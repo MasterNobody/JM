@@ -1,6 +1,6 @@
-5 ...................... 1:  Number of frames to be coded
-10 ..................... 2:  Quant. param for first frame (intra) (0-31)
-10 ..................... 3:  Quant. param for remaining frames (0-31)
+5  ..................... 1:  Number of frames to be coded
+19 ..................... 2:  Quant. param for first frame (intra) (0-31)
+19 ..................... 3:  Quant. param for remaining frames (0-31)
 1  ..................... 4:  Number of frames to be skipped in input (e.g 2 will code every third frame)
 1  ......................5:  Hadamard transform (0=not used, 1=used)
 12 ......................6:  Max search range 
@@ -16,13 +16,13 @@
 1  .....................16:  Inter block search 8x4   (0=disable, 1=enable)
 1  .....................17:  Inter block search 4x8   (0=disable, 1=enable)
 1  .....................18:  Inter block search 4x4   (0=disable, 1=enable)
-d:/video_seq/foreman.qcif      ....19:  Input sequence, YUV 4:2:0
-bitstream.26l  ...........20:  Output bitstream in Telenor H.26L format
+D:\QCIF/akiyo.qcif   ...19:  Input sequence, YUV 4:2:0
+akiyo.26l  .............20:  Output bitstream in Telenor H.26L format
 0  .....................21:  NAL mode (0=TML bitstream, 1=Partition file)
 0  .....................22:  Slice mode (0=off 1=fixed #mb in slice 2=fixed #bytes in slice 3=use callback)
-100  ...................23:  Slice argument (Arguments to modes 1 and 2 above)
+200 ....................23:  Slice argument (Arguments to modes 1 and 2 above)
 1  .....................24:  Number of B frames inserted (0=not used)
-10 .....................25:  Quant. param for B frames (0-31)
+19 .....................25:  Quant. param for B frames (0-31)
 
 This is a file containing input parameters to the Telenor H.26L encoder.
 The text line following each parameter is discarded by the encoder.
