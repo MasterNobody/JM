@@ -50,6 +50,7 @@
 #include <string.h>
 
 #include "global.h"
+#include "mbuffer.h"
 #include "b_frame.h"
 #include "elements.h"
 
@@ -147,7 +148,8 @@ void init_macroblock_Bframe(struct img_par *img)
   int fw_predframe_no=0;
     Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-    currMB->ref_frame = img->frame_cycle;
+//*KS*    currMB->ref_frame = img->frame_cycle;
+    currMB->ref_frame = 0;
     currMB->predframe_no = 0;
 
 
@@ -182,7 +184,7 @@ void init_macroblock_Bframe(struct img_par *img)
     {
       for (i = 0;i < BLOCK_SIZE;i++)
       {
-        img->fw_refFrArr[img->block_y+j][img->block_x+i] = fw_predframe_no; // previous P
+        img->fw_refFrArr[img->block_y+j][img->block_x+i] = -fw_predframe_no; // previous P
         img->bw_refFrArr[img->block_y+j][img->block_x+i] = -1;
       }
     }
@@ -204,7 +206,7 @@ void init_macroblock_Bframe(struct img_par *img)
     {
       for (i = 0;i < BLOCK_SIZE;i++)
       {
-        img->fw_refFrArr[img->block_y+j][img->block_x+i] = fw_predframe_no; // previous P
+        img->fw_refFrArr[img->block_y+j][img->block_x+i] = -fw_predframe_no; // previous P
         img->bw_refFrArr[img->block_y+j][img->block_x+i] = 0; // next P
       }
     }
@@ -242,10 +244,10 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
   // keep track of neighbouring macroblocks available for prediction
   int mb_nr = img->current_mb_nr;
   int mb_width = img->width/16;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
-  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width-1]);
-  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width+1]);
+  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
+  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
 
   // keep track of neighbouring blocks available for motion vector prediction
   int block_available_up, block_available_left, block_available_upright, block_available_upleft;
@@ -292,12 +294,13 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
         fw_predframe_no = 1;
       }
 
-      ref_frame=(img->frame_cycle+img->buf_cycle-fw_predframe_no) % img->buf_cycle;
+//*KS*      ref_frame=(img->frame_cycle+img->buf_cycle-fw_predframe_no) % img->buf_cycle;
+      ref_frame=fw_predframe_no;
 
-      if (ref_frame > img->number)
+ /*     if (ref_frame > img->number)
       {
         ref_frame = 0;
-      }
+      }*/
 
       currMB->predframe_no = fw_predframe_no;
       currMB->ref_frame = img->ref_frame = ref_frame;
@@ -699,12 +702,14 @@ int decode_one_macroblock_Bframe(struct img_par *img)
 
   int mb_nr = img->current_mb_nr;
   int mb_width = img->width/16;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
+  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-  int ref_frame_bw = (img->frame_cycle +img->buf_cycle)% img->buf_cycle;
-  int ref_frame_fw = (currMB->ref_frame-1+img->buf_cycle) % img->buf_cycle;
+//*KS*  int ref_frame_bw = (img->frame_cycle +img->buf_cycle)% img->buf_cycle;
+//*KS*  int ref_frame_fw = (currMB->ref_frame-1+img->buf_cycle) % img->buf_cycle;
+  int ref_frame_bw = 0;
+  int ref_frame_fw = currMB->ref_frame+1;
   int ref_frame = ref_frame_fw;
   int mv_mul, f1, f2, f3, f4;
 
@@ -825,7 +830,8 @@ int decode_one_macroblock_Bframe(struct img_par *img)
           {
             img->dfMV[i4+BLOCK_SIZE][j4][hv]=img->dbMV[i4+BLOCK_SIZE][j4][hv]=0;
           }
-          ref_frame = (img->number -1+ img->buf_cycle)% img->buf_cycle;
+//*KS*          ref_frame = (img->number -1+ img->buf_cycle)% img->buf_cycle;
+          ref_frame = 1;
         }
         // next P is skip or inter mode
         else
@@ -842,7 +848,8 @@ int decode_one_macroblock_Bframe(struct img_par *img)
           img->dfMV[i4+BLOCK_SIZE][j4][1]=TRb*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
           img->dbMV[i4+BLOCK_SIZE][j4][0]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][0]/TRp;
           img->dbMV[i4+BLOCK_SIZE][j4][1]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
-          ref_frame=(img->number - 1 - refFrArr[j4][i4] + img->buf_cycle)%img->buf_cycle;
+//*KS*          ref_frame=(img->number - 1 - refFrArr[j4][i4] + img->buf_cycle)%img->buf_cycle;
+          ref_frame=1 + refFrArr[j4][i4];
         }
 
         vec2_x=i4*4*mv_mul;
@@ -1085,9 +1092,11 @@ int decode_one_macroblock_Bframe(struct img_par *img)
               jf0=f1-jf1;
 
               if(refFrArr[jf][ifx]==-1)
-                ref_frame=(img->number-1)%img->buf_cycle;
+//*KS*/                ref_frame=(img->number-1)%img->buf_cycle;
+                ref_frame=1;
               else
-                        ref_frame=(img->number - 1 - refFrArr[jf][ifx] + img->buf_cycle)%img->buf_cycle;
+//*KS*                ref_frame=(img->number - 1 - refFrArr[jf][ifx] + img->buf_cycle)%img->buf_cycle;
+                ref_frame=1 + refFrArr[jf][ifx];
 
               fw_pred=(if0*jf0*mcef[ref_frame][uv][jj0][ii0]+
                        if1*jf0*mcef[ref_frame][uv][jj0][ii1]+

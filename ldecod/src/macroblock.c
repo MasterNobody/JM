@@ -58,6 +58,7 @@
 #include <string.h>
 
 #include "global.h"
+#include "mbuffer.h"
 #include "elements.h"
 #include "macroblock.h"
 
@@ -164,11 +165,8 @@ void start_macroblock(struct img_par *img,struct inp_par *inp)
 
   // Save the slice number of this macroblock. When the macroblock below
   // is coded it will use this to decide if prediction for above is possible
-  img->slice_numbers[img->current_mb_nr] = img->current_slice_nr;
-
-  // Save the slice and macroblock number of the current MB
   currMB->slice_nr = img->current_slice_nr;
-
+  
   // If MB is next to a slice boundary, mark neighboring blocks unavailable for prediction
   CheckAvailabilityOfNeighbors(img);
 
@@ -358,7 +356,8 @@ void init_macroblock(struct img_par *img)
     }
   }
 
-  currMB->ref_frame = img->frame_cycle;
+//*KS*  currMB->ref_frame = img->frame_cycle;
+  currMB->ref_frame = 0;
   currMB->predframe_no = predframe_no = 0;// g.b.1;
 
   // Set the reference frame information for motion vector prediction
@@ -399,7 +398,11 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   else
     currSE.reading = readMB_typeInfoFromBuffer_CABAC;
   currSE.type = SE_MBTYPE;
-  dP = &(currSlice->partArr[partMap[currSE.type]]);
+  
+  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else
+    dP = &(currSlice->partArr[partMap[currSE.type]]);
 
   if(inp->symbol_mode == CABAC || (img->type != INTER_IMG_1 && img->type != INTER_IMG_MULT && img->type != B_IMG_1 && img->type != B_IMG_MULT))
   {
@@ -407,6 +410,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 #if TRACE
     strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
 #endif
+    
     dP->readSyntaxElement(&currSE,img,inp,dP);
     img->mb_mode = currMB->mb_type = currSE.value1;
   } 
@@ -444,7 +448,26 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       if (img->mb_mode < 8)
         img->intra_mb[img->current_mb_nr] = 0;
   }
-
+  
+  
+  //! TO for Error Concelament
+  //! If we have an INTRA Macroblock and we lost the partition
+  //! which contains the intra coefficients Copy MB would be better 
+  //! than just a grey block.
+  //! Seems to be a bit at the wrong place to do this right here, but for this case 
+  //! up to now there is no other way.
+  dP = &(currSlice->partArr[partMap[SE_CBP_INTRA]]);
+  if(img->mb_mode == INTRA_MB && dP->bitstream->ei_flag && img->number)
+  {
+    img->mb_mode = COPY_MB;
+    img->imod = INTRA_MB_INTER;
+  }
+  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else
+    dP = &(currSlice->partArr[partMap[currSE.type]]);
+  //! End TO
+  
   if ((img->type==INTER_IMG_1) || (img->type==INTER_IMG_MULT))    // inter frame
     interpret_mb_mode_P(img);
   else if (img->type==INTRA_IMG)                                  // intra frame
@@ -494,13 +517,17 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
         currSE.reading = readIntraPredModeFromBuffer_CABAC;
 
     currSE.type = SE_INTRAPREDMODE;
-    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
 
     for(i=0;i<MB_BLOCK_SIZE/2;i++)
     {
 #if TRACE
       snprintf(currSE.tracestring, TRACESTRING_SIZE, "Intra mode ");
 #endif
+
       dP->readSyntaxElement(&currSE,img,inp,dP);
 
       i1=img->block_x + 2*(i&0x01);
@@ -557,10 +584,10 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
 
   // keep track of neighbouring macroblocks available for prediction
   int mb_width = img->width/16;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
-  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width-1]);
-  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width+1]);
+  int mb_available_up = (img->mb_y == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img->mb_x == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr);
+  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
 
   // keep track of neighbouring blocks available for motion vector prediction
   int block_available_up, block_available_left, block_available_upright, block_available_upleft;
@@ -583,10 +610,10 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
       currSE.mapping = linfo;
     else
       currSE.reading = readRefFrameFromBuffer_CABAC;
-
     dP->readSyntaxElement(&currSE,img,inp,dP);
     predframe_no = currMB->predframe_no = currSE.value1;
-    ref_frame = currMB->ref_frame = (img->frame_cycle +img->buf_cycle- predframe_no) % img->buf_cycle;
+//*KS*    ref_frame = currMB->ref_frame = (img->frame_cycle +img->buf_cycle- predframe_no) % img->buf_cycle;
+    ref_frame = currMB->ref_frame = predframe_no;
 
     /*!
     * \note
@@ -594,7 +621,7 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
     * decoded pictures is still empty, set ref_frame to last decoded
     * picture to avoid prediction from unexistent frames.
     */
-    if (ref_frame > img->number) ref_frame = 0;
+//    if (ref_frame > img->number) ref_frame = 0;
 
     // Update the reference frame information for motion vector prediction
     for (j = 0;j < BLOCK_SIZE;j++)
@@ -731,6 +758,7 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
         img->subblock_x = i; // position used for context determination
         img->subblock_y = j; // position used for context determination
         currSE.value2 = k; // identifies the component; only used for context determination
+
         dP->readSyntaxElement(&currSE,img,inp,dP);
         curr_mvd = currSE.value1;
 
@@ -798,7 +826,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
     snprintf(currSE.tracestring, TRACESTRING_SIZE, " CBP ");
 #endif
-    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
+   
     dP->readSyntaxElement(&currSE,img,inp,dP);
     currMB->cbp = cbp = currSE.value1;
     // Delta quant only if nonzero coeffs
@@ -807,24 +839,39 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       if (inp->symbol_mode == UVLC)
       {
         currSE.mapping = linfo_dquant;
-        currSE.type = SE_DELTA_QUANT;
+
+        if (currMB->intraOrInter == INTER_MB)
+          currSE.type = SE_DELTA_QUANT_INTER;
+        else
+          currSE.type = SE_DELTA_QUANT_INTRA;
 
 #if TRACE
         snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-        dP = &(currSlice->partArr[partMap[currSE.type]]);
+        if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+          dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        else
+          dP = &(currSlice->partArr[partMap[currSE.type]]);
+  
         dP->readSyntaxElement(&currSE,img,inp,dP);
         currMB->delta_quant = currSE.value1;
         img->qp= (img->qp+currMB->delta_quant+32)%32;
       }
       if (inp->symbol_mode == CABAC)
       {
-        currSE.type = SE_DELTA_QUANT;
+        if (currMB->intraOrInter == INTER_MB)
+          currSE.type = SE_DELTA_QUANT_INTER;
+        else
+          currSE.type = SE_DELTA_QUANT_INTRA;
         currSE.reading= readDquantFromBuffer_CABAC;
 #if TRACE
         snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-        dP = &(currSlice->partArr[partMap[currSE.type]]);
+        if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+          dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        else
+          dP = &(currSlice->partArr[partMap[currSE.type]]);
+  
         dP->readSyntaxElement(&currSE,img,inp,dP);
         currMB->delta_quant = currSE.value1;
         img->qp= (img->qp+currMB->delta_quant+32)%32;
@@ -846,23 +893,39 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     if (inp->symbol_mode == UVLC)
     {
       currSE.mapping = linfo_dquant;
-      currSE.type = SE_DELTA_QUANT;
+      
+      if (currMB->intraOrInter == INTER_MB)
+        currSE.type = SE_DELTA_QUANT_INTER;
+      else
+        currSE.type = SE_DELTA_QUANT_INTRA;
+
 #if TRACE
       snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
+      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+        dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else
+        dP = &(currSlice->partArr[partMap[currSE.type]]);
       dP->readSyntaxElement(&currSE,img,inp,dP);
       currMB->delta_quant = currSE.value1;
       img->qp= (img->qp+currMB->delta_quant+32)%32;
     }
     if (inp->symbol_mode == CABAC)
     {
-      currSE.type = SE_DELTA_QUANT;
+      
+      if (currMB->intraOrInter == INTER_MB)
+        currSE.type = SE_DELTA_QUANT_INTER;
+      else
+        currSE.type = SE_DELTA_QUANT_INTRA;
+      
       currSE.reading= readDquantFromBuffer_CABAC;
 #if TRACE// add when qduant/CABAC is described
       snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
+      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+        dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else
+        dP = &(currSlice->partArr[partMap[currSE.type]]);
       dP->readSyntaxElement(&currSE,img,inp,dP);
       currMB->delta_quant = currSE.value1;
       img->qp= (img->qp+currMB->delta_quant+32)%32;
@@ -875,7 +938,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
             // //////
 
     currSE.type = SE_LUM_DC_INTRA;
-    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
 
     if (inp->symbol_mode == UVLC)
       currSE.mapping = linfo_levrun_inter;
@@ -985,7 +1051,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
                 snprintf(currSE.tracestring, TRACESTRING_SIZE, " Luma sng ");
 #endif
-                dP = &(currSlice->partArr[partMap[currSE.type]]);
+                
+                if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+                  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+                else
+                  dP = &(currSlice->partArr[partMap[currSE.type]]);
                 dP->readSyntaxElement(&currSE,img,inp,dP);
                 level = currSE.value1;
                 run =  currSE.value2;
@@ -1025,7 +1095,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
                   snprintf(currSE.tracestring, TRACESTRING_SIZE, "Luma dbl(%2d,%2d)  ",scan_loop_ctr,k);
 #endif
-                  dP = &(currSlice->partArr[partMap[currSE.type]]);
+                  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+                    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+                  else
+                    dP = &(currSlice->partArr[partMap[currSE.type]]);
                   dP->readSyntaxElement(&currSE,img,inp,dP);
                   level = currSE.value1;
                   run = currSE.value2;
@@ -1090,7 +1163,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
         snprintf(currSE.tracestring, TRACESTRING_SIZE, " 2x2 DC Chroma ");
 #endif
-        dP = &(currSlice->partArr[partMap[currSE.type]]);
+        if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+          dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        else
+          dP = &(currSlice->partArr[partMap[currSE.type]]);
         dP->readSyntaxElement(&currSE,img,inp,dP);
         level = currSE.value1;
         run = currSE.value2;
@@ -1102,6 +1178,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           // Bug: img->cofu has only 4 entries, hence coef_ctr MUST be <4 (which is
           // caught by the assert().  If it is bigger than 4, it starts patching the
           // img->predmode pointer, which leads to bugs later on.
+          //
+          // This assert() should be left in the code, because it captures a very likely
+          // bug early when testing in error prone environments (or when testing NAL
+          // functionality).
           assert (coef_ctr < 4);
           img->cofu[coef_ctr]=level*JQ1[QP_SCALE_CR[img->qp]];
         }
@@ -1161,7 +1241,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
               snprintf(currSE.tracestring, TRACESTRING_SIZE, " AC Chroma ");
 #endif
-              dP = &(currSlice->partArr[partMap[currSE.type]]);
+              if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+                dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+              else
+                dP = &(currSlice->partArr[partMap[currSE.type]]);
+              
               dP->readSyntaxElement(&currSE,img,inp,dP);
               level = currSE.value1;
               run = currSE.value2;

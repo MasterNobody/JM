@@ -46,7 +46,6 @@
 
 #include "global.h"
 #include "elements.h"
-#include "header.h"
 
 
 #if TRACE
@@ -59,14 +58,11 @@
 /*!
  ************************************************************************
  * \brief
- *    read the whole Picture header without the Startcode UVLC
- * \return
- *    the number of bits used by the header exclusing start code
+ *    read the whole Slice header without the Startcode UVLC
  ************************************************************************
  */
-int PictureHeader(struct img_par *img, struct inp_par *inp)
+int SliceHeader(struct img_par *img, struct inp_par *inp)
 {
-
   int dP_nr = assignSE2partition[inp->partition_mode][SE_HEADER];
   Slice *currSlice = img->currentSlice;
   Bitstream *currStream = (currSlice->partArr[dP_nr]).bitstream;
@@ -80,7 +76,6 @@ int PictureHeader(struct img_par *img, struct inp_par *inp)
   // 1. TRType = 0
   SYMTRACESTRING("PH TemporalReferenceType");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
-  // currSlice-> ?????????
   // Currently, only the value 0 is supported, hence a simple assert to
   // catch evenntual  encoder problems
   if (sym.value1 != 0)
@@ -123,7 +118,7 @@ int PictureHeader(struct img_par *img, struct inp_par *inp)
   currSlice->picture_type = img->type = sym.value1;
   UsedBits += sym.len;
 
-  // Finally, read Reference Picture ID (same as TR here).  Note that this is an
+  // 5. Finally, read Reference Picture ID (same as TR here).  Note that this is an
   // optional field that is not present if the input parameters do not indicate
   // multiframe prediction ??
 
@@ -151,38 +146,13 @@ int PictureHeader(struct img_par *img, struct inp_par *inp)
     UsedBits += sym.len;
   }
 
-  // Now get the first Slice Header without a start code
-
-  UsedBits += SliceHeader (img, inp);
-
-  return UsedBits;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    read the whole Slice header without the Startcode UVLC
- ************************************************************************
- */
-int SliceHeader(struct img_par *img, struct inp_par *inp)
-{
-  int dP_nr = assignSE2partition[inp->partition_mode][SE_HEADER];
-  Slice *currSlice = img->currentSlice;
-  Bitstream *currStream = (currSlice->partArr[dP_nr]).bitstream;
-  DataPartition *partition = &(currSlice->partArr[dP_nr]);
-  SyntaxElement sym;
-  int UsedBits=0;
-
-  sym.type = SE_HEADER;
-  sym.mapping = linfo;
-
-  // 1. Get MB-Adresse
+  // 6. Get MB-Adresse
   SYMTRACESTRING("SH FirstMBInSlice");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->start_mb_nr = sym.value1;
   UsedBits += sym.len;
 
-  // 2. Get Quant.
+  // 7. Get Quant.
   SYMTRACESTRING("SH SliceQuant");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->qp = img->qp = 31 - sym.value1;
@@ -194,7 +164,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     img->qpsp = 31 - sym.value1;
   }
-  // 2. Get MVResolution
+  // 8. Get MVResolution
   SYMTRACESTRING("SH MVResolution");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   img->mv_res = sym.value1;
@@ -203,7 +173,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
   if (inp->symbol_mode ==CABAC)
   {
-    // 3. Get number of MBs in this slice
+    // 9. Get number of MBs in this slice
     SYMTRACESTRING("SH Last MB in Slice");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     currSlice->last_mb_nr = currSlice->start_mb_nr+sym.value1;

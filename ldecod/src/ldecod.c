@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 9.4
+ *     TML 9.6
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -115,6 +115,8 @@
 #include "elements.h"
 #include "bitsbuf.h"
 #include "rtp.h"
+#include "memalloc.h"
+#include "mbuffer.h"
 #include "leaky_bucket.h"
 
 #if _ERROR_CONCEALMENT_
@@ -122,7 +124,7 @@
 #endif
 
 #define TML         "9"
-#define VERSION     "9.40"
+#define VERSION     "9.60"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -173,9 +175,6 @@ int main(int argc, char **argv)
   // Allocate Slice data struct
   malloc_slice(inp,img);
 
-  // get_mem4global_buffers (inp, img); //!!KS!!
-
-
   init(img);
   img->number=0;
   img->type = INTRA_IMG;
@@ -195,7 +194,9 @@ int main(int argc, char **argv)
   report(inp, img, snr);
 
   free_slice(inp,img);
-  free_mem4global_buffers(inp, img);
+
+  free_frame_buffers(inp, img);
+  free_global_buffers(inp, img);
 
   CloseBitstreamFile();
 
@@ -532,6 +533,9 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
         snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
         error(errortext,100);
       }
+
+      img->currentSlice->rmpni_buffer=NULL;
+
       if (inp->symbol_mode == CABAC)
       {
         // create all context models
@@ -703,7 +707,7 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  * \brief
  *    Dynamic memory allocation of frame size related global buffers
  *    buffers are defined in global.h, allocated memory must be freed in
- *    void free_mem4global_buffers()
+ *    void free_global_buffers()
  *
  *  \par Input:
  *    Input Parameters struct inp_par *inp, Image Parameters struct img_par *img
@@ -712,11 +716,11 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  *     Number of allocated bytes
  ***********************************************************************
  */
-int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
+int init_global_buffers(struct inp_par *inp, struct img_par *img)
 {
 
 
-  int j,memory_size=0;
+  int memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
 #endif
@@ -725,12 +729,10 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 
 #ifdef _ADAPT_LAST_GROUP_
   if ((last_P_no = (int*)malloc(img->buf_cycle*sizeof(int))) == NULL)
-    no_mem_exit("get_mem4global_buffers: last_P_no");
+    no_mem_exit("init_global_buffers: last_P_no");
 #endif
 
   // allocate memory for encoding frame buffers: imgY, imgUV
-  // byte imgY[288][352];
-  // byte imgUV[2][144][176];
   memory_size += get_mem2D(&imgY, img->height, img->width);
   memory_size += get_mem3D(&imgUV, 2, img->height_cr, img->width_cr);
 
@@ -738,60 +740,38 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
   // rows and cols for croma component mcef[ref][croma][4x][4y] are switched
   // compared to luma mref[ref][4y][4x] for whatever reason
   // number of reference frames increased by one for next P-frame
-  memory_size += get_mem3D(&mref, img->buf_cycle+1, img->height, img->width);
-
-  if((mcef = (byte****)calloc(img->buf_cycle+1,sizeof(byte***))) == NULL)
-    no_mem_exit("get_mem4global_buffers: mcef");
-  for(j=0;j<img->buf_cycle+1;j++)
-        memory_size += get_mem3D(&(mcef[j]), 2, img->height_cr*2, img->width_cr*2);
-
+  alloc_mref(img);
+  
   // allocate memory for imgY_prev
-  // byte imgY_prev[288][352];
-  // byte imgUV_prev[2][144][176];
   memory_size += get_mem2D(&imgY_prev, img->height, img->width);
   memory_size += get_mem3D(&imgUV_prev, 2, img->height_cr, img->width_cr);
 
   // allocate memory for reference frames of each block: refFrArr
-  // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
   // allocate memory for reference frame in find_snr
-  // byte imgY_ref[288][352];
-  // byte imgUV_ref[2][144][176];
   memory_size += get_mem2D(&imgY_ref, img->height, img->width);
   memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
 
   // allocate memory for loop_filter
-  // byte imgY_tmp[288][352];                      /* temp luma image
-  // byte imgUV_tmp[2][144][176];                  /* temp chroma image
   memory_size += get_mem2D(&imgY_tmp, img->height, img->width);
   memory_size += get_mem3D(&imgUV_tmp, 2, img->height_cr, img->width_cr);
 
   // allocate memory in structure img
   if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
-    no_mem_exit("get_mem4global_buffers: img->mb_data");
-  if(((img->slice_numbers) = (int *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(int))) == NULL)
-    no_mem_exit("get_mem4global_buffers: img->slice_numbers");
+    no_mem_exit("init_global_buffers: img->mb_data");
   if(img->UseConstrainedIntraPred)
   {
     if(((img->intra_mb) = (int *) calloc(img->width/MB_BLOCK_SIZE * img->height/MB_BLOCK_SIZE,sizeof(int))) == NULL)
-      no_mem_exit("get_mem4global_buffers: img->intra_mb");
+      no_mem_exit("init_global_buffers: img->intra_mb");
   }
-  // img => int mv[92][72][3]
   memory_size += get_mem3Dint(&(img->mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // img => int ipredmode[90][74]
   memory_size += get_mem2Dint(&(img->ipredmode),img->width/BLOCK_SIZE +2 , img->height/BLOCK_SIZE +2);
-  // int dfMV[92][72][3];
   memory_size += get_mem3Dint(&(img->dfMV),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // int dbMV[92][72][3];
   memory_size += get_mem3Dint(&(img->dbMV),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // int fw_refFrArr[72][88];
   memory_size += get_mem2Dint(&(img->fw_refFrArr),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int bw_refFrArr[72][88];
   memory_size += get_mem2Dint(&(img->bw_refFrArr),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int fw_mv[92][72][3];
   memory_size += get_mem3Dint(&(img->fw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // int bw_mv[92][72][3];
   memory_size += get_mem3Dint(&(img->bw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
   return (memory_size);
 }
@@ -801,7 +781,7 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
  * \brief
  *    Free allocated memory of frame size related global buffers
  *    buffers are defined in global.h, allocated memory is allocated in
- *    int get_mem4global_buffers()
+ *    int init_global_buffers()
  *
  * \par Input:
  *    Input Parameters struct inp_par *inp, Image Parameters struct img_par *img
@@ -811,222 +791,45 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
  *
  ************************************************************************
  */
-void free_mem4global_buffers(struct inp_par *inp, struct img_par *img)
+void free_global_buffers(struct inp_par *inp, struct img_par *img)
 {
-  int  j;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
   free (last_P_no);
 #endif
 
-  if(imgY[0]      != NULL) free(imgY[0]);
-  if(imgY         != NULL) free(imgY);
-  if(imgUV[0][0]  != NULL) free(imgUV[0][0]);
-  if(imgUV[1][0]  != NULL) free(imgUV[1][0]);
-  if(imgUV[0]     != NULL) free(imgUV[0]);
-  if(imgUV[1]     != NULL) free(imgUV[1]);
-  if(imgUV        != NULL) free(imgUV);
-  if(imgY_prev[0] != NULL) free(imgY_prev[0]);
-  if(imgY_prev    != NULL) free(imgY_prev);
-  if(imgUV_prev[0][0] != NULL) free(imgUV_prev[0][0]);
-  if(imgUV_prev[1][0] != NULL) free(imgUV_prev[1][0]);
-  if(imgUV_prev[0]    != NULL) free(imgUV_prev[0]);
-  if(imgUV_prev[1]    != NULL) free(imgUV_prev[1]);
-  if(imgUV_prev       != NULL) free(imgUV_prev);
+  free_mem2D(imgY);
+  free_mem3D(imgUV,2);
+  free_mem2D(imgY_prev);
+  free_mem3D(imgUV_prev,2);
 
-  // free multiple ref frame buffers:  number increased by one for next P-frame
-  for(j=0;j<=img->buf_cycle;j++)
-  {
-    if(mref[j][0] != NULL) free(mref[j][0]);
-    if(mref[j] != NULL) free(mref[j]);
+  // free multiple ref frame buffers
+  free (mref);
+  free (mcef);
 
-    if(mcef[j][0][0] != NULL) free(mcef[j][0][0]);
-    if(mcef[j][1][0] != NULL) free(mcef[j][1][0]);
-    if(mcef[j][0]    != NULL) free(mcef[j][0]);
-    if(mcef[j][1]    != NULL) free(mcef[j][1]);
-    if(mcef[j]       != NULL) free(mcef[j]);
-  };
+  free_mem2Dint(refFrArr);
 
-  if(mref != NULL) free(mref);
-  if(mcef != NULL) free(mcef);
-
-  if(refFrArr[0] != NULL) free(refFrArr[0]);
-  if(refFrArr    != NULL) free(refFrArr);
-
-  if(imgY_ref[0] != NULL) free(imgY_ref[0]);    // find_snr
-  if(imgY_ref    != NULL) free(imgY_ref);
-  if(imgUV_ref[0][0] != NULL) free(imgUV_ref[0][0]);
-  if(imgUV_ref[1][0] != NULL) free(imgUV_ref[1][0]);
-  if(imgUV_ref[0]    != NULL) free(imgUV_ref[0]);
-  if(imgUV_ref[1]    != NULL) free(imgUV_ref[1]);
-  if(imgUV_ref       != NULL) free(imgUV_ref);
-  if(imgY_tmp[0]     != NULL) free(imgY_tmp[0]);    // loop_filter
-  if(imgY_tmp        != NULL) free(imgY_tmp);
-  if(imgUV_tmp[0][0] != NULL) free(imgUV_tmp[0][0]);
-  if(imgUV_tmp[1][0] != NULL) free(imgUV_tmp[1][0]);
-  if(imgUV_tmp[0]    != NULL) free(imgUV_tmp[0]);
-  if(imgUV_tmp[1]    != NULL) free(imgUV_tmp[1]);
-  if(imgUV_tmp       != NULL) free(imgUV_tmp);
+  free_mem2D (imgY_ref);
+  free_mem3D (imgUV_ref,2);
+  free_mem2D (imgY_tmp);
+  free_mem3D (imgUV_tmp,2);
 
   // free mem, allocated for structure img
   if (img->mb_data       != NULL) free(img->mb_data);
-  if (img->slice_numbers != NULL) free(img->slice_numbers);
+
   if(img->UseConstrainedIntraPred)
     if (img->intra_mb    != NULL) free(img->intra_mb);
 
-  for(j=0 ; j<(img->width/BLOCK_SIZE + 4) ; j++)         // img => int mv[92][72][3]
-  {
-    if(img->mv[j][0] != NULL) free(img->mv[j][0]) ;
-    if(img->mv[j] != NULL) free(img->mv[j]);
-  }
-  if(img->mv    != NULL) free(img->mv);
+  free_mem3Dint(img->mv,img->width/BLOCK_SIZE + 4);
 
-  if(img->ipredmode[0] != NULL) free(img->ipredmode[0]); // img => int ipredmode[90][74]
-  if(img->ipredmode != NULL) free(img->ipredmode);
+  free_mem2Dint (img->ipredmode);
 
-  for(j=0;j<(img->width/BLOCK_SIZE + 4);j++)             // int dfMV[92][72][3];
-  {
-    if(img->dfMV[j][0] != NULL) free(img->dfMV[j][0]);
-    if(img->dfMV[j] != NULL) free(img->dfMV[j]);
-  }
-  if(img->dfMV    != NULL) free(img->dfMV);
+  free_mem3Dint(img->dfMV,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->dbMV,img->width/BLOCK_SIZE + 4);
 
-  for(j=0;j<(img->width/BLOCK_SIZE + 4);j++)             // int dbMV[92][72][3];
-  {
-    if(img->dbMV[j][0] != NULL) free(img->dbMV[j][0]);
-    if(img->dbMV[j] != NULL) free(img->dbMV[j]);
-  }
-  if(img->dbMV    != NULL) free(img->dbMV);
+  free_mem2Dint(img->fw_refFrArr);
+  free_mem2Dint(img->bw_refFrArr);
 
-  if(img->fw_refFrArr[0] != NULL) free(img->fw_refFrArr[0]);    // int fw_refFrArr[72][88];
-  if(img->fw_refFrArr    != NULL) free(img->fw_refFrArr);
-  if(img->bw_refFrArr[0] != NULL) free(img->bw_refFrArr[0]);    // int bw_refFrArr[72][88];
-  if(img->bw_refFrArr    != NULL) free(img->bw_refFrArr);
-
-  for(j=0;j<(img->width/BLOCK_SIZE + 4);j++)                    // int fw_mv[92][72][3];
-  {
-   if(img->fw_mv[j][0] != NULL) free(img->fw_mv[j][0]);
-   if(img->fw_mv[j]    != NULL) free(img->fw_mv[j]);
-  }
-  if(img->fw_mv        != NULL) free(img->fw_mv);
-
-  for(j=0;j<(img->width/BLOCK_SIZE + 4);j++)                     // int bw_mv[92][72][3];
-  {
-    if(img->bw_mv[j][0] != NULL) free(img->bw_mv[j][0]);
-    if(img->bw_mv[j] != NULL) free(img->bw_mv[j]);
-  }
-  if(img->bw_mv != NULL) free(img->bw_mv);
-
+  free_mem3Dint(img->fw_mv,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->bw_mv,img->width/BLOCK_SIZE + 4);
 }
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 2D memory array -> unsigned char array2D[rows][columns]
- *
- * \par Output:
- *    memory size in bytes
- ************************************************************************/
-// Change 9-Aug-2001 P. List: dont allocate independant row arrays anymore
-// but one complete array and move row-pointers to array. Now you can step
-// to the next line with an offset of img->width
-int get_mem2D(byte ***array2D, int rows, int columns)
-{
-  int i;
-
-  if((*array2D      = (byte**)calloc(rows,        sizeof(byte*))) == NULL)
-    no_mem_exit("get_mem2D: array2D");
-  if(((*array2D)[0] = (byte* )calloc(columns*rows,sizeof(byte ))) == NULL)
-    no_mem_exit("get_mem2D: array2D");
-
-  for(i=1;i<rows;i++)
-    (*array2D)[i] = (*array2D)[i-1] + columns ;
-
-  return rows*columns;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 2D memory array -> int array2D[rows][columns]
- *
- * \par Output:
- *    memory size in bytes
- ************************************************************************
- */
-// same change as in get_mem2Dint
-int get_mem2Dint(int ***array2D, int rows, int columns)
-{
-  int i;
-
-  if((*array2D      = (int**)calloc(rows,        sizeof(int*))) == NULL)
-    no_mem_exit("get_mem2Dint: array2D");
-  if(((*array2D)[0] = (int* )calloc(rows*columns,sizeof(int ))) == NULL)
-    no_mem_exit("get_mem2Dint: array2D");
-
-  for(i=1 ; i<rows ; i++)
-    (*array2D)[i] =  (*array2D)[i-1] + columns  ;
-
-  return rows*columns*sizeof(int);
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 3D memory array -> unsigned char array3D[frames][rows][columns]
- *
- * \par Output:
- *    memory size in bytes
- ************************************************************************
- */
-// same change as in get_mem2Dint
-int get_mem3D(byte ****array3D, int frames, int rows, int columns)
-{
-  int  j;
-
-  if(((*array3D) = (byte***)calloc(frames,sizeof(byte**))) == NULL)
-    no_mem_exit("get_mem3D: array3D");
-
-  for(j=0;j<frames;j++)
-    get_mem2D( (*array3D)+j, rows, columns ) ;
-
-  return frames*rows*columns;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 3D memory array -> int array3D[frames][rows][columns]
- *
- * \par Output:
- *    memory size in bytes
- ************************************************************************
- */
-// same change as in get_mem2Dint
-int get_mem3Dint(int ****array3D, int frames, int rows, int columns)
-{
-  int  j;
-
-  if(((*array3D) = (int***)calloc(frames,sizeof(int**))) == NULL)
-    no_mem_exit("get_mem3Dint: array3D");
-
-  for(j=0;j<frames;j++)
-    get_mem2Dint( (*array3D)+j, rows, columns ) ;
-
-  return frames*rows*columns*sizeof(int);
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Exit program if memory allocation failed (using error())
- * \param where
- *    string indicating which memory allocation failed
- ************************************************************************
- */
-void no_mem_exit(char *where)
-{
-   snprintf(errortext, ET_SIZE, "Could not allocate memory: %s",where);
-   error (errortext, 100);
-}
-

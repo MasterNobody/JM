@@ -46,7 +46,9 @@
  */
 
 #include <stdlib.h>
+#include "mbuffer.h"
 #include "global.h"
+#include "memalloc.h"
 #include "erc_do.h"
 
 extern int erc_mvperMB;
@@ -413,7 +415,8 @@ static int concealByTrial(frame *recfr, byte *predMB,
                   fZeroMotionChecked = 1;
 
                   mvPred[0] = mvPred[1] = 0;
-                  mvPred[2] = erc_img->frame_cycle;
+//*KS*                  mvPred[2] = erc_img->frame_cycle;
+                  mvPred[2] = 0;
                   
                   buildPredRegionYUV(erc_img, mvPred, currRegion->xMin, currRegion->yMin, predMB);
                 }
@@ -472,7 +475,8 @@ static int concealByTrial(frame *recfr, byte *predMB,
     if (!fZeroMotionChecked) 
     {
       mvPred[0] = mvPred[1] = 0;
-      mvPred[2] = erc_img->frame_cycle;
+//*KS*      mvPred[2] = erc_img->frame_cycle;
+      mvPred[2] = 0;
 
       buildPredRegionYUV(erc_img, mvPred, currRegion->xMin, currRegion->yMin, predMB);
       

@@ -48,8 +48,10 @@
 #include <memory.h>
 #include <string.h>
 #include "cabac.h"
+#include "memalloc.h"
 #include "elements.h"
 #include "bitsbuf.h"
+#include "header.h"
 
 extern const int BLOCK_STEP[8][2];
 int symbolCount = 0;
@@ -837,12 +839,13 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
         mv_pred_res = 0;
     else
     {
-        act_ctx=5*k+4;
-        mv_sign = biari_decode_symbol(dep_dp,&ctx->mv_res_contexts[1][act_ctx] );
-
+  
         act_ctx=5*k;
         act_sym = unary_mv_decode(dep_dp,ctx->mv_res_contexts[1]+act_ctx,3);
         act_sym++;
+        act_ctx=5*k+4;
+        mv_sign = biari_decode_symbol(dep_dp,&ctx->mv_res_contexts[1][act_ctx] );
+
         mv_pred_res = ((mv_sign != 0) ? (-act_sym) : act_sym);
     }
     se->value1 = mv_pred_res;
@@ -1085,7 +1088,7 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   BitstreamLengthInBytes = currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, code_buffer);
 
   // Here we are ready to interpret the picture and slice headers.  Since
-  // PictureHeader() and SliceHeader() get their data out of the UVLC's len/info
+  // SliceHeader() gets the data out of the UVLC's len/info
   // array, we need to convert the start of our slice to such a format.
 
 
@@ -1100,7 +1103,7 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
     error(errortext, 600);
   }
   currStream->frame_bitoffset +=31;
-  BitsUsedByHeader+=PictureHeader(img, inp);
+  BitsUsedByHeader+=SliceHeader(img, inp);
 
   //WYK: Oct. 8, 2001, change the method to find a new frame
   if(img->tr != img->tr_old)

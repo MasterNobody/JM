@@ -50,6 +50,8 @@
 
 #define RTP_MAX_STRING_LEN 4096
 
+#include "mbuffer.h"
+
 typedef struct
 {
   int Valid;            //!< 0: invalid, else valid, not yet used
@@ -76,6 +78,7 @@ typedef struct
   int FramesToBeEncoded;
   int FrameSkip;
   char SequenceFileName [RTP_MAX_STRING_LEN];
+  int NumberBFrames;
 } InformationParameterSet_t;
 
 #define MAXRTPPAYLOADLEN  (65536 - 40)    //!< Maximum payload size of an RTP packet */
@@ -104,10 +107,12 @@ typedef struct
   unsigned int packlen;    //!< length of packet, typically paylen+12
 } RTPpacket_t;
 
+
 typedef struct
 {
   int ParameterSet;
   int PictureID;
+  int PictureNum;
   int SliceType;
   int FirstMBInSliceX;
   int FirstMBInSliceY;
@@ -115,6 +120,9 @@ typedef struct
   int InitialSPQP;
   int SliceID;            //!< not used for single Slice packets, see VCEG-N72
   int CABAC_LastMB;       //!< UVLC-coded Last MB for CABAC
+  int RPBT;
+  RMPNIbuffer_t *RMPNIbuffer;
+  MMCObuffer_t  *MMCObuffer;
 } RTPSliceHeader_t;
 
 
@@ -126,7 +134,7 @@ int  RTP_startcode_follows(struct img_par *img, struct inp_par *inp);
 void RTP_get_symbol(SyntaxElement *sym, Bitstream *currStream);
 int  RTP_symbols_available (Bitstream *currStream);
 int  RTPInterpretParameterSetPacket (char *buf, int buflen);
-int  RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp);
+void  RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp);
 int  RTPReadPartitions (struct img_par *img, struct inp_par *inp, FILE *bits);
 int  DecomposeRTPpacket (RTPpacket_t *p);
 void DumpRTPHeader (RTPpacket_t *p);
@@ -137,5 +145,9 @@ int  RTPSequenceHeader (struct img_par *img, struct inp_par *inp, FILE *bits);
 void RTPSetImgInp(struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *sh);
 int  RTPGetFollowingSliceHeader (struct img_par *img, RTPpacket_t *p, RTPSliceHeader_t *sh);
 int  get_lastMB(struct img_par *img, RTPSliceHeader_t *sh, RTPpacket_t *p);
+int RTPReadPacket (RTPpacket_t *p, FILE *bits);
+void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, FILE *bits, 
+                                     RTPpacket_t *a, int a_SliceID);
+void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP);
 
 #endif

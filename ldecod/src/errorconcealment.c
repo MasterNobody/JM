@@ -80,9 +80,10 @@ int set_ec_flag(
   int se)   //!< type of syntax element to conceal
 {
 
+  /*
   if (ec_flag[se] == NO_EC)
     printf("Error concealment on element %s\n",SEtypes[se]);
-
+  */
   switch (se)
   {
   case SE_HEADER :
@@ -136,8 +137,11 @@ int set_ec_flag(
   case SE_CHR_AC_INTER :
     ec_flag[SE_CHR_AC_INTER] = EC_REQ;
     break;
-   case SE_DELTA_QUANT :
-    ec_flag[SE_DELTA_QUANT] = EC_REQ;
+  case SE_DELTA_QUANT_INTER :
+    ec_flag[SE_DELTA_QUANT_INTER] = EC_REQ;
+    break;
+  case SE_DELTA_QUANT_INTRA :
+    ec_flag[SE_DELTA_QUANT_INTRA] = EC_REQ;
     break;
   default:
     break;
@@ -176,11 +180,11 @@ int get_concealed_element(SyntaxElement *sym)
 {
   if (ec_flag[sym->type] == NO_EC)
     return NO_EC;
-
+/*
 #if TRACE
   printf("TRACE: get concealed element for %s!!!\n", SEtypes[sym->type]);
 #endif
-
+*/
   switch (sym->type)
   {
   case SE_HEADER :
@@ -227,7 +231,11 @@ int get_concealed_element(SyntaxElement *sym)
     sym->inf = 0;  // return EOB
     break;
 
-  case SE_DELTA_QUANT:
+  case SE_DELTA_QUANT_INTER:
+    sym->len = 1;
+    sym->inf = 0;
+    break;
+  case SE_DELTA_QUANT_INTRA:
     sym->len = 1;
     sym->inf = 0;
     break;

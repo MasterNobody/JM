@@ -503,10 +503,10 @@ void LumaResidualCoding_B()
 
                 // next P is intra mode
                 if(refFrArr[pic_block_y][pic_block_x]==-1)
-                  ref_inx=(img->number-1)%img->buf_cycle;
+                  ref_inx=1;
                 // next P is skip or inter mode
                 else
-                  ref_inx=(img->number-refFrArr[pic_block_y][pic_block_x]-1)%img->buf_cycle;
+                  ref_inx=refFrArr[pic_block_y][pic_block_x]+1;
 
                 for (j=0;j<4;j++)
                 {
@@ -530,10 +530,10 @@ void LumaResidualCoding_B()
 
                 // next P is intra mode
                 if(refFrArr[pic_block_y][pic_block_x]==-1)
-                  ref_inx=(img->number-1)%img->buf_cycle;
+                  ref_inx=1;
                 // next P is skip or inter mode
                 else
-                  ref_inx=(img->number-refFrArr[pic_block_y][pic_block_x]-1)%img->buf_cycle;
+                  ref_inx=refFrArr[pic_block_y][pic_block_x]+1;
 
                 for (j=0;j<4;j++)
                 {
@@ -769,10 +769,10 @@ void ChromaCoding_B(int *cr_cbp)
 
           // next P is intra mode
           if(refFrArr[pic_block_y][pic_block_x]==-1)
-            ref_inx=(img->number-1)%img->buf_cycle;
+            ref_inx=1;
           // next P is skip or inter mode
           else
-            ref_inx=(img->number-refFrArr[pic_block_y][pic_block_x]-1)%img->buf_cycle;
+            ref_inx=refFrArr[pic_block_y][pic_block_x]+1;
 
           fw_pred=(if0*jf0*mcef[ref_inx][uv][jj0][ii0]+
                if1*jf0*mcef[ref_inx][uv][jj0][ii1]+
@@ -1419,10 +1419,10 @@ void get_dir(int *dir_sad)
             {
               // next P is intra mode
               if(refFrArr[pic_block_y][pic_block_x]==-1)
-                ref_inx=(img->number-1)%img->buf_cycle;
+                ref_inx=1;
               // next P is skip or inter mode
               else
-                ref_inx=(img->number-refFrArr[pic_block_y][pic_block_x]-1)%img->buf_cycle;
+                ref_inx=refFrArr[pic_block_y][pic_block_x]+1;
 
               for (j=0;j<4;j++)
               {
@@ -1457,10 +1457,10 @@ void get_dir(int *dir_sad)
             {
               // next P is intra mode
               if(refFrArr[pic_block_y][pic_block_x]==-1)
-                ref_inx=(img->number-1)%img->buf_cycle;
+                ref_inx=1;
               // next P is skip or inter mode
               else
-                ref_inx=(img->number-refFrArr[pic_block_y][pic_block_x]-1)%img->buf_cycle;
+                ref_inx=refFrArr[pic_block_y][pic_block_x]+1;
 
               for (j=0;j<4;j++)
               {

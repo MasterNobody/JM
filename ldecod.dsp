@@ -66,7 +66,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /W3 /GX /Zi /Od /I "ldecod/inc" /I "shared" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
+# ADD CPP /nologo /W3 /GX /Zi /Od /I "ldecod/inc" /I "lcommon/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -151,6 +151,14 @@ SOURCE=.\ldecod\src\macroblock.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\mbuffer.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\src\memalloc.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\nal_part.c
 # End Source File
 # Begin Source File
@@ -232,6 +240,14 @@ SOURCE=.\ldecod\inc\leaky_bucket.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\macroblock.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\mbuffer.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\memalloc.h
 # End Source File
 # Begin Source File
 

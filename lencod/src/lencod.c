@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 9.4
+ *     TML 9.6
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -79,9 +79,11 @@
 #include "global.h"
 #include "configfile.h"
 #include "leaky_bucket.h"
+#include "memalloc.h"
+#include "mbuffer.h"
 
 #define TML     "9"
-#define VERSION "9.40"
+#define VERSION "9.60"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -130,7 +132,8 @@ int main(int argc,char **argv)
   init_stat();
 
   // allocate memory for frame buffers
-  get_mem4global_buffers();
+  init_frame_buffers(input,img);
+  init_global_buffers();
 
   // Just some information which goes to the standard output
   information_init();
@@ -148,8 +151,10 @@ int main(int argc,char **argv)
   initial_Bframes = input->successive_Bframe;
 #endif
 
+
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
+    img->pn = img->number % (img->buf_cycle+1);
     if (input->intra_period == 0)
     {
       if (img->number == 0)
@@ -238,7 +243,8 @@ int main(int argc,char **argv)
   free_slice();
 
   // free allocated memory for frame buffers
-  free_mem4global_buffers();
+  free_frame_buffers(input,img);
+  free_global_buffers();
 
   // free image mem
   free_img ();
@@ -266,6 +272,10 @@ void init_img()
 #else
   img->buf_cycle = input->no_multpred;
 #endif
+
+  img->lindex=0;
+  img->max_lindex=0;
+
   img->framerate=INIT_FRAME_RATE;   // The basic frame rate (of the original sequence)
 
   get_mem_mv (&(img->mv));
@@ -281,9 +291,6 @@ void init_img()
 
   if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
     no_mem_exit("init_img: img->mb_data");
-
-  if(((img->slice_numbers) = (int *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(int))) == NULL)
-    no_mem_exit("init_img: img->slice_numbers");
 
   if(input->UseConstrainedIntraPred)
   {
@@ -738,7 +745,7 @@ void report()
   fprintf(stdout,"Exit TML %s encoder ver %s\n", TML, VERSION);
 
   // status file
-  if ((p_stat=fopen("stat.dat","wb"))==0)
+  if ((p_stat=fopen("stat.dat","wt"))==0)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s", "stat.dat");
     error(errortext, 500);
@@ -747,8 +754,8 @@ void report()
   fprintf(p_stat,"  This file contains statistics for the last encoded sequence   \n");
   fprintf(p_stat," -------------------------------------------------------------- \n");
   fprintf(p_stat,   " Sequence                     : %s\n",input->infile);
-  fprintf(p_stat,   " No.of coded pictures         : %d\n",input->no_frames+Bframe_ctr);
-  fprintf(p_stat,   " Freq. for encoded bitstream  : %3.0f\n",frame_rate);
+  fprintf(p_stat,   " No.of coded pictures         : %4d\n",input->no_frames+Bframe_ctr);
+  fprintf(p_stat,   " Freq. for encoded bitstream  : %4.0f\n",frame_rate);
 
   // B pictures
   if(input->successive_Bframe != 0)
@@ -764,14 +771,14 @@ void report()
   else
     fprintf(p_stat," Hadamard transform           : Not used\n");
 
-  fprintf(p_stat," Image format                 : %dx%d\n",input->img_width,input->img_height);
+  fprintf(p_stat,  " Image format                 : %dx%d\n",input->img_width,input->img_height);
 
   if(input->intra_upd)
     fprintf(p_stat," Error robustness             : On\n");
   else
     fprintf(p_stat," Error robustness             : Off\n");
 
-  fprintf(p_stat,    " Search range                 : %d\n",input->search_range);
+  fprintf(p_stat,  " Search range                 : %d\n",input->search_range);
 
   if(input->mv_res)
     fprintf(p_stat," MV resolution                : 1/8-pel\n");
@@ -783,14 +790,14 @@ void report()
     {
       fprintf(p_stat,   " No of frame used in P pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
       if(input->successive_Bframe != 0)
-        fprintf(p_stat,   " No of frame used in B pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+        fprintf(p_stat, " No of frame used in B pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
     }
   else
 #endif
   {
     fprintf(p_stat,   " No of frame used in P pred   : %d\n",input->no_multpred);
     if(input->successive_Bframe != 0)
-      fprintf(p_stat,   " No of frame used in B pred   : %d\n",input->no_multpred);
+      fprintf(p_stat, " No of frame used in B pred   : %d\n",input->no_multpred);
   }
   if (input->symbol_mode == UVLC)
     fprintf(p_stat,   " Entropy coding method        : UVLC\n");
@@ -830,25 +837,25 @@ void report()
   fprintf(p_stat,"   Intra            |   Mode used   |\n");
   fprintf(p_stat," -------------------|---------------|\n");
 
-  fprintf(p_stat," Mode 0  intra old\t| %5d         |\n",stat->mode_use_intra[0]);
-  for (i=1;i<24;i++)
-    fprintf(p_stat," Mode %d intra new\t| %5d         |\n",i,stat->mode_use_intra[i]);
+  fprintf(p_stat," Mode  0 intra old  | %5d         |\n",stat->mode_use_intra[0]);
+  for (i=1;i<=24;i++)
+    fprintf(p_stat," Mode %2d intra new  | %5d         |\n",i,stat->mode_use_intra[i]);
 
   fprintf(p_stat,"\n -------------------|---------------|---------------|\n");
   fprintf(p_stat,"   Inter            |   Mode used   | Vector bit use|\n");
   fprintf(p_stat," -------------------|---------------|---------------|");
 
-  fprintf(p_stat,"\n Mode 0  (copy)  \t| %5d         | %5.0f         |",stat->mode_use_inter[0],(float)stat->bit_use_mode_inter[0]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 1  (16x16) \t| %5d         | %5.0f         |",stat->mode_use_inter[1],(float)stat->bit_use_mode_inter[1]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 2  (16x8)  \t| %5d         | %5.0f         |",stat->mode_use_inter[2],(float)stat->bit_use_mode_inter[2]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 3  (8x16)  \t| %5d         | %5.0f         |",stat->mode_use_inter[3],(float)stat->bit_use_mode_inter[3]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 4  (8x8)   \t| %5d         | %5.0f         |",stat->mode_use_inter[4],(float)stat->bit_use_mode_inter[4]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 5  (8x4)   \t| %5d         | %5.0f         |",stat->mode_use_inter[5],(float)stat->bit_use_mode_inter[5]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 6  (4x8)   \t| %5d         | %5.0f         |",stat->mode_use_inter[6],(float)stat->bit_use_mode_inter[6]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 7  (4x4)   \t| %5d         | %5.0f         |",stat->mode_use_inter[7],(float)stat->bit_use_mode_inter[7]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode 8 intra old\t| %5d         | --------------|",stat->mode_use_inter[8]);
+  fprintf(p_stat,"\n Mode  0  (copy)    | %5d         | %5.0f         |",stat->mode_use_inter[0],(float)stat->bit_use_mode_inter[0]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         | %5.0f         |",stat->mode_use_inter[1],(float)stat->bit_use_mode_inter[1]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         | %5.0f         |",stat->mode_use_inter[2],(float)stat->bit_use_mode_inter[2]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         | %5.0f         |",stat->mode_use_inter[3],(float)stat->bit_use_mode_inter[3]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         | %5.0f         |",stat->mode_use_inter[4],(float)stat->bit_use_mode_inter[4]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  5  (8x4)     | %5d         | %5.0f         |",stat->mode_use_inter[5],(float)stat->bit_use_mode_inter[5]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  6  (4x8)     | %5d         | %5.0f         |",stat->mode_use_inter[6],(float)stat->bit_use_mode_inter[6]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  7  (4x4)     | %5d         | %5.0f         |",stat->mode_use_inter[7],(float)stat->bit_use_mode_inter[7]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  8 intra old  | %5d         | --------------|",stat->mode_use_inter[8]);
   for (i=9;i<33;i++)
-    fprintf(p_stat,"\n Mode %d intr.new \t| %5d         |",i,stat->mode_use_inter[i]);
+    fprintf(p_stat,"\n Mode %2d intr.new   | %5d         |",i,stat->mode_use_inter[i]);
 
   // B pictures
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
@@ -858,69 +865,69 @@ void report()
     fprintf(p_stat," -------------------|---------------|");
 
     for(i=0; i<16; i++)
-      fprintf(p_stat,"\n Mode %d   \t| %5d         |", i, stat->mode_use_Bframe[i]);
-    fprintf(p_stat,"\n Mode %d intra old\t| %5d     |", 16, stat->mode_use_Bframe[16]);
+      fprintf(p_stat,"\n Mode %2d            | %5d         |", i, stat->mode_use_Bframe[i]);
+    fprintf(p_stat,"\n Mode %2d intra old  | %5d         |", 16, stat->mode_use_Bframe[16]);
     for (i=17; i<41; i++)
-      fprintf(p_stat,"\n Mode %d intr.new \t| %5d     |",i, stat->mode_use_Bframe[i]);
+      fprintf(p_stat,"\n Mode %2d intr.new   | %5d         |",i, stat->mode_use_Bframe[i]);
   }
 
-  fprintf(p_stat,"\n\n -------------------|---------------|---------------|---------------|\n");
-  fprintf(p_stat,"  Bit usage:        |     Intra     |    Inter      |   B frame     |\n");
-  fprintf(p_stat," -------------------|---------------|---------------|---------------|\n");
+  fprintf(p_stat,"\n\n --------------------|----------------|----------------|----------------|\n");
+  fprintf(p_stat,"  Bit usage:         |      Intra     |     Inter      |    B frame     |\n");
+  fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
 
-  fprintf(p_stat," Header+modeinfo    |");
-  fprintf(p_stat," %7d       |",stat->bit_use_header[0]);
-  fprintf(p_stat," %7d       |",stat->bit_use_header[1]/bit_use[1][0]);
+  fprintf(p_stat," Header+modeinfo     |");
+  fprintf(p_stat," %8d       |",stat->bit_use_header[0]);
+  fprintf(p_stat," %8d       |",stat->bit_use_header[1]/bit_use[1][0]);
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %7d       |",stat->bit_use_header[2]/Bframe_ctr);
-  else fprintf(p_stat," %7d       |", 0);
+    fprintf(p_stat," %8d       |",stat->bit_use_header[2]/Bframe_ctr);
+  else fprintf(p_stat," %8d       |", 0);
   fprintf(p_stat,"\n");
 
-  fprintf(p_stat," CBP Y/C            |");
+  fprintf(p_stat," CBP Y/C             |");
   for (j=0; j < 2; j++)
   {
-    fprintf(p_stat," %7.2f       |", (float)stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
+    fprintf(p_stat," %8.2f       |", (float)stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
   }
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %7.2f       |", (float)stat->tmp_bit_use_cbp[2]/Bframe_ctr);
-  else fprintf(p_stat," %7.2f       |", 0.);
+    fprintf(p_stat," %8.2f       |", (float)stat->tmp_bit_use_cbp[2]/Bframe_ctr);
+  else fprintf(p_stat," %8.2f       |", 0.);
   fprintf(p_stat,"\n");
 
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," Coeffs. Y          | %7.2f      | %7.2f       | %7.2f       |\n",
+    fprintf(p_stat," Coeffs. Y           | %8.2f       | %8.2f       | %8.2f       |\n",
       (float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], (float)stat->bit_use_coeffY[2]/Bframe_ctr);
   else
-    fprintf(p_stat," Coeffs. Y          | %7.2f      | %7.2f       | %7.2f       |\n",
+    fprintf(p_stat," Coeffs. Y           | %8.2f       | %8.2f       | %8.2f       |\n",
       (float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], 0.);
 
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," Coeffs. C          | %7.2f       | %7.2f       | %7.2f       |\n",
+    fprintf(p_stat," Coeffs. C           | %8.2f       | %8.2f       | %8.2f       |\n",
       (float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], (float)stat->bit_use_coeffC[2]/Bframe_ctr);
   else
-    fprintf(p_stat," Coeffs. C          | %7.2f       | %7.2f       | %7.2f       |\n",
+    fprintf(p_stat," Coeffs. C           | %8.2f       | %8.2f       | %8.2f       |\n",
       (float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], 0.);
 
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," Delta quant        | %7.2f       | %7.2f       | %7.2f       |\n",
+    fprintf(p_stat," Delta quant         | %8.2f       | %8.2f       | %8.2f       |\n",
       (float)stat->bit_use_delta_quant[0]/bit_use[0][0], (float)stat->bit_use_delta_quant[1]/bit_use[1][0], (float)stat->bit_use_delta_quant[2]/Bframe_ctr);
   else
-    fprintf(p_stat," Delta quant        | %7.2f       | %7.2f       | %7.2f       |\n",
+    fprintf(p_stat," Delta quant         | %8.2f       | %8.2f       | %8.2f       |\n",
       (float)stat->bit_use_delta_quant[0]/bit_use[0][0], (float)stat->bit_use_delta_quant[1]/bit_use[1][0], 0.);
 
 
-  fprintf(p_stat," -------------------|---------------|---------------|---------------|\n");
+  fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
 
-  fprintf(p_stat," average bits/frame |");
+  fprintf(p_stat," average bits/frame  |");
   for (i=0; i < 2; i++)
   {
-    fprintf(p_stat," %7d       |",bit_use[i][1]/bit_use[i][0]);
+    fprintf(p_stat," %8d       |",bit_use[i][1]/bit_use[i][0]);
   }
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %7d       |", bit_use_Bframe/Bframe_ctr);
-  else fprintf(p_stat," %7d       |", 0);
+    fprintf(p_stat," %8d       |", bit_use_Bframe/Bframe_ctr);
+  else fprintf(p_stat," %8d       |", 0);
 
   fprintf(p_stat,"\n");
-  fprintf(p_stat," -------------------|---------------|---------------|---------------|\n");
+  fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
 
   // write to log file
   if (fopen("log.dat","r")==0)                      // check if file exist
@@ -1141,21 +1148,21 @@ void information_init()
  * \brief
  *    Dynamic memory allocation of frame size related global buffers
  *    buffers are defined in global.h, allocated memory must be freed in
- *    void free_mem4global_buffers()
+ *    void free_global_buffers()
  * \par Input:
  *    Input Parameters struct inp_par *inp,                            \n
  *    Image Parameters struct img_par *img
  * \return Number of allocated bytes
  ************************************************************************
  */
-int get_mem4global_buffers()
+int init_global_buffers()
 {
   int j,memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
 
   if ((last_P_no = (int*)malloc(img->buf_cycle*sizeof(int))) == NULL)
-    no_mem_exit("get_mem4global_buffers: last_P_no");
+    no_mem_exit("init_global_buffers: last_P_no");
 #endif
 
   // allocate memory for encoding frame buffers: imgY, imgUV
@@ -1188,15 +1195,13 @@ int get_mem4global_buffers()
   // rows and cols for croma component mcef[ref][croma][4x][4y] are switched
   // compared to luma mref[ref][4y][4x] for whatever reason
   // number of reference frames increased by one for next P-frame
-  memory_size += get_mem3D(&mref, img->buf_cycle+1, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-  if((mcef = (byte****)calloc(img->buf_cycle+1,sizeof(byte***))) == NULL)
-    no_mem_exit("get_mem4global_buffers: mcef");
-  for(j=0;j<img->buf_cycle+1;j++)
-  {
-    memory_size += get_mem3D(&(mcef[j]), 2, img->height_cr, img->width_cr);
-  }
 
-  InitRefbuf (Refbuf11, Refbuf11_P);
+  alloc_mref(img);
+
+  alloc_Refbuf (img);
+
+  if (NULL == (Refbuf11_P = malloc ((img->width * img->height) * sizeof (pel_t))))
+    no_mem_exit ("init_global_buffers: Refbuf11_P");
 
 
   // allocate memory for B-frame coding (last upsampled P-frame): mref_P, mcref_P
@@ -1242,7 +1247,7 @@ int get_mem4global_buffers()
   {
     memory_size += get_mem2Dint(&resY, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
     if ((decref = (byte****) calloc(input->NoOfDecoders,sizeof(byte***))) == NULL) 
-      no_mem_exit("get_mem4global_buffers: decref");
+      no_mem_exit("init_global_buffers: decref");
     for (j=0 ; j<input->NoOfDecoders; j++)
     {
       memory_size += get_mem3D(&decref[j], img->buf_cycle+1, img->height, img->width);
@@ -1251,6 +1256,9 @@ int get_mem4global_buffers()
     memory_size += get_mem3D(&decY, input->NoOfDecoders, img->height, img->width);
     memory_size += get_mem3D(&decY_best, input->NoOfDecoders, img->height, img->width);
     memory_size += get_mem2D(&status_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
+    memory_size += get_mem2D(&dec_mb_mode, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
+    memory_size += get_mem2D(&dec_mb_ref, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
+
   }
 
   return (memory_size);
@@ -1269,7 +1277,7 @@ int get_mem4global_buffers()
  *    none
  ************************************************************************
  */
-void free_mem4global_buffers()
+void free_global_buffers()
 {
   int  i,j;
 
@@ -1310,32 +1318,13 @@ void free_mem4global_buffers()
 
 
   free (Refbuf11_P);
-  for (j=0; j<img->buf_cycle; j++)
-    free (Refbuf11[j]);
   free (Refbuf11);
 
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
-  for(j=0;j<=img->buf_cycle;j++)
-  {
-    free(mref[j][0]);
-    free(mref[j]);
-    free(mcef[j][0][0]);
-    free(mcef[j][1][0]);
-    free(mcef[j][0]);
-    free(mcef[j][1]);
-    free(mcef[j]);
-  }
 
   free(mref);
   free(mcef);
-  free(mref_P[0]);
-  free(mref_P);
-  free(mcef_P[0][0]);
-  free(mcef_P[1][0]);
-  free(mcef_P[0]);
-  free(mcef_P[1]);
-  free(mcef_P);
 
   if(input->successive_Bframe!=0)
   {
@@ -1384,7 +1373,6 @@ void free_mem4global_buffers()
   free(img->ipredmode[0]);
   free(img->ipredmode);
   free(img->mb_data);
-  free(img->slice_numbers);
   if(input->UseConstrainedIntraPred)
   {
     free(img->intra_mb);
@@ -1414,36 +1402,13 @@ void free_mem4global_buffers()
     free(decref);
     free(status_map[0]);
     free(status_map);
+    free(dec_mb_mode[0]);
+    free(dec_mb_mode);
+    free(dec_mb_ref[0]);
+    free(dec_mb_ref);
+
   }
 }
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 2D memory array -> unsigned char array2D[rows][columns]
- * \par Input:
- *    none
- * \return memory size in bytes
- ************************************************************************
- */
-// Change 9-Aug-2001 P. List: dont allocate independant row arrays anymore
-// but one complete array and move row-pointers to array. Now you can step
-// to the next line with an offset of img->width
-int get_mem2D(byte ***array2D, int rows, int columns)
-{
-  int i;
-
-  if((*array2D      = (byte**)calloc(rows,        sizeof(byte*))) == NULL)
-    no_mem_exit("get_mem2D: array2D");
-  if(((*array2D)[0] = (byte* )calloc(columns*rows,sizeof(byte ))) == NULL)
-    no_mem_exit("get_mem2D: array2D");
-
-  for(i=1;i<rows;i++)
-    (*array2D)[i] = (*array2D)[i-1] + columns ;
-
-  return rows*columns;
-}
-
 
 /*!
  ************************************************************************
@@ -1509,107 +1474,5 @@ void free_mem_mv (int***** mv)
     free (mv[i]);
   }
   free (mv);
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 2D memory array -> int array2D[rows][columns]
- * \param rows
- *    number of rows
- * \param columns
- *    number of columns
- * \par Output:
- *    int ***array2D allocated memory
- * \return memory size in bytes
- ************************************************************************
- */
-// same change as in get_mem2Dint
-int get_mem2Dint(int ***array2D, int rows, int columns)
-{
-  int i;
-
-  if((*array2D      = (int**)calloc(rows,        sizeof(int*))) == NULL)
-    no_mem_exit("get_mem2Dint:array2D");
-  if(((*array2D)[0] = (int* )calloc(rows*columns,sizeof(int ))) == NULL)
-    no_mem_exit("get_mem2Dint:array2D");
-
-  for(i=1 ; i<rows ; i++)
-    (*array2D)[i] =  (*array2D)[i-1] + columns  ;
-
-  return rows*columns*sizeof(int);
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *   Allocate 3D memory array -> unsigned char array3D[frames][rows][columns]
- * \param frames
- *    number of frames
- * \param rows
- *    number of rows
- * \param columns
- *    number of columns
- * \par Output:
- *    byte ****array3D allocated memory
- * \return memory size in bytes
- ************************************************************************
- */
-// same change as in get_mem2Dint
-int get_mem3D(byte ****array3D, int frames, int rows, int columns)
-{
-  int  j;
-
-  if(((*array3D) = (byte***)calloc(frames,sizeof(byte**))) == NULL)
-    no_mem_exit("get_mem3D: array3D");
-
-  for(j=0;j<frames;j++)
-    get_mem2D( (*array3D)+j, rows, columns ) ;
-
-  return frames*rows*columns;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Allocate 3D memory array -> int array3D[frames][rows][columns]
- * \param frames
- *    number of frames
- * \param rows
- *    number of rows
- * \param columns
- *    number of columns
- * \par Output:
- *    int ****array3D allocated memory
- * \return memory size in bytes
- ************************************************************************
- */
-// same change as in get_mem2Dint
-int get_mem3Dint(int ****array3D, int frames, int rows, int columns)
-{
-  int  j;
-
-  if(((*array3D) = (int***)calloc(frames,sizeof(int**))) == NULL)
-    no_mem_exit("get_mem3Dint: array3D");
-
-  for(j=0;j<frames;j++)
-    get_mem2Dint( (*array3D)+j, rows, columns ) ;
-
-
-  return frames*rows*columns*sizeof(int);
-}
-/*!
- ************************************************************************
- * \brief
- *    Exit program if memory allocation failed (using error())
- * \param where
- *    string indicating which memory allocation failed
- ************************************************************************
- */
-void no_mem_exit(char *where)
-{
-   snprintf(errortext, ET_SIZE, "Could not allocate memory: %s",where);
-   error (errortext, 100);
 }
 

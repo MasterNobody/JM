@@ -251,7 +251,7 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
 /*!
  ************************************************************************
  * \brief
- *    readSliceUVLC for new Pictureheader according VCEG-M79
+ *    readSliceUVLC
  *
  * \par
  *    Slice Headers can start on every byte aligned position, provided zero-stuffing.
@@ -284,7 +284,10 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
 #if TRACE
     strncpy(sym.tracestring, "\nHeaderinfo", TRACESTRING_SIZE);
 #endif
-    dP = &(currSlice->partArr[partMap[sym.type]]);
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dP = &(currSlice->partArr[partMap[sym.type]]);
     len =  GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length);
 #if TRACE
     tracebits("Startcode", len, info, 0, 0);
@@ -292,8 +295,8 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
 
     currStream->frame_bitoffset +=len;
 
-    // TO 28.08.2001 Note, that we write PictureHeader at the start of any Slice!
-    dummy = PictureHeader(img,inp);
+    // read the slice header
+    dummy = SliceHeader(img,inp);
 
     //WYK: Oct. 8, 2001, change the method to find a new frame
     if(img->tr != img->tr_old)

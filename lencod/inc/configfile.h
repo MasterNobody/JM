@@ -110,7 +110,9 @@ Mapping Map[] = {
     {"ChangeQPStart",            &configinput.qp2start,                0},
 #endif
     {"RDOptimization",           &configinput.rdopt,                   0},
-    {"LossRate",                 &configinput.LossRate,                0},
+    {"LossRateA",                 &configinput.LossRateA,                0},
+    {"LossRateB",                 &configinput.LossRateB,                0},
+    {"LossRateC",                 &configinput.LossRateC,                0},
     {"NumberOfDecoders",         &configinput.NoOfDecoders,            0},
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
     {"AdditionalReferenceFrame", &configinput.add_ref_frame,           0},

@@ -35,7 +35,7 @@
  * \file header.c
  *
  * \brief
- *    H.26L Slice, Picture, and Sequence headers
+ *    H.26L Slice and Sequence headers
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -60,36 +60,35 @@
 #define SYMTRACESTRING(s) // to nothing
 #endif
 
-// Local Functions
-static int PutSliceStartCode(Bitstream *s);
-static int PutPictureStartCode (Bitstream *s);
+// local function
 static int PutStartCode (int Type, Bitstream *s, char *ts);
 
-// End local Functions
 
-
-int PictureHeader()
+/*!
+ ********************************************************************************************
+ * \brief 
+ *    Write a slice header
+ * \note
+ *    We do not have a picture header. All neccessary information is coded at
+ *    the slice level.
+ ********************************************************************************************
+*/
+int SliceHeader()
 {
-
-// StW: PictureTypeSymbol is the Symbol used to encode the picture type.
-// This is one of the dirtiest hacks if have seen so far from people who
-// usually know what they are doing :-)
-// img->type has one of three possible values (I, P, B), the picture type as coded
-// distiguishes further by indicating whether one or more reference frames are
-// used for P and B frames (hence 5 values).  See decoder/defines.h
-// The mapping is performed in image.c select_picture_type()
-
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
   SyntaxElement sym;
   int len = 0;
+  int Quant = img->qp;                  // Hack.  This should be a parameter as soon as Gisle is done
+  int MBPosition = img->current_mb_nr;  // Hack.  This should be a paremeter as well.
 
-  sym.type = SE_HEADER;       // This will be true for all symbols generated here
-  sym.mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
+  sym.type = SE_HEADER;                 // This will be true for all symbols generated here
+  sym.mapping = n_linfo2;               // Mapping rule: Simple code number to len/info
 
-  // Ok.  We are sure we want to code a Picture Header.  So, first: Put PSC
-  len+=PutPictureStartCode (currStream);
+
+  // Write a slice start code
+  len+=PutStartCode (0, currStream, "\nSlice Header");
 
   // Now, take care of te UVLC coded data structure described in VCEG-M79
   sym.value1 = 0;               // TRType = 0
@@ -104,7 +103,7 @@ int PictureHeader()
   // For all other picture type just indicate that it didn't change.
   // Note: this is currently the prudent way to do things, because we do not
   // have anything similar to Annex P of H.263.  However, we should anticipate
-  // taht one day we may want to have an Annex P type functionality.  Hence, it is
+  // that one day we may want to have an Annex P type functionality.  Hence, it is
   // unwise to assume that P pictures will never have a size indiciation.  So the
   // one bit for an "unchanged" inidication is well spent.
 
@@ -147,28 +146,25 @@ int PictureHeader()
     len += writeSyntaxElement_UVLC (&sym, partition);
   }
 
-  return len;
-}
+  // For the GOB address, use straigtforward procedure.  Note that this allows slices 
+  // to start at MB addresses up to 2^15 MBs due ot start code emulation problems.  
+  // This should be enough for most practical applications,. but probably not for cinema. 
+  // Has to be discussed. For the MPEG tests this is irrelevant, because there the rule 
+  // will be one silce--one picture.
+
+  // Put MB-Adresse
+  assert (MBPosition < (1<<15));
+  SYMTRACESTRING("SH FirstMBInSlice");
+  sym.value1 = MBPosition;
+  len += writeSyntaxElement_UVLC (&sym, partition);
 
 
-int SliceHeader(int UseStartCode)
-{
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  SyntaxElement sym;
-  int len = 0;
-  int Quant = img->qp;          // Hack.  This should be a parameter as soon as Gisle is done
-  int MBPosition = img->current_mb_nr;  // Hack.  This should be a paremeter as well.
+  // Put Quant.  It's a bit irrationale that we still put the same quant here, but it's
+  // a good provision for the future.  In real-world applications slices typically
+  // start with Intra information, and Intra MBs will likely use a different quant
+  // than Inter
 
-  sym.type = SE_HEADER;       // This will be true for all symbols generated here
-  sym.mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
-
-  // Note 1.  Current implementation: Slice start code is similar to pictrure start code
-  // (info is 1 for slice and 0 for picture start code).  Slice Start code is not
-  // present except when generating an UVLC file.  Start codes are typical NAL
-  // functionality, and hence NALs will take care the issue in the future.
-  // Note 2:  Traditionally, the QP is a bit mask.  However, at numerically large QPs
+  // Note:  Traditionally, the QP is a bit mask.  However, at numerically large QPs
   // we usually have high compression and don't want to waste bits, whereas
   // at low QPs this is not as much an issue.  Hence, the QUANT parameter
   // is coded as a UVLC calculated as 31 - QUANT.  That is, the UVLC representation
@@ -181,39 +177,10 @@ int SliceHeader(int UseStartCode)
   // 2 == 1/2 pel resolution
   // 3 == full pel resolution
 
-  if (UseStartCode)
-  {
-    // Input mode 0, File Format, and not Picture Start (first slice in picture)
-    // This is the only case where a slice start code makes sense
-    //
-    // Putting a Slice Start Code is the same like the picture start code.  It's
-    // n ot as straightforward as one thinks,  See remarks above.
-    len += PutSliceStartCode(currStream);
-  };
-
-  // Now we have coded the Pciture header when appropriate, and the slice header when
-  // appropriate.  Follow with the content of the slice header: GOB address of the slice
-  // start and (initial) QP.  For the QP see remarks above.  For the GOB address, use
-  // straigtforward procedure.  Note that this allows slices to start at MB addresses
-  // up to 2^15 MBs due ot start code emulation problems.  This should be enough for
-  // most practical applications,. but probably not for cinema.  Has to be discussed.
-  // For the MPEG tests this is irrelevant, because there the rule will be one silce--
-  // one picture.
-
-  // Put MB-Adresse
-  assert (MBPosition < (1<<15));
-  SYMTRACESTRING("SH FirstMBInSlice");
-  sym.value1 = MBPosition;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  // Put Quant.  It's a bit irrationale that we still put the same quant here, but it's
-  // a good provision for the future.  In real-world applications slices typically
-  // start with Intra information, and Intra MBs will likely use a different quant
-  // than Inter
-
   SYMTRACESTRING("SH SliceQuant");
   sym.value1 = 31 - Quant;
   len += writeSyntaxElement_UVLC (&sym, partition);
+
   if (img->types==SP_IMG)
   {
     SYMTRACESTRING("SH SP SliceQuant");
@@ -221,16 +188,12 @@ int SliceHeader(int UseStartCode)
     len += writeSyntaxElement_UVLC (&sym, partition);
   }
   // Put the Motion Vector resolution as per reflector consensus
-
   SYMTRACESTRING("SH MVResolution");
   sym.value1 = input->mv_res;
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   return len;
 }
-
-
-
 
 int SequenceHeader (FILE *outf)
 {
@@ -322,52 +285,6 @@ int SequenceHeader (FILE *outf)
  ********************************************************************************************
  ********************************************************************************************/
 
-/*!
- ********************************************************************************************
- * \brief
- *    Puts a Picture Start Code into the Bitstream
- *
- * \return
- *    number of bits used for the PSC.
- *
- * \par Side effects:
- *    Adds picture start code to the Bitstream
- *
- * \par Remarks:
- *    THIS IS AN INTERIM SOLUTION FOR A PICTURE HEADER, see VCEG-M79
- *                                                                                        \par
- *    The PSC is a NAL functionality and, hence, should not be put into the
- *    bitstream by a module like this.  It was added here in response to
- *    the need for a quick hack for the MPEG tests.
- *    The PSC consists of a UVLC codeword of len 31 with info 0.  This results
- *    in 30 consecutove 0 bits in the bit stream, which should be easily
- *    identifyable if a need arises.
- ********************************************************************************************
-*/
-
-static int PutPictureStartCode (Bitstream *s)
-{
-  return PutStartCode (0, s, "\nPicture Header");
-}
-
-
-/*!
- ********************************************************************************************
- * \brief
- *    Puts a Slice Start Code into the Bitstream
- *
- * \return
- *    number of bits used for the PSC.
- *
- * \note
- *     See PutPictureStartCode()
- ********************************************************************************************
-*/
-
-static int PutSliceStartCode(Bitstream *s)
-{
-  return PutStartCode (1, s, "\nSlice Header");
-}
 
 /*!
  ********************************************************************************************

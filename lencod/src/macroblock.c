@@ -77,6 +77,7 @@ void proceed2nextMacroblock()
   int i;
   if (p_trace)
   {
+    fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
     if(use_bitstream_backing)
       fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
    // Write out the tracestring for each symbol
@@ -194,9 +195,6 @@ void start_macroblock()
 
   // Save the slice number of this macroblock. When the macroblock below
   // is coded it will use this to decide if prediction for above is possible
-  img->slice_numbers[img->current_mb_nr] = img->current_slice_nr;
-
-  // Save the slice and macroblock number of the current MB
   currMB->slice_nr = img->current_slice_nr;
 
     // Initialize delta qp change from last macroblock. Feature may be used for future rate control
@@ -240,7 +238,7 @@ void start_macroblock()
   {
     currMB->bitcounter[BITS_HEADER] = 0;
   }
-  else if (img->slice_numbers[img->current_mb_nr] == img->slice_numbers[img->current_mb_nr-1]) // current MB belongs to the
+  else if (currMB->slice_nr == img->mb_data[img->current_mb_nr-1].slice_nr) // current MB belongs to the
   // same slice as the last MB
   {
     currMB->bitcounter[BITS_HEADER] = 0;
@@ -305,7 +303,10 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
      if(img->cod_counter)
      {
        // write out the skip MBs to know how many bits we need for the RLC
-       dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+       if(img->type == B_IMG)
+         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+       else
+         dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
        currSE->value1 = img->cod_counter;
        currSE->mapping = n_linfo2;
        currSE->type = SE_MBTYPE;
@@ -413,7 +414,10 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
       img->cod_counter--;
       if(img->cod_counter)
       {
-        dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+        if(img->type == B_IMG)
+          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        else
+          dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
         currSE->value1 = img->cod_counter;
         currSE->mapping = n_linfo2;
         currSE->type = SE_MBTYPE;
@@ -443,7 +447,10 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
   //! TO 4.11.2001 Skip MBs at the end of this slice for Slice Mode 0 or 1
   if(*end_of_slice == TRUE && img->cod_counter && !use_bitstream_backing)
   {
-    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    if(img->type == B_IMG)
+      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     currSE->value1 = img->cod_counter;
     currSE->mapping = n_linfo2;
     currSE->type = SE_MBTYPE;
@@ -1155,6 +1162,7 @@ void write_one_macroblock()
 #if TRACE
         snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
 #endif
+       
         dataPart->writeSyntaxElement( currSE, dataPart);
         bitCount[BITS_MB_MODE]+=currSE->len;
         currSE++;
@@ -1210,6 +1218,7 @@ void write_one_macroblock()
           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
         }
+      
         dataPart->writeSyntaxElement( currSE, dataPart);
         bitCount[BITS_COEFF_Y_MB]+=currSE->len;
 
@@ -1274,6 +1283,7 @@ int writeMotionInfo2NAL_Pframe()
       else
         currSE->writing = writeRefFrame2Buffer_CABAC;
       dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+      
       dataPart->writeSyntaxElement( currSE, dataPart);
       bitCount[BITS_INTER_MB]+=currSE->len;
       no_bits += currSE->len;
@@ -1311,6 +1321,7 @@ int writeMotionInfo2NAL_Pframe()
             currSE->mapping = mvd_linfo2;
           else
             currSE->writing = writeMVD2Buffer_CABAC;
+          
           dataPart = &(currSlice->partArr[partMap[currSE->type]]);
           dataPart->writeSyntaxElement( currSE, dataPart);
           bitCount[BITS_INTER_MB]+=currSE->len;
@@ -1344,14 +1355,21 @@ writeCBPandCoeffs2NAL ()
     // Bits for CBP
     writeMB_bits_for_CBP  ();
     // Bits for Delta quant
+    
+    //! TO Hack for Dquant
     if (currMB->cbp != 0)
-      writeMB_bits_for_Dquant  ();
+    {
+      if (currMB->intraOrInter == INTER_MB)
+        writeMB_bits_for_Dquant_inter();
+      else
+        writeMB_bits_for_Dquant_intra();
+    }
     // Bits for luma coefficients
     writeMB_bits_for_luma (1);
   }
   else // 16x16 based intra modes
   {
-    writeMB_bits_for_Dquant  ();
+    writeMB_bits_for_Dquant_intra  ();
     writeMB_bits_for_16x16_luma ();
   }
   // Bits for chroma 2x2 DC transform coefficients
@@ -1411,8 +1429,14 @@ writeMB_bits_for_CBP ()
   return no_bits;
 }
 
+/*
+ *  TO Hack for the Dquant Problem:
+ *  introduce Dquant_inter and Dquant_intra
+ *
+ *
+ */
 int
-writeMB_bits_for_Dquant ()
+writeMB_bits_for_Dquant_inter ()
 {
   int           no_bits    = 0;
   Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
@@ -1431,7 +1455,48 @@ writeMB_bits_for_Dquant ()
   else if (input->symbol_mode == CABAC)
      currSE->writing = writeDquant_CABAC;// writeMVD2Buffer_CABAC;
 
-   currSE->type = SE_DELTA_QUANT;
+   currSE->type = SE_DELTA_QUANT_INTER;
+
+   // choose the appropriate data partition
+
+   if (img->type != B_IMG)
+     dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
+   else
+     dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
+
+   dataPart->writeSyntaxElement(  currSE, dataPart);
+   bitCount[BITS_DELTA_QUANT_MB]+=currSE->len;
+   no_bits              +=currSE->len;
+
+    // proceed to next SE
+   currSE++;
+   currMB->currSEnr++;
+
+   return no_bits;
+}
+
+
+int
+writeMB_bits_for_Dquant_intra ()
+{
+  int           no_bits    = 0;
+  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  int           *bitCount  = currMB->bitcounter;
+  DataPartition *dataPart;
+  int           *partMap   = assignSE2partition[input->partition_mode];
+
+
+  currSE->value1 = currMB->delta_qp;
+#if TRACE
+  snprintf(currSE->tracestring, TRACESTRING_SIZE, "Delta QP (%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->delta_qp);
+#endif
+  if (input->symbol_mode == UVLC)
+     currSE->mapping = dquant_linfo;
+  else if (input->symbol_mode == CABAC)
+     currSE->writing = writeDquant_CABAC;// writeMVD2Buffer_CABAC;
+
+   currSE->type = SE_DELTA_QUANT_INTRA;
 
    // choose the appropriate data partition
 
@@ -1598,7 +1663,7 @@ writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
         dataPart = &(currSlice->partArr[partMap[currSE->type]]);
       else
         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
+       
       dataPart->writeSyntaxElement (currSE, dataPart);
       bitCount[BITS_COEFF_Y_MB]+=currSE->len;
       no_bits                  +=currSE->len;
@@ -1700,7 +1765,7 @@ writeMB_bits_for_16x16_luma ()
                 dataPart = &(currSlice->partArr[partMap[currSE->type]]);
               else
                 dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
+              
               dataPart->writeSyntaxElement (currSE, dataPart);
               bitCount[BITS_COEFF_Y_MB]+=currSE->len;
               no_bits                  +=currSE->len;
@@ -1772,7 +1837,7 @@ writeMB_bits_for_DC_chroma (int filtering)
           dataPart = &(currSlice->partArr[partMap[currSE->type]]);
         else
           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
+       
         dataPart->writeSyntaxElement (currSE, dataPart);
         bitCount[BITS_COEFF_UV_MB]+=currSE->len;
         no_bits                   +=currSE->len;
@@ -1847,7 +1912,7 @@ writeMB_bits_for_AC_chroma (int  filtering)
                 dataPart = &(currSlice->partArr[partMap[currSE->type]]);
               else
                 dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
+       
               dataPart->writeSyntaxElement (currSE, dataPart);
               bitCount[BITS_COEFF_UV_MB]+=currSE->len;
               no_bits                   +=currSE->len;
@@ -1892,8 +1957,8 @@ int find_sad2(int *intra_mode)
   {
     int mb_nr = img->current_mb_nr;
     int mb_width = img->width/16;
-    int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-    int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
+    int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+    int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
     if(input->UseConstrainedIntraPred)
     {
       if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))

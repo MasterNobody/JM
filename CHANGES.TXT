@@ -1,3 +1,20 @@
+Changes for Version 9.6 to Version 9.4
+--------------------------------------
+
+New Features
+* Data Partitioning (SW/TO)
+* ERPS / Annex U functionality (KS)
+
+-> see "Changes_detail.txt" for more details on changes
+
+Bug Fixes
+* align CABAC MV coding to document (DM)
+* fixes for RD Optimization for error prone channels (DK)
+
+Cleanups
+* cosmetical .dat file updates (ZX/KS)
+* Bitstream file cleanup
+
 Changes for Version 9.4 to Version 9.0
 --------------------------------------
 New Features
@@ -242,3 +259,4 @@ TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 VV	Viktor Varsa		viktor.varsa@nokia.com
 WYK	Ye-Kui Wang		wangy@cs.tut.fi
 YL      Yann Lemaguet		yann.lemaguet@philips.com
+ZX      Z. Xue                  jon_xz@yahoo.com

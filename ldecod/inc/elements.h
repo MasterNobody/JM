@@ -69,7 +69,8 @@
  *  TYPE_MBHEADER   | SE_MBTYPE, SE_REFFRAME, SE_INTRAPREDMODE
  *  TYPE_MVD        | SE_MVD
  *  TYPE_CBP        | SE_CBP_INTRA, SE_CBP_INTER
- *  SE_DELTA_QUANT
+ *  SE_DELTA_QUANT_INTER
+ *  SE_DELTA_QUANT_INTRA
  *  TYPE_COEFF_Y    | SE_LUM_DC_INTRA, SE_LUM_AC_INTRA, SE_LUM_DC_INTER, SE_LUM_AC_INTER
  *  TYPE_2x2DC      | SE_CHR_DC_INTRA, SE_CHR_DC_INTER
  *  TYPE_COEFF_C    | SE_CHR_AC_INTRA, SE_CHR_AC_INTER
@@ -92,10 +93,11 @@
 #define SE_CHR_DC_INTER     13
 #define SE_LUM_AC_INTER     14
 #define SE_CHR_AC_INTER     15
-#define SE_DELTA_QUANT      16
-#define SE_BFRAME           17
-#define SE_EOS              18
-#define SE_MAX_ELEMENTS     19
+#define SE_DELTA_QUANT_INTER      16
+#define SE_DELTA_QUANT_INTRA      17
+#define SE_BFRAME           18
+#define SE_EOS              19
+#define SE_MAX_ELEMENTS     20
 
 
 #define NO_EC               0   //!< no error concealment necessary
@@ -122,7 +124,8 @@ static char SEtypes[][20] =
     "SE_CHR_DC_INTER",
     "SE_LUM_AC_INTER",
     "SE_CHR_AC_INTER",
-    "SE_DELTA_QUANT",
+    "SE_DELTA_QUANT_INTER",
+    "SE_DELTA_QUANT_INTRA",
     "SE_BFRAME",
     "SE_EOS"
 };
@@ -155,9 +158,9 @@ static char SEtypes[][20] =
 
 static int assignSE2partition[][SE_MAX_ELEMENTS] =
 {
-  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18  // elementnumber (no not uncomment)
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
-  {  0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 0, 0, 0 }    //!< three partitions per slice
+  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 // elementnumber (no not uncomment)
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
+  {  0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 0, 0 }    //!< three partitions per slice
 };
 
 static int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment

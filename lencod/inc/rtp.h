@@ -89,5 +89,6 @@ void RTPUpdateTimestamp (int tr);
 int  RTPSliceHeader();
 int  RTPWriteBits (int Marker, int PacketType, void * bitstream, 
                    int BitStreamLenInByte, FILE *out);
+int RTPPartition_BC_Header();
 
 #endif

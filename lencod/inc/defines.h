@@ -61,6 +61,9 @@
 #define _ADDITIONAL_REFERENCE_FRAME_
 #define _LEAKYBUCKET_
 
+// #define _CHECK_MULTI_BUFFER_1_
+// #define _CHECK_MULTI_BUFFER_2_
+
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
 #define TRACE           1        //!< 0:Trace off 1:Trace on

@@ -63,6 +63,7 @@
 #include "global.h"
 #include "elements.h"
 #include "image.h"
+#include "mbuffer.h"
 
 #if _ERROR_CONCEALMENT_
 #include "erc_api.h"
@@ -143,6 +144,10 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     if (current_header == SOP)
       init_frame(img, inp);
 
+    // do reference frame buffer reordering
+    reorder_mref(img);
+
+
 #if _ERROR_CONCEALMENT_
     if (current_header == SOP)
     {
@@ -156,12 +161,20 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     }
     // mark the start of a slice 
     ercStartSegment(currSlice->start_mb_nr, ((currSlice->start_mb_nr == 0) ? 0 : -1), 0 , erc_errorVar);
-#endif
     
+
     // decode main slice information
     if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
       decode_one_slice(img,inp);
+#else
 
+    // decode main slice information
+    if (current_header == SOP || current_header == SOS)
+      decode_one_slice(img,inp);
+
+#endif
+    
+    
 #if _ERROR_CONCEALMENT_
     if(!currSlice->ei_flag)  // slice received
     {
@@ -204,9 +217,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   else
     ercConcealInterFrame(&recfr, erc_object_list, img->width, img->height, erc_errorVar);
 #endif
-
-  if(img->number == 0)
-    copy2mref(img);
 
   if (p_ref)
     find_snr(snr,img,p_ref,inp->postfilter);      // if ref sequence exist
@@ -259,32 +269,11 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   exit_frame(img, inp);
 
   img->current_mb_nr = 0;
+  img->current_slice_nr = 0;
   return (SOP);
 }
 
 
-
-/*!
- ************************************************************************
- * \brief
- *    store reconstructed frames in multiple
- *    reference buffer
- ************************************************************************
- */
-void copy2mref(struct img_par *img)
-{
-  int i,j,uv;
-
-  img->frame_cycle=img->number % img->buf_cycle;
-  for (j=0; j < img->height; j++)
-  for (i=0; i < img->width; i++)
-     mref[img->frame_cycle][j][i]=imgY[j][i];
-
-  for (uv=0; uv < 2; uv++)
-  for (i=0; i < img->width_cr; i++)
-    for (j=0; j < img->height_cr; j++)
-    mcef[img->frame_cycle][uv][j][i]=imgUV[uv][j][i];// just copy 1/1 pix, interpolate "online"
-}
 
 /*!
  ************************************************************************
@@ -304,6 +293,7 @@ void find_snr(
   int uv;
   int  status;
   static int modulo_ctr = 0;
+  static int modolo_flag = 0;
   static int pic_id_old = 0, pic_id_old_b = 0;
   Slice *currSlice = img->currentSlice;
 #ifndef _ADAPT_LAST_GROUP_
@@ -326,8 +316,14 @@ void find_snr(
   {
     if (img->number > 0)
     {
-      if (currSlice->picture_id < pic_id_old)
+      if ((currSlice->picture_id < pic_id_old) && !modolo_flag)
+      {
         modulo_ctr++;
+        modolo_flag = 1;
+      }
+      else
+        modolo_flag = 0;
+
       frame_no = currSlice->picture_id + (256*modulo_ctr);
       pic_id_old = currSlice->picture_id;
     }
@@ -336,8 +332,14 @@ void find_snr(
   }
   else // B
   {
-    if (currSlice->picture_id < pic_id_old_b)
+    if ((currSlice->picture_id < pic_id_old_b) && !modolo_flag)
+    {
       modulo_ctr++;
+      modolo_flag = 1;
+    }
+    else
+      modolo_flag = 0;
+
     frame_no = currSlice->picture_id + (256*modulo_ctr);
     pic_id_old_b = currSlice->picture_id;
   }
@@ -898,7 +900,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
       for(i=1; i<j; i++)  // j-1 non-B frames are lost
       {
         img->number++;
-        copy2mref(img);
+        copy2fb(img);
       }
     }
   }
@@ -933,7 +935,11 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
   // allocate memory for frame buffers
-  if (img->number == 0)  get_mem4global_buffers(inp, img); //!!KS!!
+  if (img->number == 0) 
+  {
+    init_frame_buffers(inp, img); 
+    init_global_buffers(inp, img); 
+  }
 
   for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
     img->ipredmode[i+1][0]=-1;
@@ -948,7 +954,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 
   // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
   for(i=0; i<img->max_mb_nr; i++)
-    img->mb_data[i].slice_nr = -1;
+    img->mb_data[i].slice_nr = -1; 
 
 }
 
@@ -961,7 +967,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 void exit_frame(struct img_par *img, struct inp_par *inp)
 {
     if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
-        copy2mref(img);
+        copy2fb(img);
 }
 
 /*!
@@ -1114,7 +1120,8 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
           pRegion->mv[0] = (img->bw_mv[ii][jj][0] + img->bw_mv[ii+1][jj][0] + img->bw_mv[ii][jj+1][0] + img->bw_mv[ii+1][jj+1][0] + 2)/4;
           pRegion->mv[1] = (img->bw_mv[ii][jj][1] + img->bw_mv[ii+1][jj][1] + img->bw_mv[ii][jj+1][1] + img->bw_mv[ii+1][jj+1][1] + 2)/4;
           erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
+//*KS*          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
+          pRegion->mv[2] = 0; //ref_frame_bw
         }
         break;
       case B_Direct:
@@ -1126,7 +1133,8 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
           pRegion->mv[0] = (img->dbMV[ii][jj][0] + img->dbMV[ii+1][jj][0] + img->dbMV[ii][jj+1][0] + img->dbMV[ii+1][jj+1][0] + 2)/4;
           pRegion->mv[1] = (img->dbMV[ii][jj][1] + img->dbMV[ii+1][jj][1] + img->dbMV[ii][jj+1][1] + img->dbMV[ii+1][jj+1][1] + 2)/4;
           erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
+//*KS*          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
+          pRegion->mv[2] = 0; //ref_frame_bw
         }
         break;
       default:
@@ -1159,7 +1167,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   {
 
 #if TRACE
-    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->current_mb_nr, img->slice_numbers[img->current_mb_nr], img->type);
+    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->current_mb_nr, img->mb_data[img->current_mb_nr].slice_nr, img->type);
 #endif
 
     // Initializes the current macroblock

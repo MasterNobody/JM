@@ -50,6 +50,7 @@
 #include <memory.h>
 
 #include "global.h"
+#include "memalloc.h"
 #include "erc_api.h"
 
 objectBuffer_t *erc_object_list;

@@ -66,6 +66,7 @@
 #include "global.h"
 #include "image.h"
 #include "refbuf.h"
+#include "mbuffer.h"
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
@@ -121,6 +122,11 @@ int encode_one_frame()
   img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
   init_frame();
 
+  if (img->type != B_IMG) //all I- and P-frames
+    add_frame(img);
+  init_mref(img);
+  init_Refbuf(img);
+
   // Read one new frame
   read_one_new_frame();
 
@@ -145,14 +151,16 @@ int encode_one_frame()
   if (img->type != B_IMG) //all I- and P-frames
   {
     if (input->successive_Bframe == 0 || img->number == 0)
+    {
       interpolate_frame(); // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
+    }
     else
       interpolate_frame_2();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
                                  // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
   }
   else
     if (img->b_frame_to_code == input->successive_Bframe)
-      copy2mref(img);          // last successive B-frame: mref_P[][][], mcef_P[][][][] (loop-filtered imgY, imgUV)-> mref[][][], mcef[][][][]
+      copy2fb(img);          // last successive B-frame: mref_P[][][], mcef_P[][][][] (loop-filtered imgY, imgUV)-> mref[][][], mcef[][][][]
 
   if (input->rdopt==2)
     UpdateDecoders(); // simulate packet losses and move decoded image to reference buffers
@@ -415,7 +423,6 @@ void init_slice()
   Bitstream *currStream;
 
   curr_slice->picture_id = img->tr%256;
-  curr_slice->slice_nr = img->current_slice_nr;
   curr_slice->qp = img->qp;
   curr_slice->start_mb_nr = img->current_mb_nr;
   curr_slice->dp_mode = input->partition_mode;
@@ -583,9 +590,7 @@ void write_reconstructed_image()
  */
 void interpolate_frame()
 {                 // write to mref[]
-  int rpic;
-
-  rpic = img->frame_cycle = img->number % img->buf_cycle;
+  int rpic = 0;
 
   if(input->mv_res)
     oneeighthpix(0);
@@ -748,8 +753,6 @@ void oneeighthpix(int prior_B_frame)
   int nx_out, ny_out, nx_1, ny_1, maxy;
   int i0,i1,i2,i3;
 
-  img->frame_cycle=img->number % img->buf_cycle;  /*GH input->no_multpred used insteadof MAX_MULT_PRED
-                                                  frame buffer size = input->no_multpred+1*/
   nx_out = 4*img->width;
   ny_out = 4*img->height;
   nx_1   = img->width-1;
@@ -856,10 +859,10 @@ void oneeighthpix(int prior_B_frame)
       }
       else
       {
-        PutPel_14 (mref[img->frame_cycle], y4,   x4p, (pel_t) max(0,min(255,i0)));   
-        PutPel_14 (mref[img->frame_cycle], y4+1, x4p, (pel_t) max(0,min(255,i1)));   
-        PutPel_14 (mref[img->frame_cycle], y4+2, x4p, (pel_t) max(0,min(255,i2)));
-        PutPel_14 (mref[img->frame_cycle], y4+3, x4p, (pel_t) max(0,min(255,i3)));   
+        PutPel_14 (mref[0], y4,   x4p, (pel_t) max(0,min(255,i0)));   
+        PutPel_14 (mref[0], y4+1, x4p, (pel_t) max(0,min(255,i1)));   
+        PutPel_14 (mref[0], y4+2, x4p, (pel_t) max(0,min(255,i2)));
+        PutPel_14 (mref[0], y4+3, x4p, (pel_t) max(0,min(255,i3)));   
       }
 
     }
@@ -869,7 +872,7 @@ void oneeighthpix(int prior_B_frame)
   {
     for(y=0;y<img->height;y++)
       for(x=0;x<img->width;x++)
-        PutPel_11 (Refbuf11[img->frame_cycle], y, x, FastPelY_14 (mref[img->frame_cycle], y*4, x*4));
+        PutPel_11 (Refbuf11[0], y, x, FastPelY_14 (mref[0], y*4, x*4));
   }
 
   // Chroma and full pel representation:
@@ -885,8 +888,8 @@ void oneeighthpix(int prior_B_frame)
   {
     for (uv=0; uv < 2; uv++)
       for (y=0; y < img->height_cr; y++)
-        memcpy(mcef[img->frame_cycle][uv][y],imgUV[uv][y],img->width_cr); // just copy 1/1 pix, interpolate "online"
-    GenerateFullPelRepresentation (mref[img->frame_cycle], Refbuf11[img->frame_cycle], img->width, img->height);
+        memcpy(mcef[0][uv][y],imgUV[uv][y],img->width_cr); // just copy 1/1 pix, interpolate "online"
+    GenerateFullPelRepresentation (mref[0], Refbuf11[0], img->width, img->height);
   }
     // Generate 1/1th pel representation (used for integer pel MV search)
 

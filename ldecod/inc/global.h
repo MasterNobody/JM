@@ -77,9 +77,6 @@ byte **imgY_pf;                                 //<! Post filter luma image
 byte ***imgUV;                                  //<! array for the chroma component
 byte ***imgUV_pf;                               //<! Post filter luma image
 
-byte ***mref;                                   //<! 1/1 pix luma for direct interpolation
-byte ****mcef;                                  //<! pix chroma
-
 // B pictures
 byte **imgY_prev;
 byte ***imgUV_prev;
@@ -144,7 +141,8 @@ typedef enum {
   SE_CHR_DC_INTER,
   SE_LUM_AC_INTER,
   SE_CHR_AC_INTER,
-  SE_DELTA_QUANT,
+  SE_DELTA_QUANT_INTER,
+  SE_DELTA_QUANT_INTRA,
   SE_BFRAME,
   SE_EOS,
   SE_MAX_ELEMENTS //!< number of maximum syntax elements, this MUST be the last one!
@@ -258,6 +256,24 @@ struct img_par;
 struct inp_par;
 struct stat_par;
 
+/*! Buffer structure for RMPNI commands */
+typedef struct RMPNIbuffer_s
+{
+  int RMPNI;
+  int Data;
+  struct RMPNIbuffer_s *Next;
+} RMPNIbuffer_t;
+
+/*! Buffer structure for MMCO commands */
+typedef struct MMCObuffer_s
+{
+  int MMCO;
+  int DPN;
+  int LPIN;
+  int MLIP1;
+  struct MMCObuffer_s *Next;
+} MMCObuffer_t;
+
 //! Syntaxelement
 typedef struct syntaxelement
 {
@@ -283,8 +299,8 @@ typedef struct syntaxelement
 //! Macroblock
 typedef struct macroblock
 {
-  int           slice_nr;             //!< slice number to which the MB belongs
   int           qp;
+  int           slice_nr;
   int           delta_quant;          //!< for rate control
   int           intraOrInter;
   struct macroblock   *mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
@@ -304,14 +320,14 @@ typedef struct macroblock
 typedef struct
 {
   // CABAC Decoding
-  int           read_len;           //!< actual position in the codebuffer
-  int           code_len;           //!< overall codebuffer length
-  byte          *streamBuffer;      //!< actual codebuffer for read bytes
+  int           read_len;           //!< actual position in the codebuffer, CABAC only
+  int           code_len;           //!< overall codebuffer length, CABAC only
   // UVLC Decoding
-  int           frame_bitoffset;
-  int           bitstream_length;
+  int           frame_bitoffset;    //!< actual position in the codebuffer, bit-oriented, UVLC only
+  int           bitstream_length;   //!< over codebuffer lnegth, byte oriented, UVLC only
   // ErrorConcealment
-  int           ei_flag;
+  byte          *streamBuffer;      //!< actual codebuffer for read bytes
+  int           ei_flag;            //!< error indication, 0: no error, else unspecified error
 } Bitstream;
 
 //! DataPartition
@@ -332,7 +348,6 @@ typedef struct
 {
   int                 ei_flag;       //!< 0 if the partArr[0] contains valid information
   int                 picture_id;    //!< MUST be set by NAL even in case ei_flag == 1
-  int                 slice_nr;      //!< MUST be set by NAL even in case ei_flag == 1
   int                 qp;
   int                 picture_type;  //!< picture type
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
@@ -345,25 +360,25 @@ typedef struct
   DataPartition       *partArr;      //!< array of partitions
   MotionInfoContexts  *mot_ctx;      //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;      //!< pointer to struct of context models for use in CABAC
+  RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
   int     (*readSlice)(struct img_par *, struct inp_par *);
 
 } Slice;
 //****************************** ~DM ***********************************
 
 // image parameters
-struct img_par
+typedef struct img_par
 {
   int number;                                 //<! frame number
+  int pn;                                     //<! short term picture number
   int current_mb_nr;
   int max_mb_nr;
   int current_slice_nr;
-  int *slice_numbers;
   int *intra_mb;                              //<! 1 = intra mb, 0 = not intra mb
   int tr;                                     //<! temporal reference, 8 bit, wrapps at 255
   int tr_old;                                     //<! old temporal reference, for detection of a new frame, added by WYK
   int refPicID;                         //<! temporal reference for reference frames (non-B frames), 4 bit, wrapps at 15, added by WYK
   int refPicID_old;                  //<! to detect how many reference frames are lost, added by WYK
-  int frame_cycle;                            //<! cycle through all stored reference frames
   int qp;                                     //<! quant for the current frame
   int qpsp;                                   //<! quant for SP-picture predicted frame
   int type;                                   //<! image type INTER/INTRA
@@ -415,7 +430,9 @@ struct img_par
 
   int mv_res;
   int buf_cycle;
-};
+
+  MMCObuffer_t *mmco_buffer;                    //<! stores the memory management control operations
+} ImageParameters;
 
 // signal to noice ratio parameters
 struct snr_par
@@ -526,11 +543,8 @@ int  readSliceUVLC(struct img_par *img, struct inp_par *inp);
 void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 void get_eighthpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
-void copy2mref(struct img_par *img);
 
 int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
-int  PictureHeader(struct img_par *img, struct inp_par *inp);
-int  SliceHeader(struct img_par *img, struct inp_par *inp);
 
 // int   inter_intra(struct img_par *img);
 
@@ -583,13 +597,8 @@ void start_slice(struct img_par *img, struct inp_par *inp);
 int  terminate_slice(struct img_par *img, struct inp_par *inp, struct stat_par  *stat);
 
 // dynamic mem allocation
-int  get_mem4global_buffers(struct inp_par *inp, struct img_par *img);
-void free_mem4global_buffers(struct inp_par *inp, struct img_par *img);
-int  get_mem2D(byte ***array2D, int rows, int columns);
-int  get_mem2Dint(int ***array2D, int rows, int columns);
-int  get_mem3D(byte ****array2D, int frames, int rows, int columns);
-int  get_mem3Dint(int ****array3D, int frames, int rows, int columns);
-void no_mem_exit(char *where);
+int  init_global_buffers(struct inp_par *inp, struct img_par *img);
+void free_global_buffers(struct inp_par *inp, struct img_par *img);
 
 #endif
 

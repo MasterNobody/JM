@@ -115,7 +115,8 @@ typedef enum {
   SE_CHR_DC_INTER,
   SE_LUM_AC_INTER,
   SE_CHR_AC_INTER,
-  SE_DELTA_QUANT,
+  SE_DELTA_QUANT_INTER,
+  SE_DELTA_QUANT_INTRA,
   SE_BFRAME,
   SE_EOS,
   SE_MAX_ELEMENTS  //!< number of maximum syntax elements
@@ -239,6 +240,15 @@ typedef struct
  ***********************************************************************
  */
 
+/*! Buffer structure for RMPNI commands */
+typedef struct RMPNIbuffer_s
+{
+  int RMPNI;
+  int Data;
+  struct RMPNIbuffer_s *Next;
+} RMPNIbuffer_t;
+
+
 //! Syntaxelement
 typedef struct syntaxelement
 {
@@ -265,7 +275,7 @@ typedef struct syntaxelement
 typedef struct macroblock
 {
   int                 currSEnr;                   //!< number of current syntax element
-  int                 slice_nr;                   //!< slice number to which the MB belongs
+  int                 slice_nr;
   int                 delta_qp;
   int                 qp ;
   int                 intraOrInter;
@@ -321,7 +331,6 @@ typedef struct datapartition
 typedef struct
 {
   int                 picture_id;
-  int                 slice_nr;     //!< not necessary but o.k.
   int                 qp;
   int                 picture_type; //!< picture type
   int                 start_mb_nr;
@@ -330,6 +339,8 @@ typedef struct
   DataPartition       *partArr;     //!< array of partitions
   MotionInfoContexts  *mot_ctx;     //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;     //!< pointer to struct of context models for use in CABAC
+
+  RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
 
   Boolean             (*slice_too_big)(int bits_slice); //!< for use of callback functions
 
@@ -373,6 +384,8 @@ byte ****decref;         //!< Reference frames of the simulated decoders
 byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
 byte **RefBlock;
 byte **status_map;
+byte **dec_mb_mode;
+byte **dec_mb_ref;
 int intras;       //!< Counts the intra updates in each frame.
 
 int  Bframe_ctr, frame_no, nextP_tr;
@@ -476,7 +489,9 @@ typedef struct
   char LeakyBucketParamFile[100];
 #endif
 
-  int LossRate;
+  int LossRateA;
+  int LossRateB;
+  int LossRateC;
   int NoOfDecoders;
 
 } InputParameters;
@@ -485,6 +500,9 @@ typedef struct
 typedef struct
 {
   int number;                  //!< current image number to be encoded
+  int pn;                      //!< picture number
+  int lindex;                  //!< next long term index to be used
+  int max_lindex;              //!< max long term index 
   int nb_references;
   int current_mb_nr;
   int total_number_mb;
@@ -498,7 +516,6 @@ typedef struct
   int multframe_no;
   int qp;                      //!< quant for the current frame
   int qpsp;                    //!< quant for the prediction frame of SP-frame
-  int frame_cycle;
   int framerate;
   int width;                   //!< Number of pels
   int width_cr;                //!< Number of pels chroma
@@ -545,7 +562,6 @@ typedef struct
 
   int quad[256];               //!< Array containing square values,used for snr computation  */                                         /* Values are limited to 5000 for pixel differences over 70 (sqr(5000)).
   int mv_bituse[512];
-  int *slice_numbers;
   int *intra_mb;
 
   // UMV support
@@ -668,12 +684,8 @@ void write_reconstructed_image();
 void DeblockMb(ImageParameters *img, byte **, byte ***) ;
 
 // dynamic mem allocation
-int  get_mem4global_buffers();
-void free_mem4global_buffers();
-int  get_mem2D    (byte ***array2D, int rows, int columns);
-int  get_mem2Dint (int ***array2D, int rows, int columns);
-int  get_mem3D    (byte ****array2D, int frames, int rows, int columns);
-int  get_mem3Dint (int ****array3D, int frames, int rows, int columns);
+int  init_global_buffers();
+void free_global_buffers();
 void no_mem_exit  (char *where);
 
 int  get_mem_mv  (int******);
@@ -749,11 +761,7 @@ int  terminate_sequence();
 int  start_slice(SyntaxElement *sym);
 int  terminate_slice();
 
-void DP_SliceHeader(FILE *out, int bytes_written, int part_nr);
-void DP_PartHeader(FILE *out, int bytes_written, int part_nr);
-
 // B pictures
-void copy2mref();
 int  motion_search_Bframe(int tot_intra_sad);
 int  get_fwMV(int *min_fw_sad, int tot_intra_sad);
 void get_bwMV(int *min_bw_sad);
@@ -783,7 +791,10 @@ int   writeMB_bits_for_luma       (int);
 int   writeMB_bits_for_DC_chroma  (int);
 int   writeMB_bits_for_AC_chroma  (int);
 int   writeMB_bits_for_CBP        ();
-int   writeMB_bits_for_Dquant     ();
+//!TO Hack for the Dquant-Problem
+int   writeMB_bits_for_Dquant_inter     ();
+int   writeMB_bits_for_Dquant_intra     ();
+//! End TO
 int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int*****, double);
 
 //============= rate-distortion optimization ===================
@@ -800,7 +811,7 @@ void compute_residue(int mode);
 void UpdateDecoders();
 void Build_Status_Map(byte **s_map);
 void Error_Concealment(byte **inY, byte **s_map, byte ***refY);
-void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY);
+void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map);
 
 //============= fast full integer search =======================
 #ifdef _FAST_FULL_ME_

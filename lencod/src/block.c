@@ -215,8 +215,8 @@ void intrapred_luma_2()
 
   int mb_nr = img->current_mb_nr;
   int mb_width = img->width/16;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
+  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
 
   if(input->UseConstrainedIntraPred)
   {
@@ -283,7 +283,7 @@ void intrapred_luma_2()
   {
     for (i=0;i< MB_BLOCK_SIZE;i++)
     {
-      img->mprr_2[PLANE_16][j][i]=max(0,min(255,(iaa+(i-7)*ib +(j-7)*ic + 16)/32));/* store plane prediction */                              
+      img->mprr_2[PLANE_16][j][i]=max(0,min(255,(iaa+(i-7)*ib +(j-7)*ic + 16)/32));// store plane prediction
     }
   }
 }
@@ -649,8 +649,8 @@ void intrapred_chroma(int img_c_x,int img_c_y,int uv)
 
   int mb_nr = img->current_mb_nr;
   int mb_width = img->width/16;
-  int mb_available_up = (img_c_y/BLOCK_SIZE == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left = (img_c_x/BLOCK_SIZE == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
+  int mb_available_up = (img_c_y/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img_c_x/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
   if(input->UseConstrainedIntraPred)
   {
     if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))

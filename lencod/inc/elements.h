@@ -126,19 +126,20 @@ typedef enum {
 13  SE_CHR_DC_INTER,
 14  SE_LUM_AC_INTER,
 15  SE_CHR_AC_INTER,
-16  SE_DELTA_QUANT,
-17  SE_BFRAME,
-18  SE_EOS,
-19  SE_MAX_ELEMENTS */ // number of maximum syntax elements
+16  SE_DELTA_QUANT_INTER,
+17  SE_DELTA_QUANT_INTRA,
+18  SE_BFRAME,
+19  SE_EOS,
+20  SE_MAX_ELEMENTS */ // number of maximum syntax elements
 
 //} SE_type;
 
 
 static int assignSE2partition[][SE_MAX_ELEMENTS] =
 {
-  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18  // elementnumber (no not uncomment)
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
-  {  0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 0, 0, 0 }    //!< three partitions per slice
+  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 // elementnumber (no not uncomment)
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
+  {  0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 0, 0 }    //!< three partitions per slice
 };
 
 #endif

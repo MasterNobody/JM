@@ -186,8 +186,8 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
 
   int mb_nr = img->current_mb_nr;
   int mb_width = img->width/16;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
+  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
 
   if(img->UseConstrainedIntraPred)
   {
@@ -253,8 +253,7 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
     {
       for (i=0;i< MB_BLOCK_SIZE;i++)
       {
-        // Clip value to 0-255
-        img->mpr[i][j]=max(0,min((iaa+(i-7)*ib +(j-7)*ic + 16)/32,255));                
+        img->mpr[i][j]=max(0,min((iaa+(i-7)*ib +(j-7)*ic + 16)/32,255));
       }
     }// store plane prediction
     break;

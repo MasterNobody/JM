@@ -737,20 +737,21 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   act_sym = absm(mv_pred_res);
 
-  if (act_sym == 0)
+ if (act_sym == 0)
     biari_encode_symbol(eep_dp, 0, &ctx->mv_res_contexts[0][act_ctx] );
   else
   {
     biari_encode_symbol(eep_dp, 1, &ctx->mv_res_contexts[0][act_ctx] );
-    mv_sign = (mv_pred_res<0) ? 1: 0;
-    act_ctx=5*k+4;
-    biari_encode_symbol(eep_dp, (unsigned char) mv_sign, &ctx->mv_res_contexts[1][act_ctx] );
     act_sym--;
     act_ctx=5*k;
     unary_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
+
+    mv_sign = (mv_pred_res<0) ? 1: 0;
+    act_ctx=5*k+4;
+    biari_encode_symbol(eep_dp, (unsigned char) mv_sign, &ctx->mv_res_contexts[1][act_ctx] );
+ 
   }
 }
-
 /*!
  ****************************************************************************
  * \brief

@@ -157,10 +157,10 @@ SetMotionVectorPredictor (int pred[2], int **refFrArr, int ***tmp_mv,
   int pic_block_y = img->block_y + block_y;
   int mb_nr = img->current_mb_nr;
   int mb_width = img->width/16;
-  int mb_available_up      = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-  int mb_available_left    = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
-  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width-1]);
-  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width+1]);
+  int mb_available_up      = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left    = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
+  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
   int block_available_up, block_available_left, block_available_upright, block_available_upleft;
   int mv_a, mv_b, mv_c, mv_d, pred_vec=0;
   int mvPredType, rFrameL, rFrameU, rFrameUR;
@@ -1047,7 +1047,8 @@ UnifiedMotionSearch (int tot_intra_sad, int **refFrArr, int ***tmp_mv,
 #endif
 
   {
-    ref_inx = (img->number-ref_frame-1)%img->buf_cycle;
+//*KS*    ref_inx = (img->number-ref_frame-1)%img->buf_cycle;
+    ref_inx = ref_frame+1;
 
     //  Looping through all the chosen block sizes:
     blocktype=1;
@@ -1189,7 +1190,7 @@ SingleUnifiedMotionSearch (int    ref_frame,
   // find  reference image
   if (BFrame != B_BACKWARD)
   {
-    ref_inx=(img->number-ref_frame-1)%img->buf_cycle;
+    ref_inx=ref_frame+1;
     CurrRefPic   = mref[ref_inx];
     CurrRefPic11 = Refbuf11[ref_inx];
   }

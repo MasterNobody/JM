@@ -85,6 +85,25 @@ void error(char *text, int code)
   exit(code);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Enforces Byte Alihnment of the Bitstream b
+ * \param b
+ *    Bitstream to be byte aligned
+ ************************************************************************
+ */
+
+static void ByteAlign (Bitstream *b)
+{
+  if (b->bits_to_go != 8)
+  {
+    b->byte_buf <<= b->bits_to_go;
+    b->bits_to_go=8;
+    b->streamBuffer[b->byte_pos++]=b->byte_buf;
+    b->byte_buf=0;
+  }
+}
 
 /*!
  ************************************************************************
@@ -97,24 +116,20 @@ int start_sequence()
 {
   int len;
 
+  if ((out=fopen(input->outfile,"wb"))==NULL)
+  {
+    snprintf(errortext, ET_SIZE, "Error open file %s  \n",input->outfile);
+    error(errortext,1);
+  }
+
   switch(input->of_mode)
   {
     case PAR_OF_26L:
-      if ((out=fopen(input->outfile,"wb"))==NULL)
-      {
-          snprintf(errortext, ET_SIZE, "Error open file %s  \n",input->outfile);
-          error(errortext,1);
-      }
       len = SequenceHeader(out);
       return 0;
     case PAR_OF_RTP:
-      if ((out=fopen(input->outfile,"wb"))==NULL)
-      {
-          snprintf(errortext, ET_SIZE, "Error open file %s  \n",input->outfile);
-          error(errortext,1);
-      }
-      len = SequenceHeader(out);
-      return len;
+      len = RTPSequenceHeader(out);
+      return 0;
       
     default:
       snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", input->of_mode);
@@ -206,7 +221,7 @@ int start_slice(SyntaxElement *sym)
   EncodingEnvironmentPtr eep;
   Slice *currSlice = img->currentSlice;
   Bitstream *currStream;
-  int header_len;
+  int header_len, part_header_len;
   int i;
 
   switch(input->of_mode)
@@ -215,11 +230,7 @@ int start_slice(SyntaxElement *sym)
       if (input->symbol_mode == UVLC)
       {
         currStream = (currSlice->partArr[0]).bitstream;
-        // the information given in the SliceHeader is far not enought if we want to be able
-        // to do some errorconcealment.
-        // So write PictureHeader and SliceHeader in any case.
-       header_len = PictureHeader();   // Picture Header
-       header_len += SliceHeader (0);  // Slice Header without Start Code
+        header_len = SliceHeader (0);  // Slice Header without Start Code
        
         return header_len;
       }
@@ -233,13 +244,9 @@ int start_slice(SyntaxElement *sym)
         assert (currStream->byte_pos == 0);
         memset(currStream->streamBuffer, 0, 12);    // fill first 12 bytes with zeros (debug only)
 
-        // the information given in the SliceHeader is far not enought if we want to be able
-        // to do some errorconcealment.
-        // So write PictureHeader and SliceHeader in any case.
-        header_len = PictureHeader();   // Picture Header
-        header_len += SliceHeader (0);  // Slice Header without Start Code
+        header_len = SliceHeader (0);  // Slice Header without Start Code
         
-        // Note that PictureHeader() and SliceHeader() set the buffer pointers as a side effect
+        // Note that SliceHeader() sets the buffer pointers as a side effect
         // Hence no need for adjusting it manually (and preserving space to be patched later
 
         // reserve bits for d_MB_Nr
@@ -262,25 +269,139 @@ int start_slice(SyntaxElement *sym)
         return header_len;
 
       }
-    
+    /*
+    case PAR_OF_RTP:
+
+
+      if (input->symbol_mode == UVLC)
+      {
+        currStream = currSlice->partArr[0].bitstream;
+
+        assert (currStream != NULL);
+        assert (currStream->bits_to_go == 8);
+        assert (currStream->byte_pos == 0);
+        assert (currStream->byte_buf == 0);
+
+        header_len=RTPSliceHeader();                      // generate the slice header
+        currStream->header_len = header_len;
+        ByteAlign (currStream);
+
+        assert (currStream->bits_to_go == 8);
+
+        if (input->partition_mode != PAR_DP_1)
+        {
+          for (i=1; i<currSlice->max_part_nr; i++)
+          {
+            // generate the Partition header for all partitions.  terminate_slice()
+            // later writes only those partitions which contain more data than
+            // header_len (and worries about byte alignment itself!)
+
+            currStream = (currSlice->partArr[i]).bitstream;
+            assert (currStream != NULL);
+            assert (currStream->bits_to_go == 8);
+            assert (currStream->byte_pos == 0);
+            assert (currStream->byte_buf == 0);
+            part_header_len = RTPPartition_BC_Header(i);
+            currStream->header_len = part_header_len;
+            ByteAlign (currStream);
+          }
+        }
+        return header_len;
+      }
+      else
+      {                   // H.26: CABAC File Format
+        eep = &((currSlice->partArr[0]).ee_cabac);
+        currStream = (currSlice->partArr[0]).bitstream;
+
+        assert (currStream->bits_to_go == 8);
+        assert (currStream->byte_buf == 0);
+
+
+        header_len=RTPSliceHeader();                      // generate the slice header
+
+        // reserve bits for d_MB_Nr
+        currStream->header_len = header_len;
+        currStream->header_byte_buffer = currStream->byte_buf;
+
+        currStream->byte_pos += ((31-currStream->bits_to_go)/8);
+        if ((31-currStream->bits_to_go)%8 != 0)
+          currStream->byte_pos++;
+        currStream->bits_to_go = 8;
+        currStream->byte_pos++;
+
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+        
+        if(input->partition_mode != PAR_DP_1)
+        {
+          for (i=1; i<currSlice->max_part_nr; i++)
+          {
+            eep = &((currSlice->partArr[i]).ee_cabac);
+	          currStream = (currSlice->partArr[i]).bitstream;
+
+            part_header_len = RTPPartition_BC_Header(i);
+            currStream->header_len = part_header_len;
+            ByteAlign (currStream);
+
+     			  assert (currStream->bits_to_go == 8);
+		        assert (currStream->byte_buf == 0);
+			      assert (currStream->byte_pos == 0);
+
+	          arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+          }
+		    }
+		    // initialize context models
+        init_contexts_MotionInfo(currSlice->mot_ctx, 1);
+        init_contexts_TextureInfo(currSlice->tex_ctx, 1);
+
+        return header_len;
+
+      }
+
+*/
+
+
+
+
     case PAR_OF_RTP:
       if (img->current_mb_nr == 0)                       // new picture
         RTPUpdateTimestamp (img->tr);
 
       if (input->symbol_mode == UVLC)
       {
-        header_len=RTPSliceHeader();                      // generate the slice header
         currStream = currSlice->partArr[0].bitstream;
-        
-        if (header_len % 8 != 0)
+
+        assert (currStream != NULL);
+        assert (currStream->bits_to_go == 8);
+        assert (currStream->byte_pos == 0);
+        assert (currStream->byte_buf == 0);
+
+        header_len=RTPSliceHeader();                      // generate the slice header
+        currStream->header_len = header_len;
+        ByteAlign (currStream);
+
+        assert (currStream->bits_to_go == 8);
+
+        if (input->partition_mode != PAR_DP_1)
         {
-          currStream->byte_buf <<= currStream->bits_to_go;
-          currStream->bits_to_go=8;
-          currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-          currStream->byte_buf=0;
+          for (i=1; i<currSlice->max_part_nr; i++)
+          {
+            // generate the Partition header for all partitions.  terminate_slice()
+            // later writes only those partitions which contain more data than
+            // header_len (and worries about byte alignment itself!)
+
+            currStream = (currSlice->partArr[i]).bitstream;
+            assert (currStream != NULL);
+            assert (currStream->bits_to_go == 8);
+            assert (currStream->byte_pos == 0);
+            assert (currStream->byte_buf == 0);
+            part_header_len = RTPPartition_BC_Header(i);
+            currStream->header_len = part_header_len;
+            ByteAlign (currStream);
+          }
         }
         return header_len;
-      }
+      }      
+
       else
       {                   // RTP: CABAC 
         eep = &((currSlice->partArr[0]).ee_cabac);
@@ -308,14 +429,17 @@ int start_slice(SyntaxElement *sym)
         {
           for (i=1; i<currSlice->max_part_nr; i++)
           {
-            eep = &((currSlice->partArr[0]).ee_cabac);
-            currStream = (currSlice->partArr[0]).bitstream;
-  
-            assert (currStream->bits_to_go == 8);
-            assert (currStream->byte_buf == 0);
-            assert (currStream->byte_pos == 0);
+            eep = &((currSlice->partArr[i]).ee_cabac);
+	          currStream = (currSlice->partArr[i]).bitstream;
 
-            arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+            part_header_len = RTPPartition_BC_Header(i);
+            currStream->header_len = part_header_len;
+            ByteAlign (currStream);
+
+     			  assert (currStream->bits_to_go == 8);
+		        assert (currStream->byte_buf == 0);
+
+	          arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
           }
         }
         // initialize context models
@@ -353,6 +477,7 @@ int terminate_slice()
   int LastPartition;
   int cabac_byte_pos=0, uvlc_byte_pos=0, empty_bytes=0;
   int rtp_bytes_written;
+  int header_bytes;
 
   // Mainly flushing of everything
   // Add termination symbol, etc.
@@ -441,12 +566,13 @@ int terminate_slice()
 
       for (i=0; i<currSlice->max_part_nr; i++)
       {
+        currStream = (currSlice->partArr[i]).bitstream;
+
         if (input->symbol_mode == CABAC)
         {
           eep = &((currSlice->partArr[i]).ee_cabac);
           arienco_done_encoding(eep);
         }
-        currStream = (currSlice->partArr[i]).bitstream;
         
         if (currStream->bits_to_go < 8) // trailing bits to process
         {
@@ -455,9 +581,12 @@ int terminate_slice()
           currStream->bits_to_go = 8;
         }
         bytes_written = currStream->byte_pos; // number of written bytes
-
-        assert (bytes_written != 0);
-        if (bytes_written != 0)     // at least one bit in the partition -- something to do
+        header_bytes = currStream->header_len/8;
+        if (currStream->header_len%8 != 0)
+          header_bytes ++;
+        
+        if (bytes_written > header_bytes)     // at least one useful bit in the partition 
+                                                            // besides the header -- something to do
           {
             int Marker;
             int FirstBytePacketType;
@@ -517,9 +646,12 @@ int terminate_slice()
             FirstBytePacketType = 0;
           else
             FirstBytePacketType = i+1;
-
-          assert (FirstBytePacketType == 0);    //! This has to go as soon as data partitioning is to be tested
-
+          
+          //!TO A clean solution should be found
+          if(img->type == B_IMG)
+            FirstBytePacketType = 0;
+          //! End TO
+          
           // Calculate the Marker bit
           LastPartition=0;
           if (input->partition_mode == PAR_DP_3)
@@ -535,6 +667,12 @@ int terminate_slice()
                 (input->partition_mode==PAR_DP_3 && i == LastPartition ))   // Last partition containing bits
               Marker = 1;
           // and write the RTP packet
+
+          //! TO just a hack for B-Frames should be removed one time
+          if(!FirstBytePacketType)
+            Marker = 1;
+          //! 
+
           rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
         }
         stat->bit_ctr += 8*bytes_written;

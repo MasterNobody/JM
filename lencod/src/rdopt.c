@@ -490,16 +490,19 @@ RDCost_Macroblock (RateDistortion  *rd,
   else if (inter)
   {
     //===== INTER MACROBLOCK =====
-    img->multframe_no = (img->number-ref_or_i16mode-1) % img->buf_cycle;
+    img->multframe_no = ref_or_i16mode+1;
     LumaResidualCoding_P ();
   }
   else if (inter_bframe)
   {
     //===== INTER MACROBLOCK in B-FRAME =====
-    img->fw_multframe_no = (img->number-ref_or_i16mode-1) % img->buf_cycle;
+    img->fw_multframe_no = ref_or_i16mode+1;
     LumaResidualCoding_B ();
   }
 
+  // We need the reconstructed prediction residue for the simulated decoders.
+  if (input->rdopt==2 && !bframe)
+    compute_residue(mode);
 
   /*==============================================================*
    *=====   PREDICTION, DCT, QUANT, DEQUANT OF CHROMINANCE   =====*
@@ -531,13 +534,13 @@ RDCost_Macroblock (RateDistortion  *rd,
         }
     }
     rd->distortion /= input->NoOfDecoders;
-    refidx = (img->number-1) % img->buf_cycle; /* reference frame index */
+    refidx = 1; /* reference frame index */
   }
   else
   {
     if (copy)
     {
-      refidx = (img->number-1) % img->buf_cycle; // reference frame index
+      refidx = 1; // reference frame index
       for   (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
         for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
           rd->distortion += img->quad [abs (imgY_org[j][i] - FastPelY_14(mref[refidx], j<<2, i<<2))];
@@ -906,10 +909,10 @@ RD_Mode_Decision ()
 
   if (input->rdopt == 2)
   {
-    rdopt->lambda_mode=(1.0-input->LossRate/100.0)*rdopt->lambda_mode;
-    rdopt->lambda_motion = sqrt (1.0-input->LossRate/100.0) * rdopt->lambda_motion;
+    rdopt->lambda_mode=(1.0-input->LossRateA/100.0)*rdopt->lambda_mode;
+    rdopt->lambda_motion = sqrt (1.0-input->LossRateA/100.0) * rdopt->lambda_motion;
   }
-
+  
   //--- cost values ---
   rdopt->best_mode   = -1;
   rdopt->min_rdcost  =  1e30;
@@ -1244,6 +1247,14 @@ RD_Mode_Decision ()
   intra16mode    = rdopt->ref_or_i16mode;
   blocktype      = rdopt->blocktype;
   blocktype_back = rdopt->blocktype_back;
+  if (input->rdopt==2)
+  {
+    //! save the MB Mode of every macroblock
+    dec_mb_mode[img->mb_x][img->mb_y] = mode;
+    //! save ref of every macroblock
+    dec_mb_ref[img->mb_x][img->mb_y] = refframe;
+  }
+
 
 
   //=== RECONSTRUCTED MACROBLOCK ===
