@@ -267,7 +267,7 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
   Bitstream *currStream = currSlice->partArr[0].bitstream;
-  int *partMap = assignSE2partition[inp->partition_mode];
+  int *partMap = assignSE2partition[currSlice->dp_mode];
   int frame_bitoffset = currStream->frame_bitoffset = 0;
   SyntaxElement sym;
   int dummy;
@@ -354,7 +354,7 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
-  int dp_Nr = assignSE2partition[inp->partition_mode][SE_MBTYPE];
+  int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
   DataPartition *dP = &(currSlice->partArr[dp_Nr]);
   Bitstream   *currStream = dP->bitstream;
   byte *buf = currStream->streamBuffer;

@@ -356,7 +356,6 @@ void init_macroblock(struct img_par *img)
     }
   }
 
-//*KS*  currMB->ref_frame = img->frame_cycle;
   currMB->ref_frame = 0;
   currMB->predframe_no = predframe_no = 0;// g.b.1;
 
@@ -386,23 +385,24 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
-  int *partMap = assignSE2partition[inp->partition_mode];
+  int *partMap = assignSE2partition[currSlice->dp_mode];
 
   int dbl_ipred_word;
 
   currMB->qp           = img->qp ;
 
   //  read MB mode *****************************************************************
-  if (inp->symbol_mode == UVLC)
-    currSE.mapping = linfo;
-  else
-    currSE.reading = readMB_typeInfoFromBuffer_CABAC;
   currSE.type = SE_MBTYPE;
   
   if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
   else
     dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag) 
+    currSE.mapping = linfo;
+  else
+    currSE.reading = readMB_typeInfoFromBuffer_CABAC;
 
   if(inp->symbol_mode == CABAC || (img->type != INTER_IMG_1 && img->type != INTER_IMG_MULT && img->type != B_IMG_1 && img->type != B_IMG_MULT))
   {
@@ -511,16 +511,16 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   // intra prediction modes for a macroblock 4x4 **********************************************
   if (img->imod==INTRA_MB_OLD)
   {
-    if (inp->symbol_mode == UVLC)
-        currSE.mapping = linfo;
-    else
-        currSE.reading = readIntraPredModeFromBuffer_CABAC;
-
     currSE.type = SE_INTRAPREDMODE;
     if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
       dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else
       dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+        currSE.mapping = linfo;
+    else
+        currSE.reading = readIntraPredModeFromBuffer_CABAC;
 
     for(i=0;i<MB_BLOCK_SIZE/2;i++)
     {
@@ -577,7 +577,7 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
   SyntaxElement currSE;
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
-  int *partMap = assignSE2partition[inp->partition_mode];
+  int *partMap = assignSE2partition[currSlice->dp_mode];
   int ref_frame = currMB->ref_frame;
   int predframe_no = currMB->predframe_no;
 
@@ -606,13 +606,13 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
     currSE.type = SE_REFFRAME;
     dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-    if (inp->symbol_mode == UVLC)
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
       currSE.mapping = linfo;
     else
       currSE.reading = readRefFrameFromBuffer_CABAC;
+
     dP->readSyntaxElement(&currSE,img,inp,dP);
     predframe_no = currMB->predframe_no = currSE.value1;
-//*KS*    ref_frame = currMB->ref_frame = (img->frame_cycle +img->buf_cycle- predframe_no) % img->buf_cycle;
     ref_frame = currMB->ref_frame = predframe_no;
 
     /*!
@@ -634,7 +634,7 @@ void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
   currSE.type = SE_MVD;
   dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-  if (inp->symbol_mode == UVLC)
+  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
     currSE.mapping = linfo_mvd;
   else
     currSE.reading = readMVDFromBuffer_CABAC;
@@ -795,7 +795,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   SyntaxElement currSE;
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
-  int *partMap = assignSE2partition[inp->partition_mode];
+  int *partMap = assignSE2partition[currSlice->dp_mode];
   int iii,jjj;
   int coef_ctr, len, i0,j0;
 
@@ -809,73 +809,57 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   if (img->imod != INTRA_MB_NEW)
   {
     if (img->imod == INTRA_MB_OLD)
-    {
-      if (inp->symbol_mode == UVLC)
-        currSE.mapping = linfo_cbp_intra;
       currSE.type = SE_CBP_INTRA;
+    else
+      currSE.type = SE_CBP_INTER;
+
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+    {
+      if (img->imod == INTRA_MB_OLD)
+        currSE.mapping = linfo_cbp_intra;
+      else
+        currSE.mapping = linfo_cbp_inter;
     }
     else
-    {
-      if (inp->symbol_mode == UVLC)
-        currSE.mapping = linfo_cbp_inter;
-      currSE.type = SE_CBP_INTER;
-    }
-    if (inp->symbol_mode == CABAC)
       currSE.reading = readCBPFromBuffer_CABAC;
 
 #if TRACE
     snprintf(currSE.tracestring, TRACESTRING_SIZE, " CBP ");
 #endif
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
    
+
     dP->readSyntaxElement(&currSE,img,inp,dP);
     currMB->cbp = cbp = currSE.value1;
     // Delta quant only if nonzero coeffs
     if (cbp !=0)
     {
-      if (inp->symbol_mode == UVLC)
-      {
+      if (currMB->intraOrInter == INTER_MB)
+        currSE.type = SE_DELTA_QUANT_INTER;
+      else
+        currSE.type = SE_DELTA_QUANT_INTRA;
+
+      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+        dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else
+        dP = &(currSlice->partArr[partMap[currSE.type]]);
+  
+      if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
         currSE.mapping = linfo_dquant;
-
-        if (currMB->intraOrInter == INTER_MB)
-          currSE.type = SE_DELTA_QUANT_INTER;
-        else
-          currSE.type = SE_DELTA_QUANT_INTRA;
-
-#if TRACE
-        snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
-#endif
-        if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-          dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-        else
-          dP = &(currSlice->partArr[partMap[currSE.type]]);
-  
-        dP->readSyntaxElement(&currSE,img,inp,dP);
-        currMB->delta_quant = currSE.value1;
-        img->qp= (img->qp+currMB->delta_quant+32)%32;
-      }
-      if (inp->symbol_mode == CABAC)
-      {
-        if (currMB->intraOrInter == INTER_MB)
-          currSE.type = SE_DELTA_QUANT_INTER;
-        else
-          currSE.type = SE_DELTA_QUANT_INTRA;
+      else
         currSE.reading= readDquantFromBuffer_CABAC;
+
 #if TRACE
-        snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
+      snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-        if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-          dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-        else
-          dP = &(currSlice->partArr[partMap[currSE.type]]);
-  
-        dP->readSyntaxElement(&currSE,img,inp,dP);
-        currMB->delta_quant = currSE.value1;
-        img->qp= (img->qp+currMB->delta_quant+32)%32;
-      }
+
+      dP->readSyntaxElement(&currSE,img,inp,dP);
+      currMB->delta_quant = currSE.value1;
+      img->qp= (img->qp+currMB->delta_quant+32)%32;
     }
   }
   else
@@ -890,46 +874,28 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   if(img->imod==INTRA_MB_NEW) // read DC coeffs for new intra modes
   {
 
-    if (inp->symbol_mode == UVLC)
-    {
+    if (currMB->intraOrInter == INTER_MB)
+      currSE.type = SE_DELTA_QUANT_INTER;
+    else
+      currSE.type = SE_DELTA_QUANT_INTRA;
+
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
       currSE.mapping = linfo_dquant;
-      
-      if (currMB->intraOrInter == INTER_MB)
-        currSE.type = SE_DELTA_QUANT_INTER;
-      else
-        currSE.type = SE_DELTA_QUANT_INTRA;
+    else
+      currSE.reading= readDquantFromBuffer_CABAC;
 
 #if TRACE
       snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-        dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-      else
-        dP = &(currSlice->partArr[partMap[currSE.type]]);
-      dP->readSyntaxElement(&currSE,img,inp,dP);
-      currMB->delta_quant = currSE.value1;
-      img->qp= (img->qp+currMB->delta_quant+32)%32;
-    }
-    if (inp->symbol_mode == CABAC)
-    {
-      
-      if (currMB->intraOrInter == INTER_MB)
-        currSE.type = SE_DELTA_QUANT_INTER;
-      else
-        currSE.type = SE_DELTA_QUANT_INTRA;
-      
-      currSE.reading= readDquantFromBuffer_CABAC;
-#if TRACE// add when qduant/CABAC is described
-      snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
-#endif
-      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-        dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-      else
-        dP = &(currSlice->partArr[partMap[currSE.type]]);
-      dP->readSyntaxElement(&currSE,img,inp,dP);
-      currMB->delta_quant = currSE.value1;
-      img->qp= (img->qp+currMB->delta_quant+32)%32;
-    }
+
+    dP->readSyntaxElement(&currSE,img,inp,dP);
+    currMB->delta_quant = currSE.value1;
+    img->qp= (img->qp+currMB->delta_quant+32)%32;
 
     for (i=0;i<BLOCK_SIZE;i++)
       for (j=0;j<BLOCK_SIZE;j++)
@@ -943,7 +909,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     else
       dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-    if (inp->symbol_mode == UVLC)
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
       currSE.mapping = linfo_levrun_inter;
     else
     {
@@ -1008,10 +974,6 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
               level = 1;
               for(k=start_scan;(k<17) && (level!=0);k++)
               {
-                if (inp->symbol_mode == UVLC)
-                  currSE.mapping = linfo_levrun_inter;
-                else
-                  currSE.reading = readRunLevelFromBuffer_CABAC;
                   /*
                   * make distinction between INTRA and INTER coded
                   * luminance coefficients
@@ -1056,6 +1018,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                   dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
                 else
                   dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+                if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+                  currSE.mapping = linfo_levrun_inter;
+                else
+                  currSE.reading = readRunLevelFromBuffer_CABAC;
+
                 dP->readSyntaxElement(&currSE,img,inp,dP);
                 level = currSE.value1;
                 run =  currSE.value2;
@@ -1081,13 +1049,6 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                 level=1;                          // just to get inside the loop
                 for(k=0; k<9 && level!=0;k++)
                 {
-                  if (inp->symbol_mode == UVLC)
-                    currSE.mapping = linfo_levrun_intra;
-                  else
-                  {
-                    currSE.context = 0; // for choosing context model
-                    currSE.reading = readRunLevelFromBuffer_CABAC;
-                  }
                   if (k == 0)
                     currSE.type  = SE_LUM_DC_INTRA; // element is of type DC
                   else
@@ -1099,6 +1060,15 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
                   else
                     dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+                  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+                    currSE.mapping = linfo_levrun_intra;
+                  else
+                  {
+                    currSE.context = 0; // for choosing context model
+                    currSE.reading = readRunLevelFromBuffer_CABAC;
+                  }
+
                   dP->readSyntaxElement(&currSE,img,inp,dP);
                   level = currSE.value1;
                   run = currSE.value2;
@@ -1144,11 +1114,6 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       level=1;
       for(k=0;(k<5)&&(level!=0);k++)
       {
-        if (inp->symbol_mode == UVLC)
-          currSE.mapping = linfo_levrun_c2x2;
-        else
-          currSE.reading = readRunLevelFromBuffer_CABAC;
-
         if ( img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
         {
           currSE.context = 6; // for choosing context model
@@ -1167,6 +1132,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
         else
           dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+        if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+          currSE.mapping = linfo_levrun_c2x2;
+        else
+          currSE.reading = readRunLevelFromBuffer_CABAC;
+
         dP->readSyntaxElement(&currSE,img,inp,dP);
         level = currSE.value1;
         run = currSE.value2;
@@ -1223,11 +1194,6 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
             level=1;
             for(k=0;(k<16)&&(level!=0);k++)
             {
-              if (inp->symbol_mode == UVLC)
-                currSE.mapping = linfo_levrun_inter;
-              else
-                currSE.reading = readRunLevelFromBuffer_CABAC;
-
               if ( img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
               {
                 currSE.context = 8; // for choosing context model
@@ -1246,6 +1212,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
               else
                 dP = &(currSlice->partArr[partMap[currSE.type]]);
               
+              if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+                currSE.mapping = linfo_levrun_inter;
+              else
+                currSE.reading = readRunLevelFromBuffer_CABAC;
+
               dP->readSyntaxElement(&currSE,img,inp,dP);
               level = currSE.value1;
               run = currSE.value2;

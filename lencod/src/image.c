@@ -425,7 +425,6 @@ void init_slice()
   curr_slice->picture_id = img->tr%256;
   curr_slice->qp = img->qp;
   curr_slice->start_mb_nr = img->current_mb_nr;
-  curr_slice->dp_mode = input->partition_mode;
   curr_slice->slice_too_big = dummy_slice_too_big;
 
   for (i=0; i<curr_slice->max_part_nr; i++)

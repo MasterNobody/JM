@@ -171,6 +171,7 @@ store_coding_state ()
     bs_dest->stored_byte_pos   = bs_src->stored_byte_pos;
     bs_dest->stored_bits_to_go = bs_src->stored_bits_to_go;
     bs_dest->stored_byte_buf   = bs_src->stored_byte_buf;
+    bs_dest->write_flag        = bs_src->write_flag;
   }
 
 
@@ -263,6 +264,7 @@ restore_coding_state ()
     bs_dest->stored_byte_pos   = bs_src->stored_byte_pos;
     bs_dest->stored_bits_to_go = bs_src->stored_bits_to_go;
     bs_dest->stored_byte_buf   = bs_src->stored_byte_buf;
+    bs_dest->write_flag        = bs_src->write_flag;
   }
 
 

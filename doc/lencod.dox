@@ -52,7 +52,8 @@ WARN_LOGFILE           = warning.log
 #---------------------------------------------------------------------------
 # configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = ../lencod/
+INPUT                  = ../lencod/ \
+                         ../lcommon
 FILE_PATTERNS          = *.c \
                          *.h
 RECURSIVE              = YES

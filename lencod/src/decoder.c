@@ -125,7 +125,7 @@ void decode_one_macroblock(int decoder, int mode, int ref)
         for (block_x=img->block_x ; block_x < img->block_x+BLOCK_MULTIPLE ; block_x++)
         {
 
-          ref_inx = ref+1;
+          ref_inx = (img->number-ref-1)%img->no_multpred;
           
           Get_Reference_Block(decref[decoder][ref_inx],
                                 block_y, block_x,
@@ -395,8 +395,7 @@ void UpdateDecoders()
  */
 void DecOneForthPix(byte **dY, byte ***dref)
 {
-//*KS*  int j, ref=img->number%img->buf_cycle;
-  int j, ref=0;
+  int j, ref=img->number%img->buf_cycle;
 
   for (j=0; j<img->height; j++)
     memcpy(dref[ref][j], dY[j], img->width);
@@ -450,13 +449,10 @@ void Build_Status_Map(byte **s_map)
       if (!input->slice_mode || img->mb_data[mb].slice_nr != slice) /* new slice */
       {
         packet_lost=0;
-        if(input->partition_mode)
-        {
-          if ((double)rand()/(double)RAND_MAX*100 < input->LossRateC)
-            packet_lost += 3;
-          if ((double)rand()/(double)RAND_MAX*100 < input->LossRateB)
-            packet_lost += 2;
-        }
+        if ((double)rand()/(double)RAND_MAX*100 < input->LossRateC)
+          packet_lost += 3;
+        if ((double)rand()/(double)RAND_MAX*100 < input->LossRateB)
+          packet_lost += 2;
         if ((double)rand()/(double)RAND_MAX*100 < input->LossRateA)
           packet_lost=1;
         

@@ -51,11 +51,12 @@
 #include "elements.h"
 #include "header.h"
 #include "rtp.h"
+#include "mbuffer.h"
 
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
-#define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
+#define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
 #else
 #define SYMTRACESTRING(s) // to nothing
 #endif
@@ -78,26 +79,28 @@ int SliceHeader()
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  SyntaxElement sym;
+  SyntaxElement *sym;
   int len = 0;
   int Quant = img->qp;                  // Hack.  This should be a parameter as soon as Gisle is done
   int MBPosition = img->current_mb_nr;  // Hack.  This should be a paremeter as well.
 
-  sym.type = SE_HEADER;                 // This will be true for all symbols generated here
-  sym.mapping = n_linfo2;               // Mapping rule: Simple code number to len/info
+  if ((sym=(SyntaxElement*)calloc(1,sizeof(SyntaxElement)))==NULL) no_mem_exit("SliceHeader:sym");
+
+  sym->type = SE_HEADER;                 // This will be true for all symbols generated here
+  sym->mapping = n_linfo2;               // Mapping rule: Simple code number to len/info
 
 
   // Write a slice start code
   len+=PutStartCode (0, currStream, "\nSlice Header");
 
   // Now, take care of te UVLC coded data structure described in VCEG-M79
-  sym.value1 = 0;               // TRType = 0
+  sym->value1 = 0;               // TRType = 0
   SYMTRACESTRING("PH TemporalReferenceType");
-  len += writeSyntaxElement_UVLC (&sym, partition);
+  len += writeSyntaxElement_UVLC (sym, partition);
 
-  sym.value1 = img->tr%256;         // TR, variable length
+  sym->value1 = img->tr%256;         // TR, variable length
   SYMTRACESTRING("PH TemporalReference");
-  len += writeSyntaxElement_UVLC (&sym, partition);
+  len += writeSyntaxElement_UVLC (sym, partition);
 
   // Size information.  If the picture is Intra, then transmit the size in MBs,
   // For all other picture type just indicate that it didn't change.
@@ -113,26 +116,26 @@ int SliceHeader()
     assert (img->width  % 16 == 0);
     assert (img->height % 16 == 0);
 
-    sym.value1 = 1;             // SizeType = Width/Height in MBs
+    sym->value1 = 1;             // SizeType = Width/Height in MBs
     SYMTRACESTRING("PH FullSizeInformation");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-    sym.value1 = img->width / 16;
+    len += writeSyntaxElement_UVLC (sym, partition);
+    sym->value1 = img->width / 16;
     SYMTRACESTRING("PH FullSize-X");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-    sym.value1 = img->height / 16;
+    len += writeSyntaxElement_UVLC (sym, partition);
+    sym->value1 = img->height / 16;
     SYMTRACESTRING("PH FullSize-Y");
-    len += writeSyntaxElement_UVLC (&sym, partition);
+    len += writeSyntaxElement_UVLC (sym, partition);
 
   } else
   {    // Not an intra frame -> write "unchanged"
-    sym.value1 = 0;             // SizeType = Unchanged
+    sym->value1 = 0;             // SizeType = Unchanged
     SYMTRACESTRING("PHSizeUnchanged");
-    len += writeSyntaxElement_UVLC (&sym, partition);
+    len += writeSyntaxElement_UVLC (sym, partition);
   }
 
-  select_picture_type (&sym);
+  select_picture_type (sym);
   SYMTRACESTRING("Hacked Picture Type Symbol");
-  len+= writeSyntaxElement_UVLC (&sym, partition);
+  len+= writeSyntaxElement_UVLC (sym, partition);
 
   // Finally, write Reference Picture ID 
   // WYK: Oct. 16, 2001. Now I use this for the reference frame ID (non-B frame ID). 
@@ -141,9 +144,9 @@ int SliceHeader()
   // frames are lost, and then can adjust the reference frame buffers correctly.
   if (1)
   {
-    sym.value1 = img->refPicID%16;         // refPicID, variable length
+    sym->value1 = img->refPicID%16;         // refPicID, variable length
     SYMTRACESTRING("PHRefPicID");
-    len += writeSyntaxElement_UVLC (&sym, partition);
+    len += writeSyntaxElement_UVLC (sym, partition);
   }
 
   // For the GOB address, use straigtforward procedure.  Note that this allows slices 
@@ -155,8 +158,8 @@ int SliceHeader()
   // Put MB-Adresse
   assert (MBPosition < (1<<15));
   SYMTRACESTRING("SH FirstMBInSlice");
-  sym.value1 = MBPosition;
-  len += writeSyntaxElement_UVLC (&sym, partition);
+  sym->value1 = MBPosition;
+  len += writeSyntaxElement_UVLC (sym, partition);
 
 
   // Put Quant.  It's a bit irrationale that we still put the same quant here, but it's
@@ -178,22 +181,175 @@ int SliceHeader()
   // 3 == full pel resolution
 
   SYMTRACESTRING("SH SliceQuant");
-  sym.value1 = 31 - Quant;
-  len += writeSyntaxElement_UVLC (&sym, partition);
+  sym->value1 = 31 - Quant;
+  len += writeSyntaxElement_UVLC (sym, partition);
 
   if (img->types==SP_IMG)
   {
     SYMTRACESTRING("SH SP SliceQuant");
-    sym.value1 = 31 - img->qpsp;
-    len += writeSyntaxElement_UVLC (&sym, partition);
+    sym->value1 = 31 - img->qpsp;
+    len += writeSyntaxElement_UVLC (sym, partition);
   }
   // Put the Motion Vector resolution as per reflector consensus
   SYMTRACESTRING("SH MVResolution");
-  sym.value1 = input->mv_res;
-  len += writeSyntaxElement_UVLC (&sym, partition);
+  sym->value1 = input->mv_res;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+  len+=writeERPS(sym, partition);
+
+  free(sym);
 
   return len;
 }
+
+/*!
+ ********************************************************************************************
+ * \brief 
+ *    writes the ERPS syntax elements
+ *
+ * \return
+ *    number of bits used for the ERPS
+ ********************************************************************************************
+*/
+int writeERPS(SyntaxElement *sym, DataPartition *partition)
+{
+  int len=0;
+
+  /* RPSF: Reference Picture Selection Flags */
+  SYMTRACESTRING("RTP-SH: Reference Picture Selection Flags");
+  sym->value1 = 0;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+  /* PN: Picture Number */
+  SYMTRACESTRING("RTP-SH: Picture Number");
+  sym->value1 = img->pn;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+#ifdef _CHECK_MULTI_BUFFER_1_
+
+  /* RPSL: Reference Picture Selection Layer */
+  SYMTRACESTRING("RTP-SH: Reference Picture Selection Layer");
+  sym->value1 = 1;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+  if(img->type!=INTRA_IMG)
+  {
+    // let's mix some reference frames
+    if ((img->pn==5)&&(img->type==INTER_IMG))
+    {
+      r = (RMPNIbuffer_t*)calloc (1,sizeof(RMPNIbuffer_t));
+      r->RMPNI=0;
+      r->Data=2;
+      r->Next=NULL;
+      img->currentSlice->rmpni_buffer=r;
+
+    
+      // negative ADPN follows
+      SYMTRACESTRING("RTP-SH: RMPNI");
+      sym->value1 = 0;
+      len += writeSyntaxElement_UVLC (sym, partition);
+
+      // ADPN
+      SYMTRACESTRING("RTP-SH: ADPN");
+      sym->value1 = 2;
+      len += writeSyntaxElement_UVLC (sym, partition);
+
+    }
+
+    // End loop
+    SYMTRACESTRING("RTP-SH: RMPNI");
+    sym->value1 = 3;
+    len += writeSyntaxElement_UVLC (sym, partition);
+  }
+  reorder_mref(img);
+  
+#else
+  /* RPSL: Reference Picture Selection Layer */
+  SYMTRACESTRING("RTP-SH: Reference Picture Selection Layer");
+  sym->value1 = 0;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+#endif
+
+#ifdef _CHECK_MULTI_BUFFER_2_
+
+  SYMTRACESTRING("RTP-SH: Reference Picture Bufering Type");
+  sym->value1 = 1;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+
+  // some code to check operation
+  if ((img->pn==3) && (img->type==INTER_IMG))
+  {
+
+    // check in this frame as long term picture
+    if (img->max_lindex==0)
+    {
+      // set long term buffer size = 2
+      SYMTRACESTRING("RTP-SH: MMCO Specify Max Long Term Index");
+      // command
+      sym->value1 = 4;
+      len += writeSyntaxElement_UVLC (sym, partition);
+      // size = 2+1 (MLP1)
+      sym->value1 = 2+1;
+      len += writeSyntaxElement_UVLC (sym, partition);
+
+      img->max_lindex=2;
+    }
+
+    // assign a long term index to actual frame
+    SYMTRACESTRING("RTP-SH: MMCO Assign Long Term Index to a Picture");
+    // command
+    sym->value1 = 3;
+    len += writeSyntaxElement_UVLC (sym, partition);
+    // DPN=0 for actual frame 
+    sym->value1 = 0;
+    len += writeSyntaxElement_UVLC (sym, partition);
+    //long term ID
+    sym->value1 = img->lindex;
+    len += writeSyntaxElement_UVLC (sym, partition);
+
+    // assign local long term
+    init_long_term_buffer(2,img);
+    init_mref(img);
+    init_Refbuf(img);
+
+    assign_long_term_id(3,img->lindex,img);
+    
+    img->lindex=(img->lindex+1)%img->max_lindex;
+
+
+  } 
+  if ((img->pn==4) && (img->type==INTER_IMG))
+  {
+     if (img->max_lindex>0)
+     {
+      // delete long term picture again
+      SYMTRACESTRING("RTP-SH: MMCO Mark a Long-Term Picture as Unused");
+      // command
+      sym->value1 = 2;
+      len += writeSyntaxElement_UVLC (sym, partition);
+      SYMTRACESTRING("RTP-SH: MMCO LPIN");
+      // command
+      sym->value1 = (img->max_lindex+img->lindex-1)%img->max_lindex;
+      len += writeSyntaxElement_UVLC (sym, partition);
+    }
+  } 
+
+  // end MMCO loop
+  SYMTRACESTRING("RTP-SH: end loop");
+  sym->value1 = 0;
+  len += writeSyntaxElement_UVLC (sym, partition);
+#else
+    /* RPBT: Reference Picture Bufering Type */
+    SYMTRACESTRING("RTP-SH: Reference Picture Bufering Type");
+    sym->value1 = 0;
+    len += writeSyntaxElement_UVLC (sym, partition);
+#endif 
+
+  return len;
+}
+
 
 int SequenceHeader (FILE *outf)
 {
@@ -416,21 +572,25 @@ void LastMBInSlice()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  SyntaxElement sym;
+  SyntaxElement *sym;
   int d_MB_Nr;
+
+  if ((sym=(SyntaxElement*)calloc(1,sizeof(SyntaxElement)))==NULL) no_mem_exit("LastMBInSlice:sym");
 
   d_MB_Nr = img->current_mb_nr-img->currentSlice->start_mb_nr;
   if (d_MB_Nr == img->total_number_mb)
     d_MB_Nr = 0;
 
-  sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
+  sym->type = SE_HEADER;
+  sym->mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
 
   // Put MB-Adresse
   assert (d_MB_Nr < (1<<15));
   SYMTRACESTRING("SH Numbers of MB in Slice");
-  sym.value1 = d_MB_Nr;
-  writeSyntaxElement_UVLC (&sym, partition);
+  sym->value1 = d_MB_Nr;
+  writeSyntaxElement_UVLC (sym, partition);
+
+  free (sym);
 }
 
 

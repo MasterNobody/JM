@@ -1,3 +1,22 @@
+Changes for Version JM 1.0 to TML 9.6
+-----------------------------------
+
+New Features
+* ERPS works also with bitstream file
+
+Bug Fixes
+* Bitstream file works again with new reference frame buffers (KS)
+* Leaky bucket memory allocation (KS/SR)
+* Fix encoder memory leak (KS)
+* Update workspace include path for Release mode (KS)
+* Data partitioning fixes (TO)
+* Update doxygen config files (KS)
+* Data Partitioning / ERPS fixes (KS/TO)
+
+Cleanups
+* remove unused code (KS/TO)
+* use free_mem?D in encoder (KS)
+
 Changes for Version 9.6 to Version 9.4
 --------------------------------------
 

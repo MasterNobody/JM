@@ -419,6 +419,9 @@ int writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart)
   // perform the actual coding by calling the appropriate method
   se->writing(se, eep_dp);
 
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
   return (se->len = (arienco_bits_written(eep_dp) - curr_len));
 }
 

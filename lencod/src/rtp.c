@@ -56,7 +56,7 @@
 #include "rtp.h"
 #include "elements.h"
 #include "defines.h"
-#include "mbuffer.h"
+#include "header.h"
 
 #include "global.h"
 
@@ -390,9 +390,9 @@ int RTPSequenceHeader (FILE *out)
 
 int RTPSliceHeader()
 {
-  int dP_nr;
-  Bitstream *currStream; 
-  DataPartition *partition;
+  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
+  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
+  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
   SyntaxElement sym;
 
   int len = 0;
@@ -401,14 +401,6 @@ int RTPSliceHeader()
 #ifdef _CHECK_MULTI_BUFFER_1_
   RMPNIbuffer_t *r;
 #endif
-
-  if(img->type == B_IMG)
-    dP_nr= assignSE2partition[input->partition_mode][SE_BFRAME];
-  else
-    dP_nr= assignSE2partition[input->partition_mode][SE_HEADER];
-
-  currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
-  partition = &((img->currentSlice)->partArr[dP_nr]);
 
   assert (input->of_mode == PAR_OF_RTP);
   sym.type = SE_HEADER;         // This will be true for all symbols generated here
@@ -421,8 +413,6 @@ int RTPSliceHeader()
 
   SYMTRACESTRING("RTP-SH: Picture ID");
   sym.value1 = img->currentSlice->picture_id;
-// printf ("Put PictureId %d\n", img->currentSlice->picture_id);
-
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   /*! StW:
@@ -502,138 +492,7 @@ int RTPSliceHeader()
   }
 
   /* KS: add Annex U Syntax elements */
-
-  /* RPSF: Reference Picture Selection Flags */
-  SYMTRACESTRING("RTP-SH: Reference Picture Selection Flags");
-  sym.value1 = 0;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  /* PN: Picture Number */
-  SYMTRACESTRING("RTP-SH: Picture Number");
-  sym.value1 = img->pn;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-#ifdef _CHECK_MULTI_BUFFER_1_
-
-  /* RPSL: Reference Picture Selection Layer */
-  SYMTRACESTRING("RTP-SH: Reference Picture Selection Layer");
-  sym.value1 = 1;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  if(img->type!=INTRA_IMG)
-  {
-    // let's mix some reference frames
-    if ((img->pn==5)&&(img->type==INTER_IMG))
-    {
-      r = (RMPNIbuffer_t*)calloc (1,sizeof(RMPNIbuffer_t));
-      r->RMPNI=0;
-      r->Data=2;
-      r->Next=NULL;
-      img->currentSlice->rmpni_buffer=r;
-
-    
-      // negative ADPN follows
-      SYMTRACESTRING("RTP-SH: RMPNI");
-      sym.value1 = 0;
-      len += writeSyntaxElement_UVLC (&sym, partition);
-
-      // ADPN
-      SYMTRACESTRING("RTP-SH: ADPN");
-      sym.value1 = 2;
-      len += writeSyntaxElement_UVLC (&sym, partition);
-
-    }
-
-    // End loop
-    SYMTRACESTRING("RTP-SH: RMPNI");
-    sym.value1 = 3;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-  reorder_mref(img);
-  
-#else
-  /* RPSL: Reference Picture Selection Layer */
-  SYMTRACESTRING("RTP-SH: Reference Picture Selection Layer");
-  sym.value1 = 0;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-#endif
-
-#ifdef _CHECK_MULTI_BUFFER_2_
-
-  SYMTRACESTRING("RTP-SH: Reference Picture Bufering Type");
-  sym.value1 = 1;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-
-  // some code to check operation
-  if ((img->pn==3) && (img->type==INTER_IMG))
-  {
-
-    // check in this frame as long term picture
-    if (img->max_lindex==0)
-    {
-      // set long term buffer size = 2
-      SYMTRACESTRING("RTP-SH: MMCO Specify Max Long Term Index");
-      // command
-      sym.value1 = 4;
-      len += writeSyntaxElement_UVLC (&sym, partition);
-      // size = 2+1 (MLP1)
-      sym.value1 = 2+1;
-      len += writeSyntaxElement_UVLC (&sym, partition);
-
-      img->max_lindex=2;
-    }
-
-    // assign a long term index to actual frame
-    SYMTRACESTRING("RTP-SH: MMCO Assign Long Term Index to a Picture");
-    // command
-    sym.value1 = 3;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-    // DPN=0 for actual frame 
-    sym.value1 = 0;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-    //long term ID
-    sym.value1 = img->lindex;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-
-    // assign local long term
-    init_long_term_buffer(2,img);
-    init_mref(img);
-    init_Refbuf(img);
-
-    assign_long_term_id(3,img->lindex,img);
-    
-    img->lindex=(img->lindex+1)%img->max_lindex;
-
-
-  } 
-  if ((img->pn==4) && (img->type==INTER_IMG))
-  {
-     if (img->max_lindex>0)
-     {
-      // delete long term picture again
-      SYMTRACESTRING("RTP-SH: MMCO Mark a Long-Term Picture as Unused");
-      // command
-      sym.value1 = 2;
-      len += writeSyntaxElement_UVLC (&sym, partition);
-      SYMTRACESTRING("RTP-SH: MMCO LPIN");
-      // command
-      sym.value1 = (img->max_lindex+img->lindex-1)%img->max_lindex;
-      len += writeSyntaxElement_UVLC (&sym, partition);
-    }
-  } 
-
-  // end MMCO loop
-  SYMTRACESTRING("RTP-SH: end loop");
-  sym.value1 = 0;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-#else
-    /* RPBT: Reference Picture Bufering Type */
-    SYMTRACESTRING("RTP-SH: Reference Picture Bufering Type");
-    sym.value1 = 0;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-#endif 
+  len+=writeERPS(&sym, partition);
   /* end KS*/
 
   // After this, and when in CABAC mode, terminateSlice() may insert one more
@@ -795,7 +654,6 @@ int RTPPartition_BC_Header(int PartNo)
 
   SYMTRACESTRING("RTP-PH: Picture ID");
   sym.value1 = img->currentSlice->picture_id;
-// printf ("Put PictureId %d\n", img->currentSlice->picture_id);
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   SYMTRACESTRING("RTP-PH: Slice ID");

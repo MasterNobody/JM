@@ -303,10 +303,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
      if(img->cod_counter)
      {
        // write out the skip MBs to know how many bits we need for the RLC
-       if(img->type == B_IMG)
-         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-       else
-         dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+       dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
        currSE->value1 = img->cod_counter;
        currSE->mapping = n_linfo2;
        currSE->type = SE_MBTYPE;
@@ -414,10 +411,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
       img->cod_counter--;
       if(img->cod_counter)
       {
-        if(img->type == B_IMG)
-          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-        else
-          dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+        dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
         currSE->value1 = img->cod_counter;
         currSE->mapping = n_linfo2;
         currSE->type = SE_MBTYPE;
@@ -447,10 +441,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
   //! TO 4.11.2001 Skip MBs at the end of this slice for Slice Mode 0 or 1
   if(*end_of_slice == TRUE && img->cod_counter && !use_bitstream_backing)
   {
-    if(img->type == B_IMG)
-      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     currSE->value1 = img->cod_counter;
     currSE->mapping = n_linfo2;
     currSE->type = SE_MBTYPE;
@@ -1117,9 +1108,9 @@ void write_one_macroblock()
   {
     if (img->mb_mode != COPY_MB || currMB->intraOrInter != INTER_MB || (img->type == B_IMG && currMB->cbp != 0))
   {
-      // Macroblock is coded, put out run and mbmode
       currSE->value1 = img->cod_counter;
       currSE->mapping = n_linfo2;
+      // Macroblock is coded, put out run and mbmode
       currSE->type = SE_MBTYPE;
 #if TRACE
       snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);

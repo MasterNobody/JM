@@ -70,7 +70,7 @@ extern void tracebits(const char *trace_str,  int len,  int info,int value1,
 int slice_startcode_follows(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
-  int dp_Nr = assignSE2partition[inp->partition_mode][SE_MBTYPE];
+  int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
   DataPartition *dP = &(currSlice->partArr[dp_Nr]);
   Bitstream   *currStream = dP->bitstream;
   byte *buf = currStream->streamBuffer;

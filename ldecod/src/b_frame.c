@@ -148,7 +148,6 @@ void init_macroblock_Bframe(struct img_par *img)
   int fw_predframe_no=0;
     Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-//*KS*    currMB->ref_frame = img->frame_cycle;
     currMB->ref_frame = 0;
     currMB->predframe_no = 0;
 
@@ -184,7 +183,7 @@ void init_macroblock_Bframe(struct img_par *img)
     {
       for (i = 0;i < BLOCK_SIZE;i++)
       {
-        img->fw_refFrArr[img->block_y+j][img->block_x+i] = -fw_predframe_no; // previous P
+        img->fw_refFrArr[img->block_y+j][img->block_x+i] = fw_predframe_no; // previous P
         img->bw_refFrArr[img->block_y+j][img->block_x+i] = -1;
       }
     }
@@ -206,7 +205,7 @@ void init_macroblock_Bframe(struct img_par *img)
     {
       for (i = 0;i < BLOCK_SIZE;i++)
       {
-        img->fw_refFrArr[img->block_y+j][img->block_x+i] = -fw_predframe_no; // previous P
+        img->fw_refFrArr[img->block_y+j][img->block_x+i] = fw_predframe_no; // previous P
         img->bw_refFrArr[img->block_y+j][img->block_x+i] = 0; // next P
       }
     }
@@ -260,7 +259,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   Slice *currSlice = img->currentSlice;
   DataPartition *dp;
-  int *partMap = assignSE2partition[inp->partition_mode];
+  int *partMap = assignSE2partition[currSlice->dp_mode];
 
   bw_predframe_no=0;
 
@@ -294,7 +293,6 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
         fw_predframe_no = 1;
       }
 
-//*KS*      ref_frame=(img->frame_cycle+img->buf_cycle-fw_predframe_no) % img->buf_cycle;
       ref_frame=fw_predframe_no;
 
  /*     if (ref_frame > img->number)
@@ -706,8 +704,6 @@ int decode_one_macroblock_Bframe(struct img_par *img)
   int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-//*KS*  int ref_frame_bw = (img->frame_cycle +img->buf_cycle)% img->buf_cycle;
-//*KS*  int ref_frame_fw = (currMB->ref_frame-1+img->buf_cycle) % img->buf_cycle;
   int ref_frame_bw = 0;
   int ref_frame_fw = currMB->ref_frame+1;
   int ref_frame = ref_frame_fw;
@@ -830,7 +826,6 @@ int decode_one_macroblock_Bframe(struct img_par *img)
           {
             img->dfMV[i4+BLOCK_SIZE][j4][hv]=img->dbMV[i4+BLOCK_SIZE][j4][hv]=0;
           }
-//*KS*          ref_frame = (img->number -1+ img->buf_cycle)% img->buf_cycle;
           ref_frame = 1;
         }
         // next P is skip or inter mode
@@ -848,7 +843,6 @@ int decode_one_macroblock_Bframe(struct img_par *img)
           img->dfMV[i4+BLOCK_SIZE][j4][1]=TRb*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
           img->dbMV[i4+BLOCK_SIZE][j4][0]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][0]/TRp;
           img->dbMV[i4+BLOCK_SIZE][j4][1]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
-//*KS*          ref_frame=(img->number - 1 - refFrArr[j4][i4] + img->buf_cycle)%img->buf_cycle;
           ref_frame=1 + refFrArr[j4][i4];
         }
 
@@ -1092,10 +1086,8 @@ int decode_one_macroblock_Bframe(struct img_par *img)
               jf0=f1-jf1;
 
               if(refFrArr[jf][ifx]==-1)
-//*KS*/                ref_frame=(img->number-1)%img->buf_cycle;
                 ref_frame=1;
               else
-//*KS*                ref_frame=(img->number - 1 - refFrArr[jf][ifx] + img->buf_cycle)%img->buf_cycle;
                 ref_frame=1 + refFrArr[jf][ifx];
 
               fw_pred=(if0*jf0*mcef[ref_frame][uv][jj0][ii0]+

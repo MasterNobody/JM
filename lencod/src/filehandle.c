@@ -269,99 +269,6 @@ int start_slice(SyntaxElement *sym)
         return header_len;
 
       }
-    /*
-    case PAR_OF_RTP:
-
-
-      if (input->symbol_mode == UVLC)
-      {
-        currStream = currSlice->partArr[0].bitstream;
-
-        assert (currStream != NULL);
-        assert (currStream->bits_to_go == 8);
-        assert (currStream->byte_pos == 0);
-        assert (currStream->byte_buf == 0);
-
-        header_len=RTPSliceHeader();                      // generate the slice header
-        currStream->header_len = header_len;
-        ByteAlign (currStream);
-
-        assert (currStream->bits_to_go == 8);
-
-        if (input->partition_mode != PAR_DP_1)
-        {
-          for (i=1; i<currSlice->max_part_nr; i++)
-          {
-            // generate the Partition header for all partitions.  terminate_slice()
-            // later writes only those partitions which contain more data than
-            // header_len (and worries about byte alignment itself!)
-
-            currStream = (currSlice->partArr[i]).bitstream;
-            assert (currStream != NULL);
-            assert (currStream->bits_to_go == 8);
-            assert (currStream->byte_pos == 0);
-            assert (currStream->byte_buf == 0);
-            part_header_len = RTPPartition_BC_Header(i);
-            currStream->header_len = part_header_len;
-            ByteAlign (currStream);
-          }
-        }
-        return header_len;
-      }
-      else
-      {                   // H.26: CABAC File Format
-        eep = &((currSlice->partArr[0]).ee_cabac);
-        currStream = (currSlice->partArr[0]).bitstream;
-
-        assert (currStream->bits_to_go == 8);
-        assert (currStream->byte_buf == 0);
-
-
-        header_len=RTPSliceHeader();                      // generate the slice header
-
-        // reserve bits for d_MB_Nr
-        currStream->header_len = header_len;
-        currStream->header_byte_buffer = currStream->byte_buf;
-
-        currStream->byte_pos += ((31-currStream->bits_to_go)/8);
-        if ((31-currStream->bits_to_go)%8 != 0)
-          currStream->byte_pos++;
-        currStream->bits_to_go = 8;
-        currStream->byte_pos++;
-
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
-        
-        if(input->partition_mode != PAR_DP_1)
-        {
-          for (i=1; i<currSlice->max_part_nr; i++)
-          {
-            eep = &((currSlice->partArr[i]).ee_cabac);
-	          currStream = (currSlice->partArr[i]).bitstream;
-
-            part_header_len = RTPPartition_BC_Header(i);
-            currStream->header_len = part_header_len;
-            ByteAlign (currStream);
-
-     			  assert (currStream->bits_to_go == 8);
-		        assert (currStream->byte_buf == 0);
-			      assert (currStream->byte_pos == 0);
-
-	          arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
-          }
-		    }
-		    // initialize context models
-        init_contexts_MotionInfo(currSlice->mot_ctx, 1);
-        init_contexts_TextureInfo(currSlice->tex_ctx, 1);
-
-        return header_len;
-
-      }
-
-*/
-
-
-
-
     case PAR_OF_RTP:
       if (img->current_mb_nr == 0)                       // new picture
         RTPUpdateTimestamp (img->tr);
@@ -397,6 +304,7 @@ int start_slice(SyntaxElement *sym)
             part_header_len = RTPPartition_BC_Header(i);
             currStream->header_len = part_header_len;
             ByteAlign (currStream);
+            currStream->write_flag = 0;
           }
         }
         return header_len;
@@ -424,7 +332,8 @@ int start_slice(SyntaxElement *sym)
         currStream->byte_pos++;
 
         arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
-        
+        currStream->write_flag = 0;
+
         if(input->partition_mode != PAR_DP_1)
         {
           for (i=1; i<currSlice->max_part_nr; i++)
@@ -440,6 +349,7 @@ int start_slice(SyntaxElement *sym)
 		        assert (currStream->byte_buf == 0);
 
 	          arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+            currStream->write_flag = 0;
           }
         }
         // initialize context models
@@ -477,7 +387,6 @@ int terminate_slice()
   int LastPartition;
   int cabac_byte_pos=0, uvlc_byte_pos=0, empty_bytes=0;
   int rtp_bytes_written;
-  int header_bytes;
 
   // Mainly flushing of everything
   // Add termination symbol, etc.
@@ -581,84 +490,65 @@ int terminate_slice()
           currStream->bits_to_go = 8;
         }
         bytes_written = currStream->byte_pos; // number of written bytes
-        header_bytes = currStream->header_len/8;
-        if (currStream->header_len%8 != 0)
-          header_bytes ++;
         
-        if (bytes_written > header_bytes)     // at least one useful bit in the partition 
-                                                            // besides the header -- something to do
+        if(img->type == B_IMG && i > 0)    // to be really sure
+          currStream->write_flag = 0;
+
+        if(currStream->write_flag == 1)                                                   
+        {
+          int Marker;
+          int FirstBytePacketType;
+          
+          if (input->symbol_mode == CABAC && i == 0)
           {
-            int Marker;
-            int FirstBytePacketType;
-
-            // Determine First Byte of RTP payload
-            switch (input->partition_mode)
+            //! Add Number of MBs of this slice to the header
+            //! Save current state of Bitstream
+            byte_pos = currStream->byte_pos; //last byte in the stream
+            
+            //! Go to the reserved bits
+            currStream->byte_pos = cabac_byte_pos = (currStream->header_len)/8;
+            currStream->bits_to_go = 8-(currStream->header_len)%8;
+            currStream->byte_buf = currStream->header_byte_buffer;
+            
+            cabac_byte_pos += ((31-currStream->bits_to_go)/8);
+            if ((31-currStream->bits_to_go)%8 != 0)
+              cabac_byte_pos++;
+            cabac_byte_pos++; //! that's the position where we started to write CABAC code
+            
+            //! Ad Info about last MB 
+            LastMBInSlice();
+            
+            if (currStream->bits_to_go < 8) //! trailing bits to process
             {
-              case PAR_DP_1:
-                FirstBytePacketType = 0;
-                break;
-              case PAR_DP_3:
-                FirstBytePacketType = i+1;      // See VCEG-N72
-                break;
-              default:
-                assert (0==1);
+              currStream->byte_buf <<= currStream->bits_to_go;
+              currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
             }
-
-            if (input->symbol_mode == CABAC && i == 0)
-            {
-              //! Add Number of MBs of this slice to the header
-              //! Save current state of Bitstream
-              byte_pos = currStream->byte_pos; //last byte in the stream
-
-              //! Go to the reserved bits
-              currStream->byte_pos = cabac_byte_pos = (currStream->header_len)/8;
-              currStream->bits_to_go = 8-(currStream->header_len)%8;
-              currStream->byte_buf = currStream->header_byte_buffer;
-
-              cabac_byte_pos += ((31-currStream->bits_to_go)/8);
-              if ((31-currStream->bits_to_go)%8 != 0)
-                cabac_byte_pos++;
-              cabac_byte_pos++; //! that's the position where we started to write CABAC code
-
-              //! Ad Info about last MB 
-              LastMBInSlice();
-
-              if (currStream->bits_to_go < 8) //! trailing bits to process
-              {
-                currStream->byte_buf <<= currStream->bits_to_go;
-                currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-              }
-
-              uvlc_byte_pos = currStream->byte_pos; //! that's the first byte after the UVLC header data
-              currStream->byte_pos = byte_pos;  //! where we were before this last_MB thing
-              empty_bytes = cabac_byte_pos - uvlc_byte_pos; //! These bytes contain no information
-                                                            //! They were reserved for writing the last_MB information but were not used
-
-              for(byte_pos=uvlc_byte_pos; byte_pos<=currStream->byte_pos-empty_bytes; byte_pos++)
-                currStream->streamBuffer[byte_pos]=currStream->streamBuffer[byte_pos+empty_bytes]; //shift the bitstreams
-              bytes_written = byte_pos;
-              //! TO 02.11.2001 I'm sure this can be done much more elegant, but that's the way it works. 
-              //! If anybody understands what happens here please feel free to change this!
+            
+            uvlc_byte_pos = currStream->byte_pos; //! that's the first byte after the UVLC header data
+            currStream->byte_pos = byte_pos;  //! where we were before this last_MB thing
+            empty_bytes = cabac_byte_pos - uvlc_byte_pos; //! These bytes contain no information
+            //! They were reserved for writing the last_MB information but were not used
+            
+            for(byte_pos=uvlc_byte_pos; byte_pos<=currStream->byte_pos-empty_bytes; byte_pos++)
+              currStream->streamBuffer[byte_pos]=currStream->streamBuffer[byte_pos+empty_bytes]; //shift the bitstreams
+            bytes_written = byte_pos;
+            //! TO 02.11.2001 I'm sure this can be done much more elegant, but that's the way it works. 
+            //! If anybody understands what happens here please feel free to change this!
           }  
 
           // Calculate RTP payload's First Byte
-          if (input->partition_mode==PAR_DP_1)
+          if (input->partition_mode==PAR_DP_1 || img->type == B_IMG)
             FirstBytePacketType = 0;
           else
-            FirstBytePacketType = i+1;
-          
-          //!TO A clean solution should be found
-          if(img->type == B_IMG)
-            FirstBytePacketType = 0;
-          //! End TO
+            FirstBytePacketType = i+1; //! See VCEG-N72
           
           // Calculate the Marker bit
           LastPartition=0;
-          if (input->partition_mode == PAR_DP_3)
+          if (input->partition_mode == PAR_DP_3 && img->type != B_IMG)
           {
-            if (currSlice->partArr[1].bitstream->byte_pos > 0)  // something in partition 1
+            if (currSlice->partArr[1].bitstream->write_flag == 1)  // something in partition 1
               LastPartition=1;
-            if (currSlice->partArr[2].bitstream->byte_pos > 0)  // something in partition 2
+            if (currSlice->partArr[2].bitstream->write_flag == 1)  // something in partition 2
               LastPartition=2;
           }
           Marker = 0;
@@ -667,11 +557,6 @@ int terminate_slice()
                 (input->partition_mode==PAR_DP_3 && i == LastPartition ))   // Last partition containing bits
               Marker = 1;
           // and write the RTP packet
-
-          //! TO just a hack for B-Frames should be removed one time
-          if(!FirstBytePacketType)
-            Marker = 1;
-          //! 
 
           rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
         }
@@ -683,7 +568,6 @@ int terminate_slice()
         currStream->bits_to_go = 8;
         currStream->byte_buf   = 0;
         currStream->byte_pos   = 0;
-
       }
     return 0;
 

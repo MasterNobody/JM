@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 9.6
+ *     JM 1.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -123,8 +123,8 @@
 #include "erc_api.h"
 #endif
 
-#define TML         "9"
-#define VERSION     "9.60"
+#define TML         "1"
+#define VERSION     "1.00"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -180,6 +180,8 @@ int main(int argc, char **argv)
   img->type = INTRA_IMG;
   img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
   img->refPicID = -1; // WYK: for detection of a new non-B frame
+
+  img->mmco_buffer=NULL;
 
   // B pictures
   Bframe_ctr=0;
@@ -406,7 +408,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snr_va);
   fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout," Exit TML %s decoder, ver %s \n",TML,VERSION);
+  fprintf(stdout," Exit JM %s decoder, ver %s \n",TML,VERSION);
 
   // write to log file
 
@@ -724,8 +726,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
 #endif
-
-  img->buf_cycle = inp->buf_cycle+1;
 
 #ifdef _ADAPT_LAST_GROUP_
   if ((last_P_no = (int*)malloc(img->buf_cycle*sizeof(int))) == NULL)

@@ -311,7 +311,7 @@ typedef struct
   int             bits_to_go_skip;    //!< storage for bitcounter
 
   byte            *streamBuffer;      //!< actual buffer for written bytes
-
+  int             write_flag;
 } Bitstream;
 
 //! DataPartition
@@ -334,7 +334,6 @@ typedef struct
   int                 qp;
   int                 picture_type; //!< picture type
   int                 start_mb_nr;
-  int                 dp_mode;      //!< data partioning mode
   int                 max_part_nr;  //!< number of different partitions
   DataPartition       *partArr;     //!< array of partitions
   MotionInfoContexts  *mot_ctx;     //!< pointer to struct of context models for use in CABAC

@@ -43,6 +43,7 @@
 #define _HEADER_H_
 
 int  SliceHeader();
+int  writeERPS(SyntaxElement *sym, DataPartition *partition);
 int  SequenceHeader(FILE *outf);
 void LastMBInSlice();
 

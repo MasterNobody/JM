@@ -1047,7 +1047,6 @@ UnifiedMotionSearch (int tot_intra_sad, int **refFrArr, int ***tmp_mv,
 #endif
 
   {
-//*KS*    ref_inx = (img->number-ref_frame-1)%img->buf_cycle;
     ref_inx = ref_frame+1;
 
     //  Looping through all the chosen block sizes:

@@ -440,6 +440,9 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
 
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if(se->type <= 1)
     trace2out (se);
@@ -474,6 +477,7 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
     {
       currStream->bits_to_go = 8;
       currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+      currStream->byte_buf = 0;
     }
   }
 }

@@ -293,9 +293,11 @@ void find_snr(
   int uv;
   int  status;
   static int modulo_ctr = 0;
+  static int modulo_ctr_b = 0;
   static int modolo_flag = 0;
   static int pic_id_old = 0, pic_id_old_b = 0;
   Slice *currSlice = img->currentSlice;
+
 #ifndef _ADAPT_LAST_GROUP_
   byte       diff;
 #endif
@@ -334,13 +336,13 @@ void find_snr(
   {
     if ((currSlice->picture_id < pic_id_old_b) && !modolo_flag)
     {
-      modulo_ctr++;
+      modulo_ctr_b++;
       modolo_flag = 1;
     }
     else
       modolo_flag = 0;
 
-    frame_no = currSlice->picture_id + (256*modulo_ctr);
+    frame_no = currSlice->picture_id + (256*modulo_ctr_b);
     pic_id_old_b = currSlice->picture_id;
   }
 #endif
@@ -543,7 +545,7 @@ void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *im
           for (result = 0, y = -2; y < 4; y++)
             result += tmp_res[i][j+y+2]*COEF[y+2];
           block[i][j] = max(0, min(255, (result+512)/1024));
-        }
+        } 
       }
 
       if ((dy&1) == 1) {
@@ -1120,7 +1122,6 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
           pRegion->mv[0] = (img->bw_mv[ii][jj][0] + img->bw_mv[ii+1][jj][0] + img->bw_mv[ii][jj+1][0] + img->bw_mv[ii+1][jj+1][0] + 2)/4;
           pRegion->mv[1] = (img->bw_mv[ii][jj][1] + img->bw_mv[ii+1][jj][1] + img->bw_mv[ii][jj+1][1] + img->bw_mv[ii+1][jj+1][1] + 2)/4;
           erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-//*KS*          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
           pRegion->mv[2] = 0; //ref_frame_bw
         }
         break;
@@ -1133,7 +1134,6 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
           pRegion->mv[0] = (img->dbMV[ii][jj][0] + img->dbMV[ii+1][jj][0] + img->dbMV[ii][jj+1][0] + img->dbMV[ii+1][jj+1][0] + 2)/4;
           pRegion->mv[1] = (img->dbMV[ii][jj][1] + img->dbMV[ii+1][jj][1] + img->dbMV[ii][jj+1][1] + img->dbMV[ii+1][jj+1][1] + 2)/4;
           erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-//*KS*          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
           pRegion->mv[2] = 0; //ref_frame_bw
         }
         break;

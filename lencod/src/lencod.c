@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 9.6
+ *     JM 1.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -82,8 +82,8 @@
 #include "memalloc.h"
 #include "mbuffer.h"
 
-#define TML     "9"
-#define VERSION "9.60"
+#define TML     "1"
+#define VERSION "1.00"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -742,7 +742,7 @@ void report()
   }
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout,"Exit TML %s encoder ver %s\n", TML, VERSION);
+  fprintf(stdout,"Exit JM %s encoder ver %s\n", TML, VERSION);
 
   // status file
   if ((p_stat=fopen("stat.dat","wt"))==0)
@@ -1279,43 +1279,25 @@ int init_global_buffers()
  */
 void free_global_buffers()
 {
-  int  i,j;
+  int  j;
 
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
   free (last_P_no);
 #endif
 
-  free(imgY[0]);
-  free(imgY);
-  free(imgUV[0][0]);
-  free(imgUV[1][0]);
-  free(imgUV[0]);
-  free(imgUV[1]);
-  free(imgUV);
-  free(imgY_org[0]);    // free ref frame buffers
-  free(imgY_org);
-  free(imgUV_org[0][0]);
-  free(imgUV_org[1][0]);
-  free(imgUV_org[0]);
-  free(imgUV_org[1]);
-  free(imgUV_org);
-  free(imgY_pf[0]);  // free post filtering frame buffers
-  free(imgY_pf);
-  free(imgUV_pf[0][0]);
-  free(imgUV_pf[1][0]);
-  free(imgUV_pf[0]);
-  free(imgUV_pf[1]);
-  free(imgUV_pf);
+  free_mem2D(imgY);
+  free_mem3D(imgUV,2);
+  free_mem2D(imgY_org);      // free ref frame buffers
+  free_mem3D(imgUV_org,2);
+  free_mem2D(imgY_pf);       // free post filtering frame buffers
+  free_mem3D(imgUV_pf,2);
 
-  free(nextP_imgY[0]);    // free next frame buffers (for B frames)
-  free(nextP_imgY);
-  free(nextP_imgUV[0][0]);
-  free(nextP_imgUV[1][0]);
-  free(nextP_imgUV[0]);
-  free(nextP_imgUV[1]);
-  free(nextP_imgUV);
+  free_mem2D(nextP_imgY);    // free next frame buffers (for B frames)
+  free_mem3D(nextP_imgUV,2);
 
+  free_mem2D(mref_P);
+  free_mem3D(mcef_P,2);
 
   free (Refbuf11_P);
   free (Refbuf11);
@@ -1329,50 +1311,26 @@ void free_global_buffers()
   if(input->successive_Bframe!=0)
   {
     // free last P-frame buffers for B-frame coding
-    for(j=0;j<2;j++)
-    {
-      free(tmp_fwMV[j][0]);
-      free(tmp_bwMV[j][0]);
-      free(dfMV[j][0]);
-      free(dbMV[j][0]);
-      free(tmp_fwMV[j]);
-      free(tmp_bwMV[j]);
-      free(dfMV[j]);
-      free(dbMV[j]);
-    }
-    free(tmp_fwMV);
-    free(tmp_bwMV);
-    free(dfMV);
-    free(dbMV);
-    free(fw_refFrArr[0]);
-    free(bw_refFrArr[0]);
-    free(fw_refFrArr);
-    free(bw_refFrArr);
+    free_mem3Dint(tmp_fwMV,2);
+    free_mem3Dint(tmp_bwMV,2);
+    free_mem3Dint(dfMV,2);
+    free_mem3Dint(dbMV,2);
+    free_mem2Dint(fw_refFrArr);
+    free_mem2Dint(bw_refFrArr);
   } // end if B frame
 
 
-  free(tmp_mv[0][0]);
-  free(tmp_mv[0]);
-  free(tmp_mv[1][0]);
-  free(tmp_mv[1]);
-  free(tmp_mv);
-  free(img4Y_tmp[0]);    // free temp quarter pel frame buffer
-  free(img4Y_tmp);
-  free(imgY_tmp[0]);    // free temp loop filter frame buffer
-  free(imgY_tmp);
-  free(imgUV_tmp[0][0]);
-  free(imgUV_tmp[1][0]);
-  free(imgUV_tmp[0]);
-  free(imgUV_tmp[1]);
-  free(imgUV_tmp);
-  free(refFrArr[0]);
-  free(refFrArr);
+  free_mem3Dint(tmp_mv,2);
+  free_mem2Dint(img4Y_tmp);    // free temp quarter pel frame buffer
+  free_mem2D(imgY_tmp);    // free temp loop filter frame buffer
+  free_mem3D(imgUV_tmp,2);
+  free_mem2Dint(refFrArr);
 
   // free mem, allocated in init_img()
   // free intra pred mode buffer for blocks
-  free(img->ipredmode[0]);
-  free(img->ipredmode);
+  free_mem2Dint(img->ipredmode);
   free(img->mb_data);
+
   if(input->UseConstrainedIntraPred)
   {
     free(img->intra_mb);
@@ -1380,32 +1338,18 @@ void free_global_buffers()
 
   if (input->rdopt==2)
   {
-    free(resY[0]);
-    free(resY);
-    free(RefBlock[0]);
-    free(RefBlock);
+    free_mem2Dint(resY);
+    free_mem2D(RefBlock);
+    free_mem3D(decY,input->NoOfDecoders);
+    free_mem3D(decY_best,input->NoOfDecoders);
     for (j=0; j<input->NoOfDecoders; j++)
     {
-      free(decY[j][0]);
-      free(decY[j]);
-      free(decY_best[j][0]);
-      free(decY_best[j]);
-      for (i=0; i<img->buf_cycle+1; i++)
-      {
-        free(decref[j][i][0]);
-        free(decref[j][i]);
-      }
-      free(decref[j]);
+      free_mem3D(decref[j],img->buf_cycle+1);
     }
-    free(decY);
-    free(decY_best);
     free(decref);
-    free(status_map[0]);
-    free(status_map);
-    free(dec_mb_mode[0]);
-    free(dec_mb_mode);
-    free(dec_mb_ref[0]);
-    free(dec_mb_ref);
+    free_mem2D(status_map);
+    free_mem2D(dec_mb_mode);
+    free_mem2D(dec_mb_ref);
 
   }
 }

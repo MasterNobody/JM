@@ -94,6 +94,8 @@ void start_slice(struct img_par *img, struct inp_par *inp)
   {
     case PAR_OF_26L:
 
+      currSlice->dp_mode = PAR_DP_1; //! no support for other modes in PAR_OF_26L!
+      
       if (inp->symbol_mode == UVLC)
       {
         // Current TML File Format
@@ -115,15 +117,21 @@ void start_slice(struct img_par *img, struct inp_par *inp)
         nal_startcode_follows = RTP_startcode_follows;
         currSlice->readSlice = readSliceRTP;
         for (i=0; i<3; i++)       // always up to three partitions in RTP
+        {
           currSlice->partArr[i].readSyntaxElement = readSyntaxElement_RTP;
+          currSlice->partArr[i].bitstream->ei_flag = 1;
+        } 
       }
       else
       {
         // CABAC File Format
         nal_startcode_follows = cabac_startcode_follows;
         currSlice->readSlice = readSliceRTP;
-        for (i=0; i<currSlice->max_part_nr; i++)
+        for (i=0; i<3; i++)
+        {
           currSlice->partArr[i].readSyntaxElement = readSyntaxElement_CABAC;
+          currSlice->partArr[i].bitstream->ei_flag = 1;
+        }
       }
       break;
     default:

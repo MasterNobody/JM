@@ -238,7 +238,7 @@ void calc_buffer()
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, input->no_frames);
   NumberLeakyBuckets = (unsigned long) input->NumberLeakyBuckets;
-  buffer_frame = calloc(total_frame_buffer, sizeof(long));
+  buffer_frame = calloc(total_frame_buffer+1, sizeof(long));
   if(!buffer_frame)
     no_mem_exit("init_buffer: buffer_frame");
   Rmin = calloc(NumberLeakyBuckets, sizeof(unsigned long));
@@ -314,6 +314,7 @@ void calc_buffer()
 
   write_buffer(NumberLeakyBuckets, Rmin, Bmin, Fmin);
 
+  free(buffer_frame);
   free(Rmin);
   free(Bmin);
   free(Fmin);

@@ -65,6 +65,8 @@ void init_frame_buffers(struct inp_par *inp, ImageParameters *img)
 {
   int i;
 
+  img->buf_cycle = inp->buf_cycle+1;
+
   if ((fb=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: fb");
 
   if ((fb->picbuf_short=(Frame**)calloc(img->buf_cycle,sizeof (Frame*)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_short");

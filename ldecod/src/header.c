@@ -46,6 +46,7 @@
 
 #include "global.h"
 #include "elements.h"
+#include "defines.h"
 
 
 #if TRACE
@@ -63,18 +64,24 @@
  */
 int SliceHeader(struct img_par *img, struct inp_par *inp)
 {
-  int dP_nr = assignSE2partition[inp->partition_mode][SE_HEADER];
   Slice *currSlice = img->currentSlice;
+  int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   Bitstream *currStream = (currSlice->partArr[dP_nr]).bitstream;
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   SyntaxElement sym;
   int UsedBits=31;
 
+  int tmp1;
+  RMPNIbuffer_t *tmp_rmpni,*tmp_rmpni2;
+  MMCObuffer_t *tmp_mmco,*tmp_mmco2;
+  int done;
+
+
   sym.type = SE_HEADER;
   sym.mapping = linfo;
 
   // 1. TRType = 0
-  SYMTRACESTRING("PH TemporalReferenceType");
+  SYMTRACESTRING("SH TemporalReferenceType");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   // Currently, only the value 0 is supported, hence a simple assert to
   // catch evenntual  encoder problems
@@ -86,26 +93,26 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   UsedBits += sym.len;
 
   // 2. TR, variable length
-  SYMTRACESTRING("PH TemporalReference");
+  SYMTRACESTRING("SH TemporalReference");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->picture_id = img->tr = sym.value1;
   UsedBits += sym.len;
 
   // 3. Size Type
-  SYMTRACESTRING ("PH WhichSize...");
+  SYMTRACESTRING ("SH WhichSize...");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   UsedBits += sym.len;
   if (sym.value1 == 0)
-    SYMTRACESTRING("PH:    Size Information Unchanged");
+    SYMTRACESTRING("SH:    Size Information Unchanged");
   else
   {
     // width * 16
-    SYMTRACESTRING("PH FullSize-X");
+    SYMTRACESTRING("SH FullSize-X");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     img->width = sym.value1 * MB_BLOCK_SIZE;
     img->width_cr = img->width/2;
     UsedBits+=sym.len;
-    SYMTRACESTRING("PH FullSize-Y");
+    SYMTRACESTRING("SH FullSize-Y");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     img->height = sym.value1 * MB_BLOCK_SIZE;
     img->height_cr = img->height/2;
@@ -113,7 +120,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   }
 
   // 4. Picture Type indication (I, P, Mult_P, B , Mult_B, SP, Mult_SP)
-  SYMTRACESTRING("PHPictureType");
+  SYMTRACESTRING("SH SliceType");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->picture_type = img->type = sym.value1;
   UsedBits += sym.len;
@@ -169,6 +176,173 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   img->mv_res = sym.value1;
   UsedBits += sym.len;
+
+  /* KS: Multi-Picture Buffering Syntax */
+
+  // Reference Picture Selection Flags 
+  SYMTRACESTRING("SH Reference Picture Selection Flags");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  UsedBits += sym.len;
+
+  // Picture Number 
+  SYMTRACESTRING("SH Picture Number");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  img->pn=sym.value1;
+  UsedBits += sym.len;
+
+  // Reference picture selection layer 
+  SYMTRACESTRING("SH Reference picture selection layer");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  UsedBits += sym.len;
+  
+  if (sym.value1)
+  {
+    // read Reference Picture Selection Layer 
+    // free old buffer content
+    while (img->currentSlice->rmpni_buffer)
+    { 
+      tmp_rmpni=img->currentSlice->rmpni_buffer;
+ 
+      img->currentSlice->rmpni_buffer=tmp_rmpni->Next;
+      free (tmp_rmpni);
+    } 
+    done=0;
+    // if P or B frame RMPNI 
+
+    if ((img->type==INTER_IMG_1)||(img->type==INTER_IMG_MULT)||(img->type==B_IMG_1)||
+        (img->type==B_IMG_MULT)||(img->type==SP_IMG_1)||(img->type==SP_IMG_MULT))
+    {
+      do
+      {
+    
+        SYMTRACESTRING("SH RMPNI");
+        readSyntaxElement_UVLC (&sym,img,inp,partition);
+        tmp1=sym.value1;
+        UsedBits += sym.len;
+
+
+        // check for illegal values
+        if ((tmp1<0)||(tmp1>3))
+          error ("Invalid RMPNI operation specified",400);
+
+        if (tmp1!=3)
+        {
+          printf ("got RMPNI = %d\n",tmp1);
+          tmp_rmpni=(RMPNIbuffer_t*)calloc (1,sizeof (RMPNIbuffer_t));
+          tmp_rmpni->Next=NULL;
+          tmp_rmpni->RMPNI=tmp1;
+
+          // get the additional parameter
+          SYMTRACESTRING("SH RMPNI Parameter");
+          readSyntaxElement_UVLC (&sym,img,inp,partition);
+          tmp_rmpni->Data=sym.value1;
+          UsedBits += sym.len;
+
+          // add RMPNI to list
+          if (img->currentSlice->rmpni_buffer==NULL) 
+          {
+            img->currentSlice->rmpni_buffer=tmp_rmpni;
+          }
+          else
+          {
+            tmp_rmpni2=img->currentSlice->rmpni_buffer;
+            while (tmp_rmpni2->Next!=NULL) 
+              tmp_rmpni2=tmp_rmpni2->Next;
+            tmp_rmpni2->Next=tmp_rmpni;
+          }
+        } else
+        {
+          // free temporary memory (no need to save end loop operation)
+          done=1;
+        }
+      } while (!done);
+    }
+  }
+
+  // RBPT 
+  SYMTRACESTRING("SH RBPT");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  UsedBits += sym.len;
+
+  // free old buffer content
+  while (img->mmco_buffer)
+  { 
+    tmp_mmco=img->mmco_buffer;
+
+    img->mmco_buffer=tmp_mmco->Next;
+    free (tmp_mmco);
+  } 
+
+  if (sym.value1)
+  {
+    // read Memory Management Control Operation 
+    do
+    {
+
+      tmp_mmco=(MMCObuffer_t*)calloc (1,sizeof (MMCObuffer_t));
+      tmp_mmco->Next=NULL;
+    
+      SYMTRACESTRING("SH MMCO");
+      readSyntaxElement_UVLC (&sym,img,inp,partition);
+      tmp_mmco->MMCO=sym.value1;
+      UsedBits += sym.len;
+
+      switch (tmp_mmco->MMCO)
+      {
+      case 0:
+      case 5:
+        break;
+      case 1:
+        SYMTRACESTRING("SH DPN");
+        readSyntaxElement_UVLC (&sym,img,inp,partition);
+        tmp_mmco->DPN=sym.value1;
+        UsedBits += sym.len;
+        break;
+      case 2:
+        SYMTRACESTRING("SH LPIN");
+        readSyntaxElement_UVLC (&sym,img,inp,partition);
+        tmp_mmco->LPIN=sym.value1;
+        UsedBits += sym.len;
+        break;
+      case 3:
+        SYMTRACESTRING("SH DPN");
+        readSyntaxElement_UVLC (&sym,img,inp,partition);
+        tmp_mmco->DPN=sym.value1;
+        UsedBits += sym.len;
+        SYMTRACESTRING("SH LPIN");
+        readSyntaxElement_UVLC (&sym,img,inp,partition);
+        tmp_mmco->LPIN=sym.value1;
+        UsedBits += sym.len;
+        break;
+      case 4:
+        SYMTRACESTRING("SH MLIP1");
+        readSyntaxElement_UVLC (&sym,img,inp,partition);
+        tmp_mmco->MLIP1=sym.value1;
+        UsedBits += sym.len;
+        break;
+      default:
+        error ("Invalid MMCO operation specified",400);
+        break;
+      }
+
+      // add MMCO to list
+      if (img->mmco_buffer==NULL) 
+      {
+        img->mmco_buffer=tmp_mmco;
+      }
+      else
+      {
+        tmp_mmco2=img->mmco_buffer;
+        while (tmp_mmco2->Next!=NULL) tmp_mmco2=tmp_mmco2->Next;
+        tmp_mmco2->Next=tmp_mmco;
+      }
+      
+    }while (tmp_mmco->MMCO!=0);
+  }
+
+  /* end KS */
+  img->buf_cycle = inp->buf_cycle+1;
+  img->pn=(img->number%img->buf_cycle);
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
   if (inp->symbol_mode ==CABAC)
