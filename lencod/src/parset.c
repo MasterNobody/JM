@@ -309,6 +309,9 @@ FMOTYPE6:
 #else
   pps->frame_cropping_flag = FALSE;
 #endif
+
+	active_sps = sps;
+  active_pps = pps;
 };
 
 

@@ -184,6 +184,14 @@
       Thomson
       2 Independence Way
       Princeton, NJ 08540
+      
+      Siwei Ma                                <swma@jdl.ac.cn>
+      Institute of Computing Technology
+      Chinese Academy of Sciences 
+      Kexueyuan South Road 6
+      Haidian District
+      Beijing, China
+
     \endverbatim
  */
 

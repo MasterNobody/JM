@@ -84,7 +84,8 @@ void init_dpb(InputParameters *inp)
 {
   unsigned i,j;
 
-  dpb.size      = inp->num_reference_frames;
+	dpb.size      = inp->num_reference_frames;
+
   dpb.used_size = 0;
 
   dpb.fs = calloc(dpb.size, sizeof (FrameStore*));
@@ -230,6 +231,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->mb_field = calloc (img->PicSizeInMbs, sizeof(int));
 
   get_mem3Dint (&(s->ref_idx), 2, size_x / BLOCK_SIZE, size_y / BLOCK_SIZE);
+  get_mem3Dint (&(s->ref_pic_id), 2, size_x / BLOCK_SIZE, size_y / BLOCK_SIZE);
   get_mem4Dint (&(s->mv), 2, size_x / BLOCK_SIZE, size_y / BLOCK_SIZE,2 );
 
   s->pic_num=0;
@@ -303,6 +305,7 @@ void free_storable_picture(StorablePicture* p)
   if (p)
   {
     free_mem3Dint (p->ref_idx, 2);
+    free_mem3Dint (p->ref_pic_id, 2);
     free_mem4Dint (p->mv, 2, p->size_x / BLOCK_SIZE);
     
     if (p->imgY)
@@ -896,7 +899,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
           }
         }
       }
-      qsort((void *)&fs_list0[list0idx_1], list0idx-list0idx_1, sizeof(FrameStore*), compare_pic_by_poc_asc);
+      qsort((void *)&fs_list0[list0idx_1], list0idx-list0idx_1, sizeof(FrameStore*), compare_fs_by_poc_asc);
 
       for (j=0; j<list0idx_1; j++)
       {
@@ -918,7 +921,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
 //      printf("listX[0] currPoc=%d (Poc): ", img->framepoc); for (i=0; i<listXsize[0]; i++){printf ("%d  ", listX[0][i]->poc);} printf("\n");
 //      printf("listX[1] currPoc=%d (Poc): ", img->framepoc); for (i=0; i<listXsize[1]; i++){printf ("%d  ", listX[1][i]->poc);} printf("\n");
 
-      // long term handling to be done
       // long term handling
       for (i=0; i<dpb.ltref_frames_in_buffer; i++)
       {
@@ -2328,6 +2330,26 @@ void dpb_split_field(FrameStore *fs)
 
   fs->frame->top_field    = fs->top_field;
   fs->frame->bottom_field = fs->bottom_field;
+
+	//store reference picture index
+	 if (!active_sps->frame_mbs_only_flag)
+	 {
+		 for (i=0;i<listXsize[LIST_1];i++)
+		 {
+			 fs->top_field->ref_pic_num[LIST_1][2*i]=fs->frame->ref_pic_num[LIST_1][i];
+			 fs->top_field->ref_pic_num[LIST_1][2*i + 1]=fs->frame->ref_pic_num[LIST_1][i] + 1;
+			 fs->bottom_field->ref_pic_num[LIST_1][2*i]=fs->frame->ref_pic_num[LIST_1][i] + 1;
+			 fs->bottom_field->ref_pic_num[LIST_1][2*i+1]=fs->frame->ref_pic_num[LIST_1][i] ;
+		 }
+		 
+		 for (i=0;i<listXsize[LIST_0];i++)
+		 {
+			 fs->top_field->ref_pic_num[LIST_0][2*i]=fs->frame->ref_pic_num[LIST_0][i];
+			 fs->top_field->ref_pic_num[LIST_0][2*i + 1]=fs->frame->ref_pic_num[LIST_0][i] + 1;
+			 fs->bottom_field->ref_pic_num[LIST_0][2*i]=fs->frame->ref_pic_num[LIST_0][i] + 1;
+			 fs->bottom_field->ref_pic_num[LIST_0][2*i+1]=fs->frame->ref_pic_num[LIST_0][i] ;
+		 }
+	 }
 }
 
 
@@ -2370,6 +2392,17 @@ void dpb_combine_field(FrameStore *fs)
   fs->frame->bottom_field = fs->bottom_field;
   
   fs->top_field->frame = fs->bottom_field->frame = fs->frame;
+
+	//combine field for frame
+	for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
+  {
+    fs->frame->ref_pic_num[LIST_1][i]=(fs->top_field->ref_pic_num[LIST_1][2*i]/2)*2;
+  }
+
+  for (i=0;i<(listXsize[LIST_0]+1)/2;i++)
+  {
+    fs->frame->ref_pic_num[LIST_0][i]=(fs->top_field->ref_pic_num[LIST_0][2*i]/2)*2;
+  }
 }
 
 

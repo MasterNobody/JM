@@ -133,7 +133,7 @@ void code_a_picture(Picture *pic)
 {
   int NumberOfCodedMBs = 0;
   int SliceGroup = 0;
-  int j;
+  int i,j;
 
   img->currentPicture = pic;
 
@@ -157,6 +157,24 @@ void code_a_picture(Picture *pic)
   // generate reference picture lists
   init_lists(img->type, img->structure);
 
+	// update reference picture number index
+	for (i=0;i<listXsize[LIST_0];i++)
+  {
+    enc_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc;
+  }
+
+  for (i=0;i<listXsize[LIST_1];i++)
+  {
+    enc_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc;
+  }
+
+  if (img->MbaffFrameFlag)
+    for (j=2;j<6;j++)
+      for (i=0;i<listXsize[j];i++)
+      {
+        enc_picture->ref_pic_num[j][i]=listX[j][i]->poc;        
+      }
+
   // assign list 0 size from list size
   img->num_ref_idx_l0_active = listXsize[0];
   img->num_ref_idx_l1_active = listXsize[1];
@@ -166,6 +184,7 @@ void code_a_picture(Picture *pic)
 
   RandomIntraNewPicture ();     //! Allocates forced INTRA MBs (even for fields!)
   FmoStartPicture ();           //! picture level initialization of FMO
+
   while (NumberOfCodedMBs < img->total_number_mb)       // loop over slices
   {
     // Encode one SLice Group
@@ -265,6 +284,7 @@ int encode_one_frame ()
     if (input->InterlaceCodingOption >= MB_CODING)
       mb_adaptive = 1;
     img->field_picture = 0; // we encode a frame
+
     frame_picture (frame_pic);
     // For field coding, turn MB level field/frame coding flag off
     if (input->InterlaceCodingOption >= MB_CODING)
@@ -503,6 +523,7 @@ void frame_picture (Picture *frame)
   enc_frame_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag = (input->InterlaceCodingOption == MB_CODING);
 
   enc_picture=enc_frame_picture;
+
 
   stat->em_prev_bits_frm = 0;
   stat->em_prev_bits = &stat->em_prev_bits_frm;
@@ -2842,16 +2863,17 @@ static void put_buffer_frame()
   imgY_org = imgY_org_frm;
   imgUV_org = imgUV_org_frm;  
   tmp_mv = tmp_mv_frm;
-  mref = mref_frm;
+  
+	//mref = mref_frm;
   if (input->WeightedPrediction || input->WeightedBiprediction) 
     mref_w = mref_frm_w;
-  mcef = mcef_frm;  
+  //mcef = mcef_frm;  
 
   refFrArr = refFrArr_frm;
   fw_refFrArr = fw_refFrArr_frm;
   bw_refFrArr = bw_refFrArr_frm;
 
-  Refbuf11 = Refbuf11_frm;
+  //Refbuf11 = Refbuf11_frm;
   if (input->WeightedPrediction || input->WeightedBiprediction) 
         Refbuf11_w = Refbuf11_frm_w;
   if (input->direct_type && (input->successive_Bframe!=0 || input->StoredBPictures > 0))
@@ -2944,7 +2966,7 @@ static void writeUnit(Bitstream* currStream)
   {
     nalu->nal_unit_type = NALU_TYPE_SLICE;
     nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
-    assert (img->nal_reference_idc != 0);
+  //  assert (img->nal_reference_idc != 0);
   }
   else   // non-disposable, non IDR slice
   {
@@ -2955,4 +2977,140 @@ static void writeUnit(Bitstream* currStream)
   stat->bit_ctr += WriteNALU (nalu);
   
   FreeNALU(nalu);
+}
+
+
+void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, int block[BLOCK_SIZE][BLOCK_SIZE])
+{
+  int dx, dy;
+  int x, y;
+  int i, j;
+  int maxold_x,maxold_y;
+  int result;
+  int pres_x;
+  int pres_y; 
+  int tmp_res[4][9];
+  static const int COEF[6] = {
+			1, -5, 20, 20, -5, 1
+		};
+
+ 
+  dx = x_pos&3;
+  dy = y_pos&3;
+  x_pos = (x_pos-dx)/4;
+  y_pos = (y_pos-dy)/4;
+
+  maxold_x = img->width-1;
+  maxold_y = img->height-1;
+
+  if (enc_picture->mb_field[img->current_mb_nr])
+    maxold_y = img->height/2 - 1;
+
+if (dx == 0 && dy == 0) {  /* fullpel position */
+    for (j = 0; j < BLOCK_SIZE; j++)
+      for (i = 0; i < BLOCK_SIZE; i++)
+        block[i][j] = list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
+  }
+  else { /* other positions */
+
+    if (dy == 0) { /* No vertical interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -2; x < 4; x++)
+            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      if ((dx&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))] +1 )/2;
+      }
+    }
+    else if (dx == 0) {  /* No horizontal interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -2; y < 4; y++)
+            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      if ((dy&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+           block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))] +1 )/2;
+      }
+    }
+    else if (dx == 2) {  /* Vertical & horizontal interpolation */
+
+      for (j = -2; j < BLOCK_SIZE+3; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++)
+          for (tmp_res[i][j+2] = 0, x = -2; x < 4; x++)
+            tmp_res[i][j+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -2; y < 4; y++)
+            result += tmp_res[i][j+y+2]*COEF[y+2];
+          block[i][j] = max(0, min(255, (result+512)/1024));
+        } 
+      }
+
+      if ((dy&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[i][j+2+dy/2]+16)/32)) +1 )/2;
+      }
+    }
+    else if (dy == 2) {  /* Horizontal & vertical interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = -2; i < BLOCK_SIZE+3; i++)
+          for (tmp_res[j][i+2] = 0, y = -2; y < 4; y++)
+            tmp_res[j][i+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -2; x < 4; x++)
+            result += tmp_res[j][i+x+2]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+512)/1024));
+        }
+      }
+
+      if ((dx&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[j][i+2+dx/2]+16)/32))+1)/2;
+      }
+    }
+    else {  /* Diagonal interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          pres_y = dy == 1 ? y_pos+j : y_pos+j+1;
+          pres_y = max(0,min(maxold_y,pres_y));
+          for (result = 0, x = -2; x < 4; x++)
+            result += list[ref_frame]->imgY[pres_y][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          pres_x = dx == 1 ? x_pos+i : x_pos+i+1;
+          pres_x = max(0,min(maxold_x,pres_x));
+          for (result = 0, y = -2; y < 4; y++)
+            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][pres_x]*COEF[y+2];
+          block[i][j] = (block[i][j] + max(0, min(255, (result+16)/32)) +1 ) / 2;
+        }
+      }
+
+    }
+  }
 }

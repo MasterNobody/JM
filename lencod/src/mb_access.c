@@ -73,6 +73,9 @@ void CheckAvailabilityOfNeighbors()
     currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && (((mb_nr+1) % img->PicWidthInMbs)!=0);
     currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && ((mb_nr % img->PicWidthInMbs)!=0);
   }
+
+  if (currMB->mbAvailA) currMB->mb_available_left = &(img->mb_data[mb_nr-1]);
+  if (currMB->mbAvailB) currMB->mb_available_up = &(img->mb_data[mb_nr-img->PicWidthInMbs]);
 }
 
 

@@ -376,6 +376,8 @@ void init_macroblock(struct img_par *img)
     {
       dec_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
       dec_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
+      dec_picture->ref_pic_id[LIST_0][img->block_x+i][img->block_y+j] = -1;
+      dec_picture->ref_pic_id[LIST_1][img->block_x+i][img->block_y+j] = -1;
     }
 }
 
@@ -832,6 +834,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for(j=0;j<BLOCK_SIZE;j++)
       {
         dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j] = 0;
+        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
       }
 
     return DECODE_MB;
@@ -1084,7 +1087,7 @@ static void SetMotionVectorPredictor (struct img_par  *img,
   else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)  mvPredType = MVPRED_U;
   else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)  mvPredType = MVPRED_UR;
   // Directional predictions 
-  else if(blockshape_x == 8 && blockshape_y == 16)
+  if(blockshape_x == 8 && blockshape_y == 16)
   {
     if(mb_x == 0)
     {
@@ -1837,6 +1840,19 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
         }
       }
     }
+  }
+  // record reference picture Ids for deblocking decisions
+  for(i4=img->block_x;i4<(img->block_x+4);i4++)
+  for(j4=img->block_y;j4<(img->block_y+4);j4++)
+  {
+    if(dec_picture->ref_idx[LIST_0][i4][j4]>=0)
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][i4][j4]];
+    else
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = -1;
+    if(dec_picture->ref_idx[LIST_1][i4][j4]>=0)
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1][dec_picture->ref_idx[LIST_1][i4][j4]];  
+    else
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = -1;  
   }
 }
 
@@ -3292,6 +3308,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 bw_ref_idx = bw_refframe;
               }
             }
+            // store reference picture ID determined by direct mode
+            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][i4][j4]];
+            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1][dec_picture->ref_idx[LIST_1][i4][j4]];  
           }
                  
           if (mv_mode==0 && img->direct_type )
@@ -3424,7 +3443,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
-                img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  + 2*img->wp_round_luma) >> (img->luma_log2_weight_denom+1)) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 1) >>1));
+                img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  + (1<<img->luma_log2_weight_denom)) >> (img->luma_log2_weight_denom+1)) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 1) >>1));
           }
           else
           {
@@ -3750,7 +3769,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     
                     int alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1];
                     int alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1];
-                    img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + 2*img->wp_round_chroma) >> (img->chroma_log2_weight_denom + 1))+ ((img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
+                    img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + (1<<img->chroma_log2_weight_denom)) >> (img->chroma_log2_weight_denom + 1))+ ((img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
                   }
                 }
                 else

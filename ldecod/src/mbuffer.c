@@ -229,6 +229,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->mb_field = calloc (img->PicSizeInMbs, sizeof(int));
 
   get_mem3Dint (&(s->ref_idx), 2, size_x / BLOCK_SIZE, size_y / BLOCK_SIZE);
+  get_mem3Dint (&(s->ref_pic_id), 2, size_x / BLOCK_SIZE, size_y / BLOCK_SIZE);
   get_mem4Dint (&(s->mv), 2, size_x / BLOCK_SIZE, size_y / BLOCK_SIZE,2 );
 
   get_mem2D (&(s->moving_block), size_x / BLOCK_SIZE, size_y / BLOCK_SIZE);
@@ -304,6 +305,7 @@ void free_storable_picture(StorablePicture* p)
   if (p)
   {
     free_mem3Dint (p->ref_idx, 2);
+    free_mem3Dint (p->ref_pic_id, 2);
     free_mem4Dint (p->mv, 2, p->size_x / BLOCK_SIZE);
 
     if (p->moving_block)
@@ -322,6 +324,9 @@ void free_storable_picture(StorablePicture* p)
       free_mem3D (p->imgUV, 2);
       p->imgUV=NULL;
     }
+    
+    free(p->mb_field);
+
     free(p);
   }
 }
@@ -1104,8 +1109,9 @@ static void reorder_short_term(StorablePicture **RefPicListX, int num_ref_idx_lX
   nIdx = *refIdxLX;
 
   for( cIdx = *refIdxLX; cIdx <= num_ref_idx_lX_active_minus1+1; cIdx++ )
-    if( (RefPicListX[ cIdx ]->is_long_term ) ||  (RefPicListX[ cIdx ]->pic_num != picNumLX ))
-	    RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
+    if (RefPicListX[ cIdx ])
+      if( (RefPicListX[ cIdx ]->is_long_term ) ||  (RefPicListX[ cIdx ]->pic_num != picNumLX ))
+	      RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
 
 }
 
@@ -2317,7 +2323,7 @@ void dpb_split_field(FrameStore *fs)
   fs->poc = fs->top_field->poc 
           = fs->frame->poc;
 
-  fs->bottom_field->poc =  fs->frame->poc + 1;
+  fs->bottom_field->poc =  fs->frame->bottom_poc;
 
   fs->top_field->used_for_reference = fs->bottom_field->used_for_reference 
                                     = fs->frame->used_for_reference;
@@ -2561,6 +2567,8 @@ void dpb_combine_field(FrameStore *fs)
   }
 
   fs->poc=fs->frame->poc = min (fs->top_field->poc, fs->bottom_field->poc);
+  fs->frame->top_poc=fs->top_field->poc;
+  fs->frame->bottom_poc=fs->bottom_field->poc;
 
   fs->frame->used_for_reference = (fs->top_field->used_for_reference && fs->bottom_field->used_for_reference );
   fs->frame->is_long_term = (fs->top_field->is_long_term && fs->bottom_field->is_long_term );
@@ -2705,7 +2713,7 @@ void dpb_combine_field(FrameStore *fs)
  */
 void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 {
-  int size = img->num_ref_idx_l0_active;
+  int size = img->num_ref_idx_l0_active+1;
 
   if (img->type!=I_SLICE && img->type!=SI_SLICE)
   {
@@ -2720,9 +2728,9 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
     currSlice->long_term_pic_idx_l0 = NULL;
   }
   
-  size = img->num_ref_idx_l1_active;
+  size = img->num_ref_idx_l1_active+1;
 
-  if (img->type!=B_SLICE)
+  if (img->type==B_SLICE)
   {
     if ((currSlice->remapping_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
     if ((currSlice->abs_diff_pic_num_minus1_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l1");

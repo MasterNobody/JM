@@ -149,6 +149,8 @@ int RestOfSliceHeader()
     img->pic_order_cnt_lsb = u_v(active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, "SH: pic_order_cnt_lsb", currStream);
     if( img->pic_order_present_flag  ==  1 &&  !img->field_pic_flag )
       img->delta_pic_order_cnt_bottom = se_v("SH: delta_pic_order_cnt_bottom", currStream);
+    else
+      img->delta_pic_order_cnt_bottom = 0;  
   }
   if( img->pic_order_cnt_type == 1 && !img->delta_pic_order_always_zero_flag ) 
   {

@@ -26,6 +26,8 @@
 #ifndef _PARSETCOMMON_H_
 #define _PARSETCOMMON_H_
 
+#include "defines.h"
+
 #define MAXIMUMPARSETRBSPSIZE   1500
 #define MAXIMUMPARSETNALUSIZE   1500
 #define SIZEslice_group_id      (sizeof (int) * 60000)    // should be sufficient for HUGE pictures, need one int per MB in a picture
@@ -127,33 +129,19 @@ typedef struct
   Boolean   constrained_intra_pred_flag;                      // u(1)
   Boolean   redundant_pic_cnt_present_flag;                   // u(1)
   Boolean   vui_pic_parameters_flag;                          // u(1)
-#ifndef G50_SPS
-  Boolean   frame_cropping_flag;                              // u(1)
-    unsigned  frame_cropping_rect_left_offset;                // ue(v)
-    unsigned  frame_cropping_rect_right_offset;               // ue(v)
-    unsigned  frame_cropping_rect_top_offset;                 // ue(v)
-    unsigned  frame_cropping_rect_bottom_offset;              // ue(v)
-#endif
 } pic_parameter_set_rbsp_t;
 
 
-#define MAXnum_ref_frames_in_pic_order_cnt_cycle  256
+#define MAXnum_ref_frames_in_pic_order_cnt_cycle  255
 typedef struct
 {
   Boolean   Valid;                  // indicates the parameter set is valid
 
   unsigned  profile_idc;                                      // u(8)
-#ifdef G50_SPS
   Boolean   constrained_set0_flag;                            // u(1)
   Boolean   constrained_set1_flag;                            // u(1)
   Boolean   constrained_set2_flag;                            // u(1)
-#endif
   unsigned  level_idc;                                        // u(8)
-#ifndef G50_SPS
-  Boolean   more_than_one_slice_group_allowed_flag;           // u(1)
-  Boolean   arbitrary_slice_order_allowed_flag;               // u(1)
-  Boolean   redundant_slices_allowed_flag;                    // u(1)
-#endif
   unsigned  seq_parameter_set_id;                             // ue(v)
   unsigned  log2_max_frame_num_minus4;                        // ue(v)
   unsigned pic_order_cnt_type;
@@ -174,13 +162,11 @@ typedef struct
   // if( !frame_mbs_only_flag ) 
     Boolean   mb_adaptive_frame_field_flag;                   // u(1)
   Boolean   direct_8x8_inference_flag;                        // u(1)
-#ifdef G50_SPS
   Boolean   frame_cropping_flag;                              // u(1)
     unsigned  frame_cropping_rect_left_offset;                // ue(v)
     unsigned  frame_cropping_rect_right_offset;               // ue(v)
     unsigned  frame_cropping_rect_top_offset;                 // ue(v)
     unsigned  frame_cropping_rect_bottom_offset;              // ue(v)
-#endif
   Boolean   vui_parameters_present_flag;                      // u(1)
     vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
 } seq_parameter_set_rbsp_t;

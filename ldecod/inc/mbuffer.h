@@ -23,6 +23,8 @@ typedef struct storable_picture
   PictureStructure structure;
 
   int         poc;
+  int         top_poc;
+  int         bottom_poc;
   int         order_num;
   int         ref_pic_num[6][20];
   int         pic_num;
@@ -44,6 +46,8 @@ typedef struct storable_picture
 
   int  ***    ref_idx;       //<! reference picture   [list][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
+  int  ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
+                             //   (not  simply index) 
   int  ****   mv;            //<! motion vector       [list][subblock_x][subblock_y][component]
   
   byte **     moving_block;

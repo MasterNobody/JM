@@ -475,7 +475,7 @@ typedef struct img_par
            int offset_for_non_ref_pic;
            int offset_for_top_to_bottom_field;
   unsigned int num_ref_frames_in_pic_order_cnt_cycle;
-           int offset_for_ref_frame[MAX_LENGTH_POC_CYCLE];
+           int offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];
 
   // POC200301
   //the following is for slice header syntax elements of poc
@@ -493,9 +493,9 @@ typedef struct img_par
   // for POC mode 1:
   unsigned int AbsFrameNum;
     signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
-  unsigned int PreviousFrameNum, FrameNumOffset, ExpectedDeltaPerPicOrderCntCycle;
-  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc;
-           int Previousdelta_pic_order_cnt[2], PreviousPOC, ThisPOC;
+  unsigned int PreviousFrameNum, FrameNumOffset;
+           int ExpectedDeltaPerPicOrderCntCycle;
+           int PreviousPOC, ThisPOC;
            int PreviousFrameNumOffset;
   // /////////////////////////
 

@@ -778,13 +778,13 @@ int read_new_slice()
         ProcessSPS(nalu);
         break;
       case NALU_TYPE_PD:
-        printf ("read_new_slice: Found 'Picture Delimiter' NAL unit, len %d, ignored\n", nalu->len);
+//        printf ("read_new_slice: Found 'Access Unit Delimiter' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_EOSEQ:
-        printf ("read_new_slice: Found 'End of Sequence' NAL unit, len %d, ignored\n", nalu->len);
+//        printf ("read_new_slice: Found 'End of Sequence' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_EOSTREAM:
-        printf ("read_new_slice: Found 'End of Stream' NAL unit, len %d, ignored\n", nalu->len);
+//        printf ("read_new_slice: Found 'End of Stream' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_FILL:
         printf ("read_new_slice: Found NALU_TYPE_FILL, len %d\n", nalu->len);
@@ -819,6 +819,8 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 
   dec_picture = alloc_storable_picture (FRAME, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->poc=img->framepoc;
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
   dec_picture->pic_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
 //  dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
@@ -1135,6 +1137,8 @@ void init_top(struct img_par *img, struct inp_par *inp)
   }
   dec_picture = alloc_storable_picture (TOP_FIELD, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->poc=img->toppoc;
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
   dec_picture->pic_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
@@ -1199,6 +1203,8 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   }
   dec_picture = alloc_storable_picture (BOTTOM_FIELD, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->poc=img->bottompoc;
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
   dec_picture->pic_num = img->frame_num + 1;
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;

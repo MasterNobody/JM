@@ -18,15 +18,11 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#define G50_SPS
-
 #if defined _DEBUG
 #define TRACE           1                   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
-
-#define MAX_LENGTH_POC_CYCLE   10   //max no in type 1 poc cycle
 
 #define LIST_0 0
 #define LIST_1 1
@@ -119,7 +115,7 @@
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
 
-#define MAX_REFERENCE_PICTURES 30
+#define MAX_REFERENCE_PICTURES 32		//!< H264 allows 32 fields
 
 #ifndef WIN32
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value

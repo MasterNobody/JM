@@ -17,7 +17,6 @@
 #include "biariencode.h"
 #include <assert.h>
 
-
 /*!
  ************************************************************************
  * Macro for writing bytes of code
@@ -215,7 +214,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   Erange = range;
   Elow = low;
   eep->C++;
-  
+
 }
 
 

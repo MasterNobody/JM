@@ -448,6 +448,9 @@ int   **moving_block_bot;       //!< stationary block buffer - field
 
 int    **refFrArr;           //!< Array for reference frames of each block
 
+pic_parameter_set_rbsp_t *active_pps;
+seq_parameter_set_rbsp_t *active_sps;
+
 // B pictures
 // motion vector : forward, backward, direct
 int  ***tmp_fwMV;
@@ -1115,13 +1118,11 @@ void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBwdRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRunLevel_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiDirBlkSize_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBiMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);

@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.2
+ *     JM 7.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -60,8 +60,8 @@
 #include "image.h"
 #include "output.h"
 
-#define JM      "6"
-#define VERSION "6.2"
+#define JM      "7"
+#define VERSION "7.2"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -101,13 +101,9 @@ int main(int argc,char **argv)
   
   p_dec = p_stat = p_log = p_trace = NULL;
 
-//  printf("Sorry, encoding is broken in this release (JM 6.2).\n\n");
-//  exit(1);
-
   Configure (argc, argv);
   init_img();
   AllocNalPayloadBuffer();
-
 
   frame_pic = malloc_picture();
   if (input->InterlaceCodingOption != FRAME_CODING)
@@ -159,6 +155,7 @@ int main(int argc,char **argv)
       img->bottompoc = img->toppoc+1;   //hard coded
 
     push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
+		img->framepoc = min (img->toppoc, img->bottompoc);
     
     //frame_num for this frame
     img->frame_num = IMG_NUMBER % (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
@@ -226,7 +223,8 @@ int main(int argc,char **argv)
           img->bottompoc = img->toppoc+1;
         
         push_poc(img->toppoc,img->bottompoc, NONREFFRAME);      //push pocs for B frame
-        
+        img->framepoc = min (img->toppoc, img->bottompoc);
+
         //the following is sent in the slice header
         img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
         img->delta_pic_order_cnt[1]= 0;   // POC200301
@@ -234,8 +232,9 @@ int main(int argc,char **argv)
         encode_one_frame();  // encode one B-frame
       }
     }
-
+    
     process_2nd_IGOP();
+
   }
   // terminate sequence
   terminate_sequence();
@@ -248,7 +247,7 @@ int main(int argc,char **argv)
   if (p_trace)
     fclose(p_trace);
 
-  Clear_Motion_Search_Module ();
+  //Clear_Motion_Search_Module ();
 
   RandomIntraUninit();
   FmoUninit();

@@ -21,7 +21,11 @@
 
 #define G50_SPS
 
-#define TRACE           1   //!< 0:Trace off 1:Trace on
+#if defined _DEBUG
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#else
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
+#endif
 
 typedef unsigned char byte;    //!< byte type definition
 

@@ -153,7 +153,8 @@ int SliceHeader()
     len += pred_weight_table();
   }
 
-  len += dec_ref_pic_marking();
+  if (img->nal_reference_idc)
+    len += dec_ref_pic_marking();
 
   if(input->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {

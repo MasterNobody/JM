@@ -138,7 +138,8 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
 
   if (input->UseConstrainedIntraPred)
   {
-    block_available_left     = pix_a[0].available ? img->intra_block[pix_a[0].mb_addr] : 0;
+    for (i=0, block_available_left=1; i<4;i++)
+      block_available_left  &= pix_a[i].available ? img->intra_block[pix_a[i].mb_addr]: 0;
     block_available_up       = pix_b.available ? img->intra_block [pix_b.mb_addr] : 0;
     block_available_up_right = pix_c.available ? img->intra_block [pix_c.mb_addr] : 0;
     block_available_up_left  = pix_d.available ? img->intra_block [pix_d.mb_addr] : 0;

@@ -27,6 +27,7 @@ typedef struct storable_picture
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
+	int         ref_pic_num[6][20];  //add for direct mode
 
   int         is_long_term;
   int         used_for_reference;
@@ -45,6 +46,8 @@ typedef struct storable_picture
 
   int  ***    ref_idx;       //<! reference picture   [list][mb_nr][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
+  int  ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
+                             //   (not  simply index) 
   int  ****   mv;            //<! motion vector       [list][mb_nr][subblock_x][subblock_y]
   
   struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
