@@ -1,0 +1,8 @@
+test.26l  ..............H.26L coded bitstream 
+test.yuv  ..............Output file, YUV 4:2:0 format
+c:\seq\qcif\foreman.yuv c:\seq\cif\mobile_c.yuv rampdiag.raw ramphori.raw   ....Ref sequence
+0 ......................postfilter 0=OFF 1=ON
+
+This is a file contains input parameters to the Telenor H.26L decoder.
+The text line following each parameter is discarded by the encoder.
+
