@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -60,6 +29,7 @@
 #include "fmo.h"
 #include "vlc.h"
 #include "image.h"
+#include "mb_access.h"
 
  /*!
  ************************************************************************
@@ -3751,24 +3721,17 @@ int find_sad_16x16(int *intra_mode)
   int ii,jj;
   int incr = 1;
   int offset = 0; // For MB level field/frame coding  
+  int mb_nr = img->current_mb_nr;
+  PixelPos pix_left, pix_up, pix_up_left;
+  
+  getNeighbour(mb_nr, -1 ,  0 , 1, &pix_left);
+  getNeighbour(mb_nr,  0 , -1 , 1, &pix_up);
+  getNeighbour(mb_nr, -1 , -1 , 1, &pix_up_left);
 
   best_intra_sad2=MAX_VALUE;
 
   for (k=0;k<4;k++)
   {
-    int mb_nr = img->current_mb_nr;
-    int mb_width = img->width/16;
-    int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-    int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
-    int mb_available_up_left = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-  
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    mb_available_up = (img->field_mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-    mb_available_up_left = (img->field_mb_y == 0 || img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-    incr = 2;
-    offset = img->top_field ? 0:-15;
-  }
     if(input->UseConstrainedIntraPred)
     {
       /*
@@ -3781,7 +3744,7 @@ int find_sad_16x16(int *intra_mode)
       */
     }
     //check if there are neighbours to predict from
-    if ((k==0 && !mb_available_up) || (k==1 && !mb_available_left) || (k==3 && (!mb_available_left || !mb_available_up || !mb_available_up_left)))
+    if ((k==0 && !pix_up.available) || (k==1 && !pix_left.available) || (k==3 && (!pix_left.available || !pix_up.available || !pix_up_left.available)))
     {
       ; // edge, do nothing
     }

@@ -1,35 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
-
 
 /*!
  ************************************************************************
@@ -381,8 +349,8 @@ void UseParameterSet (int PicParsetId)
       error("num_ref_frames_in_pic_order_cnt_cycle too large",-1011);
 
     img->delta_pic_order_always_zero_flag = sps->delta_pic_order_always_zero_flag;
-    if(img->delta_pic_order_always_zero_flag != 0)
-      error ("delta_pic_order_always_zero_flag != 0",-1002);
+//    if(img->delta_pic_order_always_zero_flag != 0) !KS2
+//      error ("delta_pic_order_always_zero_flag != 0",-1002);
  
     img->offset_for_non_ref_pic = sps->offset_for_non_ref_pic;
   

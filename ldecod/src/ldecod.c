@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -40,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.2
+ *     JM 7.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -125,8 +94,8 @@
 
 #include "erc_api.h"
 
-#define JM          "6"
-#define VERSION     "6.2"
+#define JM          "7"
+#define VERSION     "7.0"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -172,6 +141,8 @@ int main(int argc, char **argv)
 
   init_conf(input, argv[1]);
   
+  g_new_frame=1;
+
   switch (input->FileFormat)
   {
   case 0:
@@ -196,10 +167,7 @@ int main(int argc, char **argv)
   img->number=0;
   img->type = I_SLICE;
   img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
-  img->imgtr_last_P = 0;
-  img->imgtr_next_P = 0;
   img->dec_ref_pic_marking_buffer = NULL;
-  img->last_decoded_pic_id = -1; // JVT-D101
 
   // B pictures
   Bframe_ctr=0;
@@ -251,8 +219,11 @@ void init_poc()
 {
   int i;
 
-         for(i=0; i<MAX_NO_POC_FRAMES; i++){toprefpoc[i] = bottomrefpoc[i] = 1<<29;}            //init with large 
-
+  for(i=0; i<MAX_NO_POC_FRAMES; i++)
+  {
+    toprefpoc[i] = bottomrefpoc[i] = 1<<29;            //init with large 
+  }
+  img->PreviousSlicePOC = img->ThisPOC = -145376;  //init with unlikely value
 }
 
 /*!
@@ -417,7 +388,8 @@ void init_conf(struct inp_par *inp,
   calc_buffer(inp);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #endif
-  fprintf(stdout,"Frame    TR    QP  SnrY    SnrU    SnrV   Time(ms)\n");
+  fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
+  fprintf(stdout,"Frame    POC   QP  SnrY    SnrU    SnrV   Time(ms)\n");
 }
 
 /*!
@@ -722,20 +694,7 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
     img->height_cr *= 2;      // set height to frame (twice of field) for normal variables
   }
 
-  // allocate memory for reference frames of each block: refFrArr
-  // int  refFrArr[72][88];
-  memory_size += get_mem2Dint(&refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-  memory_size += get_mem2Dint(&refFrArr_top, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-  memory_size += get_mem2Dint(&refFrArr_bot, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-  
-  // allocate memory for collocated motion stationarity - int could be replaced with boolean    
-  memory_size += get_mem2Dint(&moving_block_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-  memory_size += get_mem2Dint(&moving_block_top,  img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-  memory_size += get_mem2Dint(&moving_block_bot,  img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-
   // allocate memory for reference frame in find_snr
-  // byte imgY_ref[288][352];
-  // byte imgUV_ref[2][144][176];
   memory_size += get_mem2D(&imgY_ref, img->height, img->width);
   memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
 
@@ -785,21 +744,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
  */
 void free_global_buffers(struct inp_par *inp, struct img_par *img)
 {
-  // free multiple ref frame buffers
-  free (mref_frm);
-  free (mcef_frm);
-
-  free (mref_fld);
-  free (mcef_fld);
-
-  free_mem2Dint(refFrArr_frm);
-  free_mem2Dint(refFrArr_top);
-  free_mem2Dint(refFrArr_bot);
-
-  free_mem2Dint(moving_block_frm);
-  free_mem2Dint(moving_block_top);
-  free_mem2Dint(moving_block_bot);
-
   free_mem2D (imgY_ref);
   free_mem3D (imgUV_ref,2);
 

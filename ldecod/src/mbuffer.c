@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -457,9 +426,9 @@ static int compare_pic_by_lt_pic_num_asc( const void *arg1, const void *arg2 )
  */
 static int compare_fs_by_frame_num_desc( const void *arg1, const void *arg2 )
 {
-  if ( (*(FrameStore**)arg1)->frame_num < (*(FrameStore**)arg2)->frame_num)
+  if ( (*(FrameStore**)arg1)->frame_num_wrap < (*(FrameStore**)arg2)->frame_num_wrap)
     return 1;
-  if ( (*(FrameStore**)arg1)->frame_num > (*(FrameStore**)arg2)->frame_num)
+  if ( (*(FrameStore**)arg1)->frame_num_wrap > (*(FrameStore**)arg2)->frame_num_wrap)
     return -1;
   else
     return 0;
@@ -688,7 +657,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
   int diff;
 
   int list0idx = 0;
-  int list1idx = 0;
   int list0idx_1 = 0;
   int listltidx = 0;
 
@@ -795,7 +763,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
 
       qsort((void *)fs_list0, list0idx, sizeof(FrameStore*), compare_fs_by_frame_num_desc);
 
-//      printf("fs_list0 (FrameNum): "); for (i=0; i<list0idx; i++){printf ("%d  ", fs_list0[i]->frame_num);} printf("\n");
+//      printf("fs_list0 (FrameNum): "); for (i=0; i<list0idx; i++){printf ("%d  ", fs_list0[i]->frame_num_wrap);} printf("\n");
 
       listXsize[0] = 0;
       gen_pic_list_from_frame_list(currPicStructure, fs_list0, list0idx, listX[0], &listXsize[0], 0);
@@ -873,7 +841,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       }
       for (j=list0idx_1; j<list0idx; j++)
       {
-        listX[1][list0idx_1-j]=listX[0][j];
+        listX[1][j-list0idx_1]=listX[0][j];
       }
 
       listXsize[0] = listXsize[1] = list0idx;
@@ -1381,7 +1349,7 @@ static void sliding_window_memory_management(StorablePicture* p)
  *    Calculate picNumX
  ************************************************************************
  */
-static get_pic_num_x (StorablePicture *p, int difference_of_pic_nums_minus1)
+static int get_pic_num_x (StorablePicture *p, int difference_of_pic_nums_minus1)
 {
   int currPicNum;
 
@@ -1783,7 +1751,7 @@ static void adaptive_memory_management(StorablePicture* p)
   DecRefPicMarking_t *tmp_drpm;
 
   assert (!img->idr_flag);
-  assert (!img->adaptive_ref_pic_buffering_flag);
+  assert (img->adaptive_ref_pic_buffering_flag);
 
   while (img->dec_ref_pic_marking_buffer)
   {
@@ -2574,12 +2542,12 @@ void dpb_combine_field(FrameStore *fs)
   
   fs->top_field->frame = fs->bottom_field->frame = fs->frame;
   
-  for (i=0;i<listXsize[LIST_1]/2;i++)
+  for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
   {
     fs->frame->ref_pic_num[LIST_1][i]=(fs->top_field->ref_pic_num[LIST_1][2*i]/2)*2;
   }
 
-  for (i=0;i<listXsize[LIST_0]/2;i++)
+  for (i=0;i<(listXsize[LIST_0]+1)/2;i++)
   {
     fs->frame->ref_pic_num[LIST_0][i]=(fs->top_field->ref_pic_num[LIST_0][2*i]/2)*2;
   }

@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -388,7 +357,6 @@ void interpret_mb_mode_SI(struct img_par *img)
 void init_macroblock(struct img_par *img)
 {
   int i,j;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   for (i=0;i<BLOCK_SIZE;i++)
   {                           // reset vectors and pred. modes
@@ -506,7 +474,6 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
   int *partMap = assignSE2partition[currSlice->dp_mode];
-  int mb_width = img->width/16;
   Macroblock *topMB = NULL;
   int  prevMbSkipped = 0;
   int  img_block_y;
@@ -792,10 +759,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     int zeroMotionAbove;
     int zeroMotionLeft;
     PixelPos mb_a, mb_b;
-    int      a_mv_y;
-    int      a_ref_idx;
-    int      b_mv_y;
-    int      b_ref_idx;
+    int      a_mv_y = 0;
+    int      a_ref_idx = 0;
+    int      b_mv_y = 0;
+    int      b_ref_idx = 0;
 
     getLuma4x4Neighbour(img->current_mb_nr,0,0,-1, 0,&mb_a);
     getLuma4x4Neighbour(img->current_mb_nr,0,0, 0,-1,&mb_b);
@@ -1014,9 +981,6 @@ static void SetMotionVectorPredictor (struct img_par  *img,
 {
   int mb_x                 = 4*block_x;
   int mb_y                 = 4*block_y;
-  int pic_block_x          = img->block_x + block_x;
-  int pic_block_y          = img->block_y + block_y;
-  int mb_width             = img->width/16;
   int mb_nr                = img->current_mb_nr;
 
   int mv_a, mv_b, mv_c, pred_vec=0;
@@ -1252,7 +1216,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   int vec;
 
   int iTRb,iTRp;
-  int mv_scale;
+  int mv_scale = 0;
 
   int flag_mode;
 
@@ -1780,10 +1744,10 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                   iTRp = Clip3( -128, 127,  listX[LIST_1 + list_offset][0]->poc - listX[LIST_0 + list_offset][mapped_idx]->poc);
 
                   if (iTRp!=0)
-                    {
-                  prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
-                  mv_scale = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
-                    }
+                  {
+                    prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
+                    mv_scale = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
+                  }
                   
                   dec_picture->ref_idx [LIST_0][img->block_x+i][img->block_y+j] = mapped_idx;
                   dec_picture->ref_idx [LIST_1][img->block_x+i][img->block_y+j] = 0;
@@ -1798,9 +1762,9 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                     {
                       dec_picture->mv  [LIST_0][i4][j4][ii]=listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii];
                       dec_picture->mv  [LIST_1][i4][j4][ii]=0;
-                      }
-                      else
-                      {
+                    }
+                    else
+                    {
                       dec_picture->mv  [LIST_0][i4][j4][ii]=(mv_scale * listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii] + 128 ) >> 8;
                       dec_picture->mv  [LIST_1][i4][j4][ii]=dec_picture->mv[LIST_0][i4][j4][ii] - listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii] ;
                     }
@@ -2822,19 +2786,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int fw_ref_idx, bw_ref_idx;
 
   int  *** mv_array, ***fw_mv_array, ***bw_mv_array;
-  int bframe = (img->type==B_SLICE);
-
-  int  **moving_block_dir = moving_block; 
 
   int partmode        = (IS_P8x8(currMB)?4:currMB->mb_type);
-  int step_h0 = BLOCK_STEP [partmode][0];
-  int step_v0 = BLOCK_STEP [partmode][1];
 
   int iTRb, iTRp;
   int mv_scale;
 
   int mb_nr             = img->current_mb_nr;
-  int mb_width          = img->width/16;
   int smb       = ((img->type==SP_SLICE) && IS_INTER (currMB)) || (img->type == SI_SLICE && currMB->mb_type == SI4MB);
   int list_offset;
   int max_y_cr;

@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -252,7 +221,10 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
     no_mem_exit("alloc_storable_picture: s");
 
   get_mem2D (&(s->imgY), size_y, size_x);
-  get_mem2D (&(s->imgY_qpel), size_y*4, size_x*4);
+  
+  s->imgY_11 = NULL;
+  s->imgY_ups = NULL;
+
   get_mem3D (&(s->imgUV), 2, size_y_cr, size_x_cr );
 
   s->mb_field = calloc (img->PicSizeInMbs, sizeof(int));
@@ -338,10 +310,15 @@ void free_storable_picture(StorablePicture* p)
       free_mem2D (p->imgY);
       p->imgY=NULL;
     }
-    if (p->imgY_qpel)
+    if (p->imgY_11)
     {
-      free_mem2D (p->imgY_qpel);
-      p->imgY_qpel=NULL;
+      free (p->imgY_11);
+      p->imgY_11=NULL;
+    }
+    if (p->imgY_ups)
+    {
+      free_mem2D (p->imgY_ups);
+      p->imgY_ups=NULL;
     }
     if (p->imgUV)
     {
@@ -1945,6 +1922,13 @@ static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p)
 //  printf ("insert (%s) pic with frame_num #%d, poc %d\n", (p->structure == FRAME)?"FRAME":(p->structure == TOP_FIELD)?"TOP_FIELD":"BOTTOM_FIELD", img->frame_num, p->poc);
   assert (p!=NULL);
   assert (fs!=NULL);
+
+  // upsample a reference picture
+  if (p->used_for_reference)
+  {
+    UnifiedOneForthPix(p);
+  }
+
   switch (p->structure)
   {
   case FRAME: 
@@ -2324,6 +2308,9 @@ void dpb_split_field(FrameStore *fs)
     memcpy(fs->bottom_field->imgUV[1][i], fs->frame->imgUV[1][i*2 + 1], fs->frame->size_x_cr);
   }
 
+  UnifiedOneForthPix(fs->top_field);
+  UnifiedOneForthPix(fs->bottom_field);
+
   fs->poc = fs->top_field->poc 
           = fs->bottom_field->poc 
           = fs->frame->poc;
@@ -2369,7 +2356,9 @@ void dpb_combine_field(FrameStore *fs)
     memcpy(fs->frame->imgUV[1][i*2],     fs->top_field->imgUV[1][i],    fs->top_field->size_x_cr);
     memcpy(fs->frame->imgUV[1][i*2 + 1], fs->bottom_field->imgUV[1][i], fs->bottom_field->size_x_cr);
   }
-
+  
+  UnifiedOneForthPix(fs->frame);
+  
   fs->poc=fs->frame->poc = min (fs->top_field->poc, fs->bottom_field->poc);
   fs->frame->used_for_reference = (fs->top_field->used_for_reference && fs->bottom_field->used_for_reference );
   fs->frame->is_long_term = (fs->top_field->is_long_term && fs->bottom_field->is_long_term );

@@ -1,35 +1,3 @@
-#define ABIPRED 1
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***************************************************************************
@@ -359,13 +327,13 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   const int      *partMap      = assignSE2partition[input->partition_mode];
   DataPartition  *dataPart;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+/*  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     pic_pix_y   = img->field_pix_y + block_y;
     pic_block_y = pic_pix_y/4;
     imgY_orig   = img->top_field ? imgY_org_top : imgY_org_bot;
   }
-
+*/
   //===== perform DCT, Q, IQ, IDCT, Reconstruction =====
   dummy = 0;
   *nonzero = dct_luma (block_x, block_y, &dummy, 1);
@@ -373,7 +341,8 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   //===== get distortion (SSD) of 4x4 block =====
   for (y=0; y<4; y++)
   for (x=pic_pix_x; x<pic_pix_x+4; x++)  
-    distortion += img->quad [imgY_orig[pic_pix_y+y][x] - imgY[frame_pic_pix_y+y][x]];
+    distortion += img->quad [imgY_orig[pic_pix_y+y][x] - imgY[pic_pix_y+y][x]];
+//    distortion += img->quad [imgY_orig[pic_pix_y+y][x] - imgY[frame_pic_pix_y+y][x]];
 
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO UVLC) =====
   currSE->value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
@@ -456,7 +425,6 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 
   *min_cost = (1<<20);
 
-
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
   intrapred_luma (pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
 
@@ -504,7 +472,8 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 
           //--- set reconstruction ---
           for (y=0; y<4; y++)
-          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x];
+//          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x];
+          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[pic_pix_y+y][pic_pix_x+x];
 
           //--- flag if dct-coefficients must be coded ---
           nonzero = c_nz;
@@ -554,7 +523,8 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
     for (y=0; y<4; y++)
     for (x=0; x<4; x++)
     {
-      enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
+//      enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
+      enc_picture->imgY[pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
       img->mpr[block_x+x][block_y+y] = img->mprr[best_ipmode][y][x];
       /*
       if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
@@ -2035,22 +2005,35 @@ void encode_one_macroblock ()
   }
 
   //===== SET VALID MODES =====
+//  valid[I4MB]   = 1;
+//  valid[I16MB]  = 0;
   valid[I4MB]   = 1;
-  valid[I16MB]  = 0;
-//  valid[I16MB]  = 1;
+  valid[I16MB]  = 1;
 
   // HS: I'm not sure when the Intra Mode on 8x8 basis should be unvalid
   //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
+//  valid[0]      = (!intra );
+//  valid[1]      = (!intra && input->InterSearch16x16);
+//  valid[2]      = (!intra && input->InterSearch16x8);
+//  valid[3]      = (!intra && input->InterSearch8x16);
+//  valid[4]      = (!intra && input->InterSearch8x8);
+//  valid[5]      = (!intra && input->InterSearch8x4);
+//  valid[6]      = (!intra && input->InterSearch4x8);
+//  valid[7]      = (!intra && input->InterSearch4x4);
+//  valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7]);
+//  valid[12]     = (siframe);
+
   valid[0]      = (!intra );
-  valid[1]      = (!intra && input->InterSearch16x16);
-  valid[2]      = (!intra && input->InterSearch16x8);
-  valid[3]      = (!intra && input->InterSearch8x16);
-  valid[4]      = (!intra && input->InterSearch8x8);
-  valid[5]      = (!intra && input->InterSearch8x4);
-  valid[6]      = (!intra && input->InterSearch4x8);
-  valid[7]      = (!intra && input->InterSearch4x4);
-  valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7]);
+  valid[1]      = (!intra && 1);
+  valid[2]      = 0;
+  valid[3]      = 0;
+  valid[4]      = 0;
+  valid[5]      = 0;
+  valid[6]      = 0;
+  valid[7]      = 0;
+  valid[P8x8]   = 0;
   valid[12]     = (siframe);
+
 
   //===== SET LAGRANGE PARAMETERS =====
   if (input->rdopt)
@@ -2169,7 +2152,7 @@ void encode_one_macroblock ()
                   {
                     mcost  = (input->rdopt ? write_ref ? REF_COST_FWD (lambda_motion_factor, ref) : 0 : (int)(2*lambda_motion*min(ref,1)));
 
-                    mcost += motion_cost[mode][ref+1][block];
+                    mcost += motion_cost[mode][ref][0][block];
                     if (mcost < fw_mcost)
                     {
                       fw_mcost    = mcost;
@@ -2195,7 +2178,7 @@ void encode_one_macroblock ()
                   else
                   {
                     bid_mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, best_fw_ref) : 0 : (int)(2*lambda_motion*min(best_fw_ref,1)));
-                    bw_mcost   = motion_cost[mode][0][block];
+                    bw_mcost   = motion_cost[mode][0][1][block];
                     bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, lambda_motion_factor );
                   }
 
@@ -2424,7 +2407,7 @@ void encode_one_macroblock ()
               {
                 mcost  = (input->rdopt ? write_ref ? REF_COST_FWD (lambda_motion_factor, ref) : 0 : (int)(2*lambda_motion*min(ref,1)));
 
-                mcost += motion_cost[mode][ref+1][block];
+                mcost += motion_cost[mode][ref][0][block];
                 if (mcost < fw_mcost)
                 {
                   fw_mcost    = mcost;
@@ -2448,7 +2431,7 @@ void encode_one_macroblock ()
               }
               else
               {
-                bw_mcost   = motion_cost[mode][0][block];
+                bw_mcost   = motion_cost[mode][0][1][block];
                 bid_mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, best_fw_ref) : 0 : (int)(2*lambda_motion*min(best_fw_ref,1)));
                 bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, lambda_motion_factor);
                 best_abp_type = 1;

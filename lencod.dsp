@@ -151,7 +151,7 @@ SOURCE=.\lencod\src\macroblock.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\mb_access.c
+SOURCE=.\lencod\src\mb_access.c
 # End Source File
 # Begin Source File
 
@@ -159,7 +159,7 @@ SOURCE=.\lencod\src\mbuffer.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\memalloc.c
+SOURCE=.\lencod\src\memalloc.c
 # End Source File
 # Begin Source File
 
@@ -175,7 +175,7 @@ SOURCE=.\lencod\src\nalu.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\nalucommon.c
+SOURCE=.\lencod\src\nalucommon.c
 # End Source File
 # Begin Source File
 
@@ -187,7 +187,7 @@ SOURCE=.\lencod\src\parset.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\parsetcommon.c
+SOURCE=.\lencod\src\parsetcommon.c
 # End Source File
 # Begin Source File
 
@@ -251,7 +251,7 @@ SOURCE=.\lencod\inc\contributors.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\ctx_tables.h
+SOURCE=.\lencod\inc\ctx_tables.h
 # End Source File
 # Begin Source File
 
@@ -295,7 +295,7 @@ SOURCE=.\lencod\inc\macroblock.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\mb_access.h
+SOURCE=.\lencod\inc\mb_access.h
 # End Source File
 # Begin Source File
 
@@ -303,7 +303,7 @@ SOURCE=.\lencod\inc\mbuffer.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\memalloc.h
+SOURCE=.\lencod\inc\memalloc.h
 # End Source File
 # Begin Source File
 
@@ -315,7 +315,7 @@ SOURCE=.\lencod\inc\nalu.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\nalucommon.h
+SOURCE=.\lencod\inc\nalucommon.h
 # End Source File
 # Begin Source File
 
@@ -327,7 +327,7 @@ SOURCE=.\lencod\inc\parset.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\parsetcommon.h
+SOURCE=.\lencod\inc\parsetcommon.h
 # End Source File
 # Begin Source File
 

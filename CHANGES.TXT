@@ -1,3 +1,15 @@
+Changes for Decoder Version JM 7.0 to JM 6.2
+--------------------------------------------
+Bug fixes
+- POC updates (BH)
+- CABAC dqant and red_idx_lx contexts (KS)
+- small cleanups and other fixes
+
+Other
+- removed common directory, put a copy of these file in each
+  encoder and decoder 
+
+
 Changes for Version JM 6.2 to JM 6.1b
 --------------------------------------
 Note: This is a decoder only release. Encoding is broken.
