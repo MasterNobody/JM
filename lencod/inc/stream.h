@@ -16,6 +16,6 @@
 #define _STREAM_H_
 
 #define MAX_FRAME_SIZE 300000 /* length of one frame bitstream */
-
+#define MAX_SYMBOLS_PER_MACROBLOCK 500  /* For backing off, */
 #endif
 

@@ -1,1 +1,0 @@
-..\ldecod\release\ldecod ldecod.dat 

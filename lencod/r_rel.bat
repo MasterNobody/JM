@@ -1,1 +1,0 @@
-.\release\lencod lencod.dat 

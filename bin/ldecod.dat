@@ -1,0 +1,9 @@
+fm5dp.h26l 		..............H.26L coded bitstream
+fm5.yuv.raw 	..............Output file, YUV 4:2:0 format
+../foreman5.yuv ..............Ref sequence (for SNR)
+0 				..............Postfilter 0=OFF 1=ON
+2 				..............NAL mode (0=Telenor bitstream, 1 Partition file)
+
+This is a file containing input parameters to the Telenor H.26L decoder.
+The text line following each parameter is discarded by the encoder.
+

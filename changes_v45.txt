@@ -1,0 +1,18 @@
+Version 4.5 differs from 4.5 functionally by the implementation of the data
+partitioning syntax.  A corresponding textual description will be available
+shortly, as will be a more verbose update of this file.
+
+The function-pointer interface for the NAL as discussed in the changes_44.txt file
+was employed to enable data partitioning.  Therefore, it is now possible to
+set this variable in the config files to 1.
+
+Known bug: the decoder does not decode the last picture.  Will be fixed shortly.
+
+DP was tested with and without slices and seems to work without problems.
+
+The other major difference is the clean-up in the file structure.  In particular:
+
+- stream.c implements only symbol buffering and convert between VLC and len/info tupels.
+- nal_bits.c implements the bitstream
+_ nal_part.c implements the data partitioning file
+

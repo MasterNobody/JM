@@ -1,1 +1,0 @@
-debug\lencod lencod.dat 

@@ -1,0 +1,123 @@
+                  TML changes between version 4.3 and 4.4
+                  =======================================
+
+                              Sep 15, 2000
+                       Ericsson Radio Systems AB
+                    rickard.sjoberg@era.ericsson.se
+
+
+Encoder configuration file
+==========================
+
+Three new lines were added to the configuration file. These indicate which
+Network Adaptation Layer (NAL) mode to use, which slice mode to use and a 
+slice mode argument. 
+
+For the moment, there is only one NAL mode implemented:
+Mode 0 (Telenor), which uses the bistream file format used in the previous 
+codec versions.
+
+There are four implemented slice modes:
+Mode 0 uses no slices.
+Mode 1 uses a fixed number of MBs in each slice, as specified in the slice argument.
+Mode 2 uses a fixed amount of bytes in each slice as specified in the slice argument.
+
+Slice mode 2 works as follows: A counter keeps track of the number of bytes spent 
+for the current slice. When a macroblock is coded, the symbols are not sent directly
+to the NAL but stored in an array. The coder then checks if the number of bytes is
+within the specified limit. If it is, the coder sends the stored bytes to the NAL and 
+continues with the next macroblock. If the limit is exceeded (and at least two MBs has 
+been coded) the stored symbols of the present macroblock are flushed, a slice boundary 
+is put in before the macroblock, the prediction chain is interrupted and the 
+macroblock is coded again, but this time as the first MB in the new slice.
+
+Slice mode 3 is much like mode 2 but there is a NAL function for indicating
+whether the number of bytes has exceeded the slice limit.
+
+
+Encoder interface for different file formats
+============================================
+
+Output of bits was separated from the rest of the source code for easier
+implementations and testing of different NALs. The interface is based on
+function pointers where each NAL has to implement the following functions:
+
+void nal_init()
+int  nal_put_startcode(int tr, int mb_nr, int qp, int image_format, int slice_nr, int type)
+void nal_putbits(int len, int bitpattern, int sliceno, int type)
+int  nal_slice_too_big(int bits_slice)
+
+nal_init() is called from main in the beginning of execution and this function
+can be used to handle things needed before the coding starts.
+
+nal_put_startcode() is called when a picture or slice startcode is put out.
+The NAL is responsible for storing the provided startcode variables in the
+bitstream (or packet) so that the decoder version of the same NAL is capable
+of extracting this information. Different NALs can then have their own startcode
+representation without the codec having to know about the syntax.
+
+nal_putbits() is called when a symbol is put out. The conversion from info
+bits to a bitpattern is done in the coder to avoid duplication of this code
+in each NAL. The type variable can be used for having the different type of
+symbols going in different packets.
+
+nal_slice_too_big() is called if slice mode 3 is in use, see the description
+of mode 3 above.
+
+
+Encoder slices
+==============
+
+There is a new variable, slice_numbers[384], where the slice numbers for all
+macroblocks are stored. When a new slice is indicated by one of the slice
+mode mechanisms described above, a new slice number is obtained by incrementing
+the slice number of the previous MB by one.
+
+Before the coding of each MB, the coder checks the slice numbers to find out whether
+the prediction chain has been interrupted. For intra 4x4, this also entails marking 
+blocks in ipredmode as unavailable. Decoder slices are handled similarly, although 
+the slice boundaries of different MBs are signalled from the NAL.
+
+Decoder configuration file
+==========================
+
+An extra line to indicate which NAL mode is used in the bitstream was
+added to the decoder configuration file. For the moment only one mode
+is implemented: Mode 0, the original version 4.3 NAL.
+
+Decoder interface for different file formats
+============================================
+
+Input of bits was separated from the rest of the source code for easier
+implementations and testing of different NALs. The interface is based on
+function pointers where each NAL has to implement the following functions:
+
+void nal_init()
+void nal_get_symbol(int *len, int *info, int type)
+int  nal_startcode_follows();
+int  nal_find_startcode(FILE *p_in, int *tr, int *qp, int *mbnr, int *format)
+
+nal_init() is called from main in the beginning of execution and this function
+can be used to handle things needed before the parsing starts.
+
+nal_get_symbol() is the function where the decoder ask the NAL for the next
+symbol of a specific type, info and length of the symbol are then passed to
+the decoder.
+
+nal_startcode_follows() is called between every macroblock and the return
+value is checked. If true then the decoder stops decoding this slice.
+
+nal_find_startcode() tells the NAL to look in the bistream for the next
+startcode and return the parsed startcode information in the parameter
+pointers. The parsing of the startcode is done by the NAL because then
+the different NALs can have their own startcode representation without
+the codec having to know about the syntax.
+
+Decoder trace
+=============
+
+The trace functionality from the encoder was added to the decoder. A TRACE
+definition in global.h to turn it on or off was added. The trace data is
+written to a file, trace_dec.txt, in much the same way as is done in
+the encoder.
+

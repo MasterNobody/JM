@@ -1,1 +1,0 @@
-..\ldecod\debug\ldecod.exe ldecod.dat

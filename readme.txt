@@ -1,20 +1,28 @@
                           TML H 26L codec
                           ===================
 
-                        Version 4.3, Aug 31, 2000
+                        Version 4.5, Sep 23, 2000
 
-                   (C) Telenor Broadband Services
+                   (C) Telenor Broadband Services 
+                       Ericsson Radio Systems AB
+                       TELES AG			
 
-lcodec4.3 is an implementation of the TML4 with a few divagations from the description(see below). 
-It consists of C source code for both encoder and decoder. We have used MS Visual C++, but the 
-source code should be portable to other platforms.
+lcodec4.5 is an implementation of the TML4 with a few divagations from the description(see below). 
+It consists of C source code for both encoder and decoder. We have used MS Visual C++, but the source code should be portable to other platforms.
 For simplicity we have supplied executable codec in addition to the C source code. 
-Use only the decoder to decode the following bitstreams.  
 
 This software is according to Test Model Long Term Number 4 (TML4) with the following exceptions:
 
 -No B-Pictures
--Data Partitioning support not implemented
+
+=================================================================
+ Ericsson implemented the changes between version 4.3 and 4.4
+ The code was modified between Aug 31 and Sep 15 2000
+ Responsible for these changes: rickard.sjoberg@era.ericsson.se
+ See text file changes_v44.txt for list of modifications
+=================================================================
+TELES added Data Partitioning support, see changes_v45.txt, stewe@cs.tu-berlin.de
+=================================================================
 
 Bugfixes from version 4.1
 ===============

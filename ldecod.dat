@@ -1,8 +1,0 @@
-foreman5.26l  ..............H.26L coded bitstream 
-foreman5.dec  ..............Output file, YUV 4:2:0 format
-foreman5.yuv  ..............Ref sequence (for SNR)
-0 ..........................Postfilter 0=OFF 1=ON
-
-This is a file containing input parameters to the Telenor H.26L decoder.
-The text line following each parameter is discarded by the encoder.
-
