@@ -348,8 +348,8 @@ typedef struct macroblock
   int           mb_type;
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           cbp;
-  int64       cbp_blk ;
-  unsigned long cbp_bits;
+  int64         cbp_blk ;
+  int64         cbp_bits;
 
   int           is_skip;
 
@@ -588,7 +588,7 @@ typedef struct img_par
   unsigned int dc_pred_value;                 //!< value for DC prediction (depends on pel bit depth)
   int max_imgpel_value;                       //!< max value that one luma picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value_uv;                    //!< max value that one chroma picture element (pixel) can take (depends on pic_unit_bitdepth)
-  int AllowTransform8x8;        
+  int Transform8x8Mode;        
   int profile_idc;              
   int yuv_format;
   int lossless_qpprime_flag;
@@ -622,6 +622,7 @@ extern struct snr_par  *snr;
 // signal to noise ratio parameters
 struct snr_par
 {
+  int   frame_ctr;
   float snr_y;                                 //!< current Y SNR
   float snr_u;                                 //!< current U SNR
   float snr_v;                                 //!< current V SNR

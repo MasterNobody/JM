@@ -39,7 +39,7 @@ extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 // #define PRINT_SUBSEQUENCE_CHAR         // uncomment to print sub-sequence characteristics SEI info
 // #define PRINT_SCENE_INFORMATION        // uncomment to print scene information SEI info
 // #define PRINT_PAN_SCAN_RECT            // uncomment to print pan-scan rectangle SEI info
-// #define PRINT_RANDOM_ACCESS            // uncomment to print random access point SEI info
+// #define PRINT_RECOVERY_POINT            // uncomment to print random access point SEI info
 // #define PRINT_FILLER_PAYLOAD_INFO      // uncomment to print filler payload SEI info
 // #define PRINT_DEC_REF_PIC_MARKING      // uncomment to print decoded picture buffer management repetition SEI info
 // #define PRINT_RESERVED_INFO            // uncomment to print reserved SEI info
@@ -112,8 +112,8 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
     case  SEI_USER_DATA_UNREGISTERED:
       interpret_user_data_unregistered_info( msg+offset, payload_size, img );
       break;
-    case  SEI_RANDOM_ACCESS_POINT:
-      interpret_random_access_info( msg+offset, payload_size, img );
+    case  SEI_RECOVERY_POINT:
+      interpret_recovery_point_info( msg+offset, payload_size, img );
       break;
     case  SEI_DEC_REF_PIC_MARKING_REPETITION:
       interpret_dec_ref_pic_marking_repetition_info( msg+offset, payload_size, img );
@@ -865,7 +865,7 @@ void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img
  *    
  ************************************************************************
  */
-void interpret_random_access_info( byte* payload, int size, ImageParameters *img )
+void interpret_recovery_point_info( byte* payload, int size, ImageParameters *img )
 {
   int recovery_frame_cnt, exact_match_flag, broken_link_flag, changing_slice_group_idc;
 
@@ -885,16 +885,16 @@ void interpret_random_access_info( byte* payload, int size, ImageParameters *img
   broken_link_flag         = u_1 (    "SEI: broken_link_flag"        , buf);
   changing_slice_group_idc = u_v ( 2, "SEI: changing_slice_group_idc", buf);
 
-#ifdef PRINT_RANDOM_ACCESS
-  printf("Random access point SEI message\n");
+#ifdef PRINT_RECOVERY_POINT
+  printf("Recovery point SEI message\n");
   printf("recovery_frame_cnt       = %d\n", recovery_frame_cnt);
   printf("exact_match_flag         = %d\n", exact_match_flag);
   printf("broken_link_flag         = %d\n", broken_link_flag);
   printf("changing_slice_group_idc = %d\n", changing_slice_group_idc);
 #endif
   free (buf);
-#ifdef PRINT_RANDOM_ACCESS
-#undef PRINT_RANDOM_ACCESS
+#ifdef PRINT_RECOVERY_POINT
+#undef PRINT_RECOVERY_POINT
 #endif
 }
 
@@ -1312,6 +1312,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   Bitstream* buf;
   seq_parameter_set_rbsp_t *sps;
 
+
   buf = malloc(sizeof(Bitstream));
   buf->bitstream_length = size;
   buf->streamBuffer = payload;
@@ -1320,7 +1321,8 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   UsedBits = 0;
 
   seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
-   sps = &SeqParSet[seq_parameter_set_id];
+  
+  sps = &SeqParSet[seq_parameter_set_id];
 
   activate_sps(sps);
 
@@ -1329,33 +1331,36 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   printf("seq_parameter_set_id   = %d\n", seq_parameter_set_id);
 #endif
 
-  if (sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
+  // Note: NalHrdBpPresentFlag and CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
+  if (sps->vui_parameters_present_flag)
   {
-    for (k=0; k<sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1+1; k++)
+    
+    if (sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
     {
-      initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.nal_hrd_parameters.cpb_removal_delay_length_minus1+1,
-                                             "SEI: initial_cpb_removal_delay"         , buf);
-      initial_cpb_removal_delay_offset = u_v(sps->vui_seq_parameters.nal_hrd_parameters.cpb_removal_delay_length_minus1+1,
-                                             "SEI: initial_cpb_removal_delay_offset"  , buf);
-#ifdef PRINT_BUFFERING_PERIOD_INFO
-      printf("nal initial_cpb_removal_delay[%d]        = %d\n", k, initial_cpb_removal_delay);
-      printf("nal initial_cpb_removal_delay_offset[%d] = %d\n", k, initial_cpb_removal_delay_offset);
-#endif
-    }
-  }
+      for (k=0; k<sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1+1; k++)
+      {
+        initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay"        , buf);
+        initial_cpb_removal_delay_offset = u_v(sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay_offset" , buf);
 
-  if (sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
-  {
-    for (k=0; k<sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1+1; k++)
-    {
-      initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.cpb_removal_delay_length_minus1+1,
-                                             "SEI: initial_cpb_removal_delay"         , buf);
-      initial_cpb_removal_delay_offset = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.cpb_removal_delay_length_minus1+1,
-                                             "SEI: initial_cpb_removal_delay_offset"  , buf);
 #ifdef PRINT_BUFFERING_PERIOD_INFO
-      printf("vcl initial_cpb_removal_delay[%d]        = %d\n", k, initial_cpb_removal_delay);
-      printf("vcl initial_cpb_removal_delay_offset[%d] = %d\n", k, initial_cpb_removal_delay_offset);
+        printf("nal initial_cpb_removal_delay[%d]        = %d\n", k, initial_cpb_removal_delay);
+        printf("nal initial_cpb_removal_delay_offset[%d] = %d\n", k, initial_cpb_removal_delay_offset);
 #endif
+      }
+    }
+    
+    if (sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
+    {
+      for (k=0; k<sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1+1; k++)
+      {
+        initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay"        , buf);
+        initial_cpb_removal_delay_offset = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay_offset" , buf);
+
+#ifdef PRINT_BUFFERING_PERIOD_INFO
+        printf("vcl initial_cpb_removal_delay[%d]        = %d\n", k, initial_cpb_removal_delay);
+        printf("vcl initial_cpb_removal_delay_offset[%d] = %d\n", k, initial_cpb_removal_delay_offset);
+#endif
+      }
     }
   }
 
@@ -1388,6 +1393,11 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
   int NumClockTs = 0;
   int i;
 
+  int cpb_removal_len = 24;
+  int dpb_output_len  = 24;
+
+  Boolean CpbDpbDelaysPresentFlag;
+
   Bitstream* buf;
 
   buf = malloc(sizeof(Bitstream));
@@ -1407,15 +1417,37 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
   printf("Picture timing SEI message\n");
 #endif
 
-  if ((active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)||
-      (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag))
+  // CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
+  CpbDpbDelaysPresentFlag =  (active_sps->vui_parameters_present_flag 
+                              && (   (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag != 0)
+                                   ||(active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag != 0)));
+
+  if (CpbDpbDelaysPresentFlag )
   {
-      cpb_removal_delay = ue_v("SEI: cpb_removal_delay" , buf);
-      dpb_output_delay  = ue_v("SEI: dpb_output_delay"  , buf);
+    if (active_sps->vui_parameters_present_flag)
+    {
+      if (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
+      {
+        cpb_removal_len = active_sps->vui_seq_parameters.nal_hrd_parameters.cpb_removal_delay_length_minus1 + 1;
+        dpb_output_len  = active_sps->vui_seq_parameters.nal_hrd_parameters.dpb_output_delay_length_minus1  + 1;
+      }
+      else if (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
+      {
+        cpb_removal_len = active_sps->vui_seq_parameters.vcl_hrd_parameters.cpb_removal_delay_length_minus1 + 1;
+        dpb_output_len  = active_sps->vui_seq_parameters.vcl_hrd_parameters.dpb_output_delay_length_minus1  + 1;
+      }
+    }
+    
+    if ((active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)||
+      (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag))
+    {
+      cpb_removal_delay = u_v(cpb_removal_len, "SEI: cpb_removal_delay" , buf);
+      dpb_output_delay  = u_v(dpb_output_len,  "SEI: dpb_output_delay"  , buf);
 #ifdef PRINT_PCITURE_TIMING_INFO
       printf("cpb_removal_delay = %d\n",cpb_removal_delay);
       printf("dpb_output_delay  = %d\n",dpb_output_delay);
 #endif
+    }
   }
 
   if (!active_sps->vui_parameters_present_flag)

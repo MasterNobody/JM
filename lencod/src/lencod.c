@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.3 (FRExt)
+ *     JM 9.4 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -66,7 +66,7 @@
 #include "explicit_gop.h"
 
 #define JM      "9 (FRExt)"
-#define VERSION "9.3"
+#define VERSION "9.4"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -91,7 +91,7 @@ extern ColocatedParams *Co_located;
 void Init_Motion_Search_Module ();
 void Clear_Motion_Search_Module ();
 void report_frame_statistic();
-
+void SetLevelIndices();
 /*!
  ***********************************************************************
  * \brief
@@ -124,15 +124,15 @@ int main(int argc,char **argv)
 
   init_poc();
   GenerateParameterSets();
-
+  SetLevelIndices();
+  
   init_img();
-
-  frame_pic = malloc_picture();
+  frame_pic_1= malloc_picture();
 
   if (input->RDPictureDecision)
   {
-    frame_pic2 = malloc_picture();
-    frame_pic3 = malloc_picture();
+    frame_pic_2 = malloc_picture();
+    frame_pic_3 = malloc_picture();
   }
 
   if (input->PicInterlace != FRAME_CODING)
@@ -144,19 +144,22 @@ int main(int argc,char **argv)
 
   if (input->PyramidCoding )
   {
-      init_gop_structure();
-      if (input->PyramidCoding == 3)
-      {
-        interpret_gop_structure();
-      }
-      else
-      {
-        create_pyramid();
-      }
-  }
+    init_gop_structure();
+    if (input->PyramidCoding == 3)
+    {
+      interpret_gop_structure();
+    }
+    else
+    {
+      create_pyramid();
+    }
+  }  
 
+  dpb.init_done = 0;
   init_dpb(input);
   init_out_buffer();
+
+  stats->successive_Bframe = input->successive_Bframe;
 
   enc_picture = enc_frame_picture = enc_top_picture = enc_bottom_picture = NULL;
 
@@ -249,10 +252,11 @@ int main(int argc,char **argv)
       
       input->successive_Bframe = (input->last_frame-(img->number-1)*(input->jumpd+1))/bi-1;
 
-      //about to code the last ref frame, adjust deltapoc         
+      //about to code the last ref frame, adjust delta poc         
       img->delta_pic_order_cnt[0]= -2*(initial_Bframes - input->successive_Bframe);
       img->toppoc += img->delta_pic_order_cnt[0];
       img->bottompoc += img->delta_pic_order_cnt[0];
+      img->framepoc = min (img->toppoc, img->bottompoc);
     }
 #endif
 
@@ -310,9 +314,6 @@ int main(int argc,char **argv)
     if (input->ReportFrameStats)
       report_frame_statistic();
     
-    img->nb_references += 1;
-    img->nb_references = min(img->nb_references, img->buf_cycle); // Tian Dong. PLUS1, +1, June 7, 2002
-
     encode_enhancement_layer();
     
     process_2nd_IGOP();
@@ -346,12 +347,12 @@ int main(int argc,char **argv)
   // report everything
   report();
 
-  free_picture (frame_pic);
+  free_picture (frame_pic_1);
   
   if (input->RDPictureDecision)
   {
-    free_picture (frame_pic2);
-    free_picture (frame_pic3);
+    free_picture (frame_pic_2);
+    free_picture (frame_pic_3);
   }
 
   if (top_pic)
@@ -414,7 +415,7 @@ void report_stats_on_error()
   // report everything
   report();
   
-  free_picture (frame_pic);
+  free_picture (frame_pic_1);
   if (top_pic)
     free_picture (top_pic);
   if (bottom_pic)
@@ -585,13 +586,11 @@ void init_img()
   get_mem_mv (&(img->pred_mv));
   get_mem_mv (&(img->all_mv));
 
-#if BI_PREDICTION
   if (input->BiPredMotionEstimation)
   {
     get_mem_mv (&(img->bipred_mv1));
     get_mem_mv (&(img->bipred_mv2));
   }
-#endif
 
   get_mem_ACcoeff (&(img->cofAC));
   get_mem_DCcoeff (&(img->cofDC));
@@ -610,19 +609,6 @@ void init_img()
 
     get_mem_mv (&(rddata_bot_field_mb.pred_mv));
     get_mem_mv (&(rddata_bot_field_mb.all_mv));
-#if BI_PREDICTION
-    if (input->BiPredMotionEstimation)
-    {
-      get_mem_mv (&(rddata_top_frame_mb.bipred_mv1));
-      get_mem_mv (&(rddata_top_frame_mb.bipred_mv2));
-      get_mem_mv (&(rddata_bot_frame_mb.bipred_mv1));
-      get_mem_mv (&(rddata_bot_frame_mb.bipred_mv2));
-      get_mem_mv (&(rddata_top_field_mb.bipred_mv1));
-      get_mem_mv (&(rddata_top_field_mb.bipred_mv2));
-      get_mem_mv (&(rddata_bot_field_mb.bipred_mv1));
-      get_mem_mv (&(rddata_bot_field_mb.bipred_mv2));
-    }
-#endif
 
     get_mem_ACcoeff (&(rddata_top_frame_mb.cofAC));
     get_mem_DCcoeff (&(rddata_top_frame_mb.cofDC));
@@ -685,16 +671,16 @@ void init_img()
       no_mem_exit("init_img: img->intra_block");
   }
 
-  get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);        //need two extra rows at right and bottom
-  get_mem2Dint(&(img->ipredmode8x8), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);     // help storage for ipredmode 8x8, inserted by YV
+  get_mem2D((byte***)&(img->ipredmode), img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);        //need two extra rows at right and bottom
+  get_mem2D((byte***)&(img->ipredmode8x8), img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);     // help storage for ipredmode 8x8, inserted by YV
  
-  get_mem2Dint(&(rddata_top_frame_mb.ipredmode), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
+  get_mem2D((byte***)&(rddata_top_frame_mb.ipredmode), img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
   
   if(input->MbInterlace) 
   {
-    get_mem2Dint(&(rddata_bot_frame_mb.ipredmode), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
-    get_mem2Dint(&(rddata_top_field_mb.ipredmode), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
-    get_mem2Dint(&(rddata_bot_field_mb.ipredmode), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
+    get_mem2D((byte***)&(rddata_bot_frame_mb.ipredmode), img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    get_mem2D((byte***)&(rddata_top_field_mb.ipredmode), img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    get_mem2D((byte***)&(rddata_bot_field_mb.ipredmode), img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
   }
   // CAVLC mem
   get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4+img->num_blk8x8_uv);
@@ -704,8 +690,8 @@ void init_img()
   for (i=0; i < img->width/BLOCK_SIZE; i++)
     for (j=0; j < img->height/BLOCK_SIZE; j++)
     {
-      img->ipredmode[i][j]=-1;
-      img->ipredmode8x8[i][j]=-1;
+      img->ipredmode[j][i]=-1;
+      img->ipredmode8x8[j][i]=-1;
     }
 
   img->mb_y_upd=0;
@@ -744,13 +730,11 @@ void free_img ()
   free_mem_mv (img->pred_mv);
   free_mem_mv (img->all_mv);
 
-#if BI_PREDICTION
   if (input->BiPredMotionEstimation)
   {
     free_mem_mv (img->bipred_mv1);
     free_mem_mv (img->bipred_mv2);
   }
-#endif
 
   free_mem_ACcoeff (img->cofAC);
   free_mem_DCcoeff (img->cofDC);
@@ -768,20 +752,6 @@ void free_img ()
 
     free_mem_mv (rddata_bot_field_mb.pred_mv);
     free_mem_mv (rddata_bot_field_mb.all_mv);
-
-#if BI_PREDICTION
-    if (input->BiPredMotionEstimation)
-    {
-      free_mem_mv (rddata_top_frame_mb.bipred_mv1);
-      free_mem_mv (rddata_top_frame_mb.bipred_mv2);
-      free_mem_mv (rddata_bot_frame_mb.bipred_mv1);
-      free_mem_mv (rddata_bot_frame_mb.bipred_mv2);
-      free_mem_mv (rddata_top_field_mb.bipred_mv1);
-      free_mem_mv (rddata_top_field_mb.bipred_mv2);
-      free_mem_mv (rddata_bot_field_mb.bipred_mv1);
-      free_mem_mv (rddata_bot_field_mb.bipred_mv2);
-    }
-#endif
 
     free_mem_ACcoeff (rddata_top_frame_mb.cofAC);
     free_mem_DCcoeff (rddata_top_frame_mb.cofDC);
@@ -803,13 +773,11 @@ void free_img ()
 
   if(input->MbInterlace) 
   {
-    free_mem2Dint(rddata_bot_frame_mb.ipredmode);
-    free_mem2Dint(rddata_top_field_mb.ipredmode);
-    free_mem2Dint(rddata_bot_field_mb.ipredmode);
+    free_mem2D((byte**)rddata_bot_frame_mb.ipredmode);
+    free_mem2D((byte**)rddata_top_field_mb.ipredmode);
+    free_mem2D((byte**)rddata_bot_field_mb.ipredmode);
   }
-
 }
-
 
 
 /*!
@@ -905,8 +873,7 @@ void report_frame_statistic()
   {
     fprintf(p_stat_frm,"|  ver   | Date  | Time  |    Sequence        |Frm | QP |P/MbInt|   Bits   |  SNRY  |  SNRU  |  SNRV  |  I4  |  I8  | I16  | IC0  | IC1  | IC2  | IC3  | PI4  | PI8  | PI16 |  P0  |  P1  |  P2  |  P3  | P1*8*| P1*4*| P2*8*| P2*4*| P3*8*| P3*4*|  P8  | P8:4 | P4*8*| P4*4*| P8:5 | P8:6 | P8:7 | BI4  | BI8  | BI16 |  B0  |  B1  |  B2  |  B3  | B0*8*| B0*4*| B1*8*| B1*4*| B2*8*| B2*4*| B3*8*| B3*4*|  B8  | B8:0 |B80*8*|B80*4*| B8:4 | B4*8*| B4*4*| B8:5 | B8:6 | B8:7 |\n");
     fprintf(p_stat_frm," --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-  }
-  
+  } 
 
   //report
   fprintf(p_stat_frm,"|%4s/%s", VERSION, EXT_VERSION); 
@@ -948,7 +915,6 @@ void report_frame_statistic()
     bitcounter = stats->bit_ctr_n - last_bit_ctr_n;
     last_bit_ctr_n = stats->bit_ctr_n;
   }
-
 
   //report bitrate
   fprintf(p_stat_frm, " %9d|", bitcounter);
@@ -1029,24 +995,13 @@ void report_frame_statistic()
   fprintf(p_stat_frm, "\n");
   
   //save the last results
-  last_mode_use[I_SLICE][I4MB] = stats->mode_use[I_SLICE][I4MB];
-  last_mode_use[I_SLICE][I8MB] = stats->mode_use[I_SLICE][I8MB];
-  last_mode_use[I_SLICE][I16MB] = stats->mode_use[I_SLICE][I16MB];
-  for(i=0; i<MAXMODE; i++)
-  {
-    last_mode_use[P_SLICE][i] = stats->mode_use[P_SLICE][i];
-    last_mode_use[B_SLICE][i] = stats->mode_use[B_SLICE][i];
-    stats->mode_use_transform_8x8[0][i] = 0;
-    stats->mode_use_transform_8x8[1][i] = 0;
-    stats->mode_use_transform_4x4[0][i] = 0;
-    stats->mode_use_transform_4x4[1][i] = 0;
-  }
-//  last_b8_mode_0[P_SLICE][0] = stats->b8_mode_0_use[P_SLICE];
-  last_b8_mode_0[B_SLICE][0] = stats->b8_mode_0_use[B_SLICE][0];
-  last_b8_mode_0[B_SLICE][1] = stats->b8_mode_0_use[B_SLICE][1];
-  
-  for(i=0;i<4;i++)
-    last_mode_chroma_use[i]=stats->intra_chroma_mode[i];
+  memcpy(last_mode_use[I_SLICE],stats->mode_use[I_SLICE], MAXMODE *  sizeof(int));
+  memcpy(last_mode_use[P_SLICE],stats->mode_use[P_SLICE], MAXMODE *  sizeof(int));
+  memcpy(last_mode_use[B_SLICE],stats->mode_use[B_SLICE], MAXMODE *  sizeof(int));
+  memset(stats->mode_use_transform_8x8,0, 2 * MAXMODE *  sizeof(int));
+  memset(stats->mode_use_transform_4x4,0, 2 * MAXMODE *  sizeof(int));
+  memcpy(last_b8_mode_0[B_SLICE],stats->b8_mode_0_use[B_SLICE], 2 *  sizeof(int));
+  memcpy(last_mode_chroma_use,stats->intra_chroma_mode, 4 *  sizeof(int));
 
   frame_statistic_start = 0;
   fclose(p_stat_frm);
@@ -1107,7 +1062,7 @@ void report()
     bit_use[j][1]+=stats->bit_use_stuffingBits[j];
   }
 
-  frame_rate = (img->framerate *(float)(input->successive_Bframe + 1)) / (float) (input->jumpd+1);
+  frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (input->jumpd+1);
 
 //! Currently adding NVB bits on P rate. Maybe additional stats info should be created instead and added in log file
   stats->bitrate_I = (stats->bit_ctr_I)*(frame_rate)/(float) (input->no_frames + Bframe_ctr);
@@ -1116,15 +1071,18 @@ void report()
 
   fprintf(stdout,"-------------------------------------------------------------------------------\n");
   fprintf(stdout,  " Freq. for encoded bitstream       : %1.0f\n",img->framerate/(float)(input->jumpd+1));
-  if(input->hadamard)
+  switch (input->hadamard)
   {
-    if(input->hadamardqpel)
-      fprintf(stdout," Hadamard transform                : Used for QPel\n");
-    else
-      fprintf(stdout," Hadamard transform                : Used\n");    
-  }
-  else
+  case 2:
+    fprintf(stdout," Hadamard transform                : Used for QPel\n");
+    break;
+  case 1:
+    fprintf(stdout," Hadamard transform                : Used\n");    
+    break;
+  default:
     fprintf(stdout," Hadamard transform                : Not used\n");
+    break;
+  }
 
   fprintf(stdout,  " Image format                      : %dx%d\n",input->img_width,input->img_height);
 
@@ -1136,7 +1094,7 @@ void report()
 
   fprintf(stdout,  " Total number of references        : %d\n",input->num_ref_frames);
   fprintf(stdout,  " References for P slices           : %d\n",input->P_List0_refs? input->P_List0_refs:input->num_ref_frames);
-  if(input->successive_Bframe != 0)
+  if(stats->successive_Bframe != 0)
   {
     fprintf(stdout," List0 references for B slices     : %d\n",input->B_List0_refs? input->B_List0_refs:input->num_ref_frames);
     fprintf(stdout," List1 references for B slices     : %d\n",input->B_List1_refs? input->B_List1_refs:input->num_ref_frames);
@@ -1148,12 +1106,12 @@ void report()
   // B pictures
   fprintf(stdout,  " Sequence type                     :" );
 
-  if(input->successive_Bframe>0 && input->PyramidCoding) 
+  if(stats->successive_Bframe>0 && input->PyramidCoding) 
   {
     fprintf(stdout, " Pyramid (QP: I %d, P %d, B %d) \n",
     input->qp0, input->qpN, input->qpB);
   }
-  else if(input->successive_Bframe>0) 
+  else if(stats->successive_Bframe>0) 
   {
     char seqtype[80];
     int i,j;
@@ -1162,7 +1120,7 @@ void report()
 
     for (j=0;j<2;j++)
     {
-      for (i=0;i<input->successive_Bframe;i++)
+      for (i=0;i<stats->successive_Bframe;i++)
       {
         if (input->BRefPictures)
           strncat(seqtype,"-RB",max (0, (int) (79-strlen(seqtype))));
@@ -1176,7 +1134,7 @@ void report()
     else
       fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype,input->qp0, input->qpN, input->qpB);
   }
-  else if(input->successive_Bframe==0 && input->sp_periodicity==0) fprintf(stdout, " IPPP (QP: I %d, P %d) \n",   input->qp0, input->qpN);
+  else if(stats->successive_Bframe==0 && input->sp_periodicity==0) fprintf(stdout, " IPPP (QP: I %d, P %d) \n",   input->qp0, input->qpN);
 
   else fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  input->qp0, input->qpN, input->qpsp, input->qpsp_pred);
 
@@ -1202,30 +1160,30 @@ void report()
     fprintf(stdout," RD-optimized mode decision        : not used\n");
 
   switch(input->partition_mode)
-    {
-    case PAR_DP_1:
-      fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
-      break;
-    case PAR_DP_3:
-      fprintf(stdout," Data Partitioning Mode            : 3 partitions \n");
-      break;
-    default:
-      fprintf(stdout," Data Partitioning Mode            : not supported\n");
-      break;
-    }
-
-    switch(input->of_mode)
-    {
-    case PAR_OF_ANNEXB:
-      fprintf(stdout," Output File Format                : H.264 Bit Stream File Format \n");
-      break;
-    case PAR_OF_RTP:
-      fprintf(stdout," Output File Format                : RTP Packet File Format \n");
-      break;
-    default:
-      fprintf(stdout," Output File Format                : not supported\n");
-      break;
-    }
+  {
+  case PAR_DP_1:
+    fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
+    break;
+  case PAR_DP_3:
+    fprintf(stdout," Data Partitioning Mode            : 3 partitions \n");
+    break;
+  default:
+    fprintf(stdout," Data Partitioning Mode            : not supported\n");
+    break;
+  }
+  
+  switch(input->of_mode)
+  {
+  case PAR_OF_ANNEXB:
+    fprintf(stdout," Output File Format                : H.264 Bit Stream File Format \n");
+    break;
+  case PAR_OF_RTP:
+    fprintf(stdout," Output File Format                : RTP Packet File Format \n");
+    break;
+  default:
+    fprintf(stdout," Output File Format                : not supported\n");
+    break;
+  }
   // Residue Color Transform
   if(input->residue_transform_flag)
     fprintf(stdout," Residue Color Transform           : used\n");
@@ -1243,7 +1201,7 @@ void report()
     fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d NVB %d) \n",
       total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_B + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_B,stats->bit_ctr_parametersets);
     
-    frame_rate = (img->framerate *(float)(input->successive_Bframe + 1)) / (float) (input->jumpd+1);
+    frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (input->jumpd+1);
     stats->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + Bframe_ctr));
     
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate/1000);
@@ -1295,19 +1253,22 @@ void report()
   fprintf(p_stat,   " I Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_I/1000);
   fprintf(p_stat,   " P Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_P/1000);
   // B pictures
-  if(input->successive_Bframe != 0)
+  if(stats->successive_Bframe != 0)
     fprintf(p_stat,   " B Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_B/1000);
   fprintf(p_stat,   " Total Bitrate(kb/s)          : %6.2f\n", stats->bitrate/1000);
 
-  if(input->hadamard)
+  switch (input->hadamard)
   {
-    if(input->hadamardqpel)
-      fprintf(p_stat," Hadamard transform           : Used for QPel\n");
-    else
-      fprintf(p_stat," Hadamard transform           : Used\n");
-  }  
-  else
+  case 2:
+    fprintf(p_stat," Hadamard transform           : Used for QPel\n");
+    break;
+  case 1:
+    fprintf(p_stat," Hadamard transform           : Used\n");
+    break;
+  default:
     fprintf(p_stat," Hadamard transform           : Not used\n");
+    break;
+  }
 
   fprintf(p_stat,  " Image format                 : %dx%d\n",input->img_width,input->img_height);
 
@@ -1320,7 +1281,7 @@ void report()
 
   fprintf(p_stat,   " Total number of references   : %d\n",input->num_ref_frames);
   fprintf(p_stat,   " References for P slices      : %d\n",input->P_List0_refs? input->P_List0_refs:input->num_ref_frames);
-  if(input->successive_Bframe != 0)
+  if(stats->successive_Bframe != 0)
   {
     fprintf(p_stat, " List0 refs for B slices      : %d\n",input->B_List0_refs? input->B_List0_refs:input->num_ref_frames);
     fprintf(p_stat, " List1 refs for B slices      : %d\n",input->B_List1_refs? input->B_List1_refs:input->num_ref_frames);
@@ -1399,7 +1360,7 @@ void report()
                                       + stats->bit_use_mode[P_SLICE][3] + stats->bit_use_mode[P_SLICE][P8x8])/(float) bit_use[P_SLICE][0]; 
 
   // B pictures
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
   {
  
     fprintf(p_stat,"\n\n ---------------------|----------------|-----------------|\n");
@@ -1425,7 +1386,7 @@ void report()
   fprintf(p_stat," Header               |");
   fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[I_SLICE]/bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[P_SLICE]/bit_use[P_SLICE][0]);
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[B_SLICE]/Bframe_ctr);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
@@ -1433,7 +1394,7 @@ void report()
   fprintf(p_stat," Mode                 |");
   fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[I_SLICE]/bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[P_SLICE]/bit_use[P_SLICE][0]);
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[B_SLICE]/Bframe_ctr);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
@@ -1441,7 +1402,7 @@ void report()
   fprintf(p_stat," Motion Info          |");
   fprintf(p_stat,"        ./.     |");
   fprintf(p_stat," %10.2f     |",mean_motion_info_bit_use[0]);
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," %10.2f     |",mean_motion_info_bit_use[1]);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
@@ -1449,33 +1410,33 @@ void report()
   fprintf(p_stat," CBP Y/C              |");
   fprintf(p_stat," %10.2f     |", (float)stats->tmp_bit_use_cbp[I_SLICE]/bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |", (float)stats->tmp_bit_use_cbp[P_SLICE]/bit_use[P_SLICE][0]);
-  if(input->successive_Bframe!=0 && bit_use[B_SLICE][0]!=0)
+  if(stats->successive_Bframe!=0 && bit_use[B_SLICE][0]!=0)
     fprintf(p_stat," %10.2f     |", (float)stats->tmp_bit_use_cbp[B_SLICE]/bit_use[B_SLICE][0]);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
 
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," Coeffs. Y            | %10.2f     | %10.2f     | %10.2f     |\n",
     (float)stats->bit_use_coeffY[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffY[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffY[B_SLICE]/Bframe_ctr);
   else
     fprintf(p_stat," Coeffs. Y            | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_coeffY[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffY[P_SLICE]/(float)bit_use[P_SLICE][0], 0.);
 
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," Coeffs. C            | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffC[B_SLICE]/Bframe_ctr);
   else
     fprintf(p_stat," Coeffs. C            | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], 0.);
 
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," Delta quant          | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_delta_quant[B_SLICE]/Bframe_ctr);
   else
     fprintf(p_stat," Delta quant          | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], 0.);
 
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," Stuffing Bits        | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_stuffingBits[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_stuffingBits[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_stuffingBits[B_SLICE]/Bframe_ctr);
   else
@@ -1491,7 +1452,7 @@ void report()
   fprintf(p_stat," %10.2f     |", (float) bit_use[I_SLICE][1]/(float) bit_use[I_SLICE][0] );
   fprintf(p_stat," %10.2f     |", (float) bit_use[P_SLICE][1]/(float) bit_use[P_SLICE][0] );
 
-  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
     fprintf(p_stat," %10.2f     |", (float) bit_use[B_SLICE][1]/ (float) Bframe_ctr );
   else fprintf(p_stat," %10.2f     |", 0.);
 
@@ -1510,11 +1471,11 @@ void report()
     }
     else                                            // Create header for new log file
     {
-      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                                                                                                                            |\n");
-      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"|    ver    | Date  | Time  |    Sequence        | #Img |P/MbInt| QPI| QPP| QPB| Format  |Iperiod| #B | Hdmd | S.R |#Ref | Freq |Coding|RD-opt|Intra upd|8x8Tr|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr I|#Bitr P|#Bitr B|#Bitr IPB|     Total Time   |      Me Time     |\n");
-      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"|                   Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                                                                                                                            |\n");
+      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"|    ver    | Date  | Time  |    Sequence        | #Img |P/MbInt| QPI| QPP| QPB| Format  |Iperiod| #B | FMES | Hdmd | S.R |#Ref | Freq |Coding|RD-opt|Intra upd|8x8Tr|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr I|#Bitr P|#Bitr B|#Bitr IPB|     Total Time   |      Me Time     |\n");
+      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
     }
   }
   else
@@ -1558,13 +1519,25 @@ void report()
   fprintf(p_log,"%4dx%-4d|",input->img_width,input->img_height);
 
   fprintf(p_log,"  %3d  |",input->intra_period);
-  fprintf(p_log,"%3d |",input->successive_Bframe); 
+  fprintf(p_log,"%3d |",stats->successive_Bframe); 
 
-
-  if (input->hadamard==1)
-    fprintf(p_log,"  ON  |");
+  if (input->FMEnable==1)
+    fprintf(p_log,"  HEX |");
   else
     fprintf(p_log,"  OFF |");
+
+  switch (input->hadamard)
+  {
+  case 2:
+    fprintf(p_log,"  QPL |");
+    break;
+  case 1:
+    fprintf(p_log,"  ON  |");
+    break;
+  default:
+    fprintf(p_log,"  OFF |");
+    break;
+  }
 
   fprintf(p_log," %3d |",input->search_range );
 
@@ -1572,7 +1545,7 @@ void report()
 
 
 //  fprintf(p_log," %3d  |",img->framerate/(input->jumpd+1));
-    fprintf(p_log," %3.2f|",(img->framerate *(float) (input->successive_Bframe + 1)) / (float)(input->jumpd+1));
+    fprintf(p_log," %3.2f|",(img->framerate *(float) (stats->successive_Bframe + 1)) / (float)(input->jumpd+1));
 
   if (input->symbol_mode == UVLC)
     fprintf(p_log," CAVLC|");
@@ -1586,7 +1559,7 @@ void report()
   else
     fprintf(p_log,"   OFF   |");
 
-  fprintf(p_log,"  %d  |",input->AllowTransform8x8);
+  fprintf(p_log,"  %d  |",input->Transform8x8Mode);
   
   fprintf(p_log,"%-5.3f|",snr->snr_y1);
   fprintf(p_log,"%-5.3f|",snr->snr_u1);
@@ -1617,7 +1590,7 @@ void report()
 
   p_log=fopen("data.txt","a");
 
-  if(input->successive_Bframe != 0 && Bframe_ctr != 0) // B picture used
+  if(stats->successive_Bframe != 0 && Bframe_ctr != 0) // B picture used
   {
     fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
           "%2.2f %2.2f %2.2f %5d "
@@ -1701,7 +1674,7 @@ void information_init()
   printf(" YUV Format                        : %s \n", &yuv_types[img->yuv_format][0]);//img->yuv_format==YUV422?"YUV 4:2:2":(img->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
   printf(" Frames to be encoded I-P/B        : %d/%d\n", input->no_frames, (input->successive_Bframe*(input->no_frames-1)));
   printf(" PicInterlace / MbInterlace        : %d/%d\n", input->PicInterlace, input->MbInterlace);
-  printf(" Transform8x8Mode                  : %d\n", input->AllowTransform8x8);
+  printf(" Transform8x8Mode                  : %d\n", input->Transform8x8Mode);
   printf("-------------------------------------------------------------------------------\n");
   printf("  Frame  Bit/pic WP QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D\n");
   printf("-------------------------------------------------------------------------------\n");
@@ -1787,15 +1760,15 @@ int init_global_buffers()
 
   if(input->successive_Bframe!=0 || input->BRefPictures> 0)
   {    
-    memory_size += get_mem3Dshort(&direct_ref_idx, 2, img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
-    memory_size += get_mem2Dshort(&direct_pdir, img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
+    memory_size += get_mem3D     ((byte ****)(void*)(&direct_ref_idx), 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem2Dshort(&direct_pdir, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
   }
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
   memory_size += get_mem2Dint(&img4Y_tmp, img->height+2*IMG_PAD_SIZE, (img->width+2*IMG_PAD_SIZE)*4);
 
-  if (input->rdopt==2)
+  if (input->rdopt==3)
   {
     memory_size += get_mem2Dint(&decs->resY, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
     if ((decs->decref = (imgpel****) calloc(input->NoOfDecoders,sizeof(imgpel***))) == NULL) 
@@ -1900,9 +1873,9 @@ void free_global_buffers()
     free_mem4Dint(wbp_weight,6,MAX_REFERENCE_PICTURES);
   }
 
-  if(input->successive_Bframe!=0 || input->BRefPictures> 0)
+  if(stats->successive_Bframe!=0 || input->BRefPictures> 0)
   {
-    free_mem3Dshort(direct_ref_idx,2);
+    free_mem3D     ((byte ***)direct_ref_idx,2);
     free_mem2Dshort(direct_pdir);
   } // end if B frame
 
@@ -1911,18 +1884,18 @@ void free_global_buffers()
 
   // free mem, allocated in init_img()
   // free intra pred mode buffer for blocks
-  free_mem2Dint(img->ipredmode);
-  free_mem2Dint(img->ipredmode8x8);
+  free_mem2D((byte**)img->ipredmode);
+  free_mem2D((byte**)img->ipredmode8x8);
   free(img->mb_data);
 
-  free_mem2Dint(rddata_top_frame_mb.ipredmode);
+  free_mem2D((byte**)rddata_top_frame_mb.ipredmode);
   
   if(input->UseConstrainedIntraPred)
   {
     free (img->intra_block);
   }
 
-  if (input->rdopt==2)
+  if (input->rdopt==3)
   {
     free(decs->resY[0]);
     free(decs->resY);
@@ -2012,9 +1985,10 @@ int get_mem_mv (short ******* mv)
         {
           if (((*mv)[i][j][k][l] = (short**)calloc(9,sizeof(short*))) == NULL)
             no_mem_exit ("get_mem_mv: mv");
-          for (m=0; m<9; m++)
-            if (((*mv)[i][j][k][l][m] = (short*)calloc(2,sizeof(short))) == NULL)
-              no_mem_exit ("get_mem_mv: mv");
+          if (((*mv)[i][j][k][l][0] = (short*)calloc(2*9,sizeof(short))) == NULL)
+            no_mem_exit ("get_mem_mv: mv");
+          for (m=1; m<9; m++)
+            (*mv)[i][j][k][l][m] = (*mv)[i][j][k][l][m - 1] + 2;
         }
       }
     }
@@ -2033,7 +2007,7 @@ int get_mem_mv (short ******* mv)
  */
 void free_mem_mv (short****** mv)
 {
-  int i, j, k, l, m;
+  int i, j, k, l;
 
   for (i=0; i<4; i++)
   {
@@ -2043,10 +2017,7 @@ void free_mem_mv (short****** mv)
       {
         for (l=0; l<img->max_num_references; l++)
         {
-          for (m=0; m<9; m++)
-          {
-            free (mv[i][j][k][l][m]);
-          }
+          free (mv[i][j][k][l][0]);
           free (mv[i][j][k][l]);
         }
         free (mv[i][j][k]);
@@ -2232,7 +2203,6 @@ void process_2nd_IGOP()
   frm->picbuf_short[0]->picID=-1;
   frm->picbuf_short[0]->lt_picID=-1;
   frm->short_used = 0; */
-  img->nb_references = 0;
 }
 
 
@@ -2282,3 +2252,62 @@ void SetImgType()
 }
 
  
+void SetLevelIndices()
+{
+  switch(active_sps->level_idc)
+  {
+  case 10:         
+    img->LevelIndex=0;
+    break;
+  case 11:         
+    if (active_sps->constrained_set3_flag == 0)
+      img->LevelIndex=2;
+    else
+      img->LevelIndex=1;
+    break;
+  case 12:         
+    img->LevelIndex=3;
+    break;
+  case 13:         
+    img->LevelIndex=4;
+    break;
+  case 20:         
+    img->LevelIndex=5;
+    break;
+  case 21:         
+    img->LevelIndex=6;
+    break;
+  case 22:         
+    img->LevelIndex=7;
+    break;
+  case 30:         
+    img->LevelIndex=8;
+    break;
+  case 31:         
+    img->LevelIndex=9;
+    break;
+  case 32:         
+    img->LevelIndex=10;
+    break;
+  case 40:         
+    img->LevelIndex=11;
+    break;
+  case 41:         
+    img->LevelIndex=12;
+    break;
+  case 42:         
+    if (active_sps->profile_idc <= 88)
+      img->LevelIndex=13;
+    else
+      img->LevelIndex=14;
+    break;
+  case 50:         
+    img->LevelIndex=15;
+    break;
+  case 51:
+  default:
+    img->LevelIndex=16;
+    break;
+  }
+}
+

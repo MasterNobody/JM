@@ -233,11 +233,11 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
     if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = (currMB->mb_available_up->skip_flag==0 ? 0 : 1);
+      b = (currMB->mb_available_up->skip_flag==0 ? 1 : 0);
     if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = (currMB->mb_available_left->skip_flag==0 ? 0 : 1);
+      a = (currMB->mb_available_left->skip_flag==0 ? 1 : 0);
     
     act_ctx = 7 + a + b;
 
@@ -246,18 +246,18 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
     else
       biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][act_ctx]);   
 
-    currMB->skip_flag = (se->value1==0 && se->value2==0)?0:1;
+    currMB->skip_flag = (se->value1==0 && se->value2==0)?1:0;
   }
   else
   {
     if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = (( (currMB->mb_available_up)->skip_flag != 0) ? 1 : 0 );
+      b = (( (currMB->mb_available_up)->skip_flag == 0) ? 1 : 0 );
     if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = (( (currMB->mb_available_left)->skip_flag != 0) ? 1 : 0 );
+      a = (( (currMB->mb_available_left)->skip_flag == 0) ? 1 : 0 );
 
     act_ctx = a + b;
 
@@ -266,7 +266,7 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
     else
       biari_encode_symbol(eep_dp, 0,&ctx->mb_type_contexts[1][act_ctx]);
 
-    currMB->skip_flag = (curr_mb_type==0)?0:1;
+    currMB->skip_flag = (curr_mb_type==0)?1:0;
   }
   se->context = act_ctx;
 
@@ -707,7 +707,7 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int   a, b;
   int   act_ctx;
   int   act_sym;
-  short** refframe_array = enc_picture->ref_idx[se->value2];
+  char** refframe_array = enc_picture->ref_idx[se->value2];
 
   int bslice = (img->type==B_SLICE);
 
@@ -729,9 +729,9 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   else
   {
     if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_b.mb_addr].mb_field == 1))
-      b = (refframe_array[block_b.pos_x][block_b.pos_y] > 1 ? 1 : 0);
+      b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 1 : 0);
     else
-      b = (refframe_array[block_b.pos_x][block_b.pos_y] > 0 ? 1 : 0);
+      b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 1 : 0);
   }
 
   if (!block_a.available)
@@ -741,9 +741,9 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   else 
   {
     if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_a.mb_addr].mb_field == 1))
-      a = (refframe_array[block_a.pos_x][block_a.pos_y] > 1 ? 1 : 0);
+      a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
     else
-      a = (refframe_array[block_a.pos_x][block_a.pos_y] > 0 ? 1 : 0);
+      a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
   }
 
   act_ctx     = a + 2*b; 
@@ -1075,7 +1075,7 @@ static const int max_c2       [] = { 4,  4,  4,  4,  4,  4,  3,  4,  3,  3}; // 
  */
 void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int cbp_bit)
 {
-#define BIT_SET(x,n)  ((int)(((x)&(1<<(n)))>>(n)))
+#define BIT_SET(x,n)  ((int)(((x)&((int64)1<<(n)))>>(n)))
 
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4);
   int y_dc        = (type==LUMA_16DC);
@@ -1096,6 +1096,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
   int bit_pos_b   = 0;
 
   PixelPos block_a, block_b;
+
   if (y_ac || y_dc)
   {
     getLuma4x4Neighbour(img->current_mb_nr, i, j, -1,  0, &block_a);
@@ -1115,13 +1116,13 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
     if (u_ac||v_ac)
     {
       if (block_a.available)
-        bit_pos_a = 2*block_a.y + block_a.x;
+        bit_pos_a = 4*block_a.y + block_a.x;
       if (block_b.available)
-        bit_pos_b = 2*block_b.y + block_b.x;
+        bit_pos_b = 4*block_b.y + block_b.x;
     }
   }
 
-  bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+2*j+i : 23+2*j+i);
+  bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+4*j+i : 35+4*j+i);
   //--- set bits for current block ---
   if (cbp_bit)
   {
@@ -1144,11 +1145,11 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
     }
     else
     {
-      currMB->cbp_bits   |= (1<<bit);
+      currMB->cbp_bits   |= ((int64)1<<bit);
     }
   }
 
-  bit         = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 23);
+  bit         = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
   if (type!=LUMA_8x8)
   {
     if (block_b.available)
