@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file macroblock.c
@@ -124,37 +156,37 @@ void start_macroblock()
 
   if(use_bitstream_backing)
   {
-#if !defined LOOP_FILTER_MB
-  // Save loopb and loopc in the case of recoding this macroblock
-    for(x = 0 ; x<6 ; x++)
-      for(y = 0 ; y<6 ; y++)
-        img->tmp_loop_Y[x][y] = loopb[img->block_x+x][img->block_y+y];
-    for(x=0 ; x<4 ; x++)
-      for(y=0 ; y<4 ; y++)
-        img->tmp_loop_UV[x][y] = loopc[img->block_x/2+x][img->block_y/2+y];
-#endif
-  // Keep the current state of the bitstreams
-  if(!img->cod_counter)
-    for (i=0; i<curr_slice->max_part_nr; i++)
-    {
-      dataPart = &(curr_slice->partArr[i]);
-      currStream = dataPart->bitstream;
-      currStream->stored_bits_to_go   = currStream->bits_to_go;
-      currStream->stored_byte_pos   = currStream->byte_pos;
-      currStream->stored_byte_buf   = currStream->byte_buf;
+     // Save image to allow recoding if necessary
+     for(y=0; y<img->height; y++)
+       for(x=0; x<img->width; x++)
+         imgY_tmp[y][x] = imgY[y][x];
+     for(i=0; i<2; i++)
+       for(y=0; y<img->height_cr; y++)
+         for(x=0; x<img->width_cr; x++)
+           imgUV_tmp[i][y][x] = imgUV[i][y][x];
 
-      if (input->symbol_mode ==CABAC)
+    // Keep the current state of the bitstreams
+    if(!img->cod_counter)
+      for (i=0; i<curr_slice->max_part_nr; i++)
       {
-        eep = &(dataPart->ee_cabac);
-        eep->ElowS            = eep->Elow;
-        eep->EhighS           = eep->Ehigh;
-        eep->EbufferS         = eep->Ebuffer;
-        eep->Ebits_to_goS     = eep->Ebits_to_go;
-        eep->Ebits_to_followS = eep->Ebits_to_follow;
-        eep->EcodestrmS       = eep->Ecodestrm;
-        eep->Ecodestrm_lenS   = eep->Ecodestrm_len;
+        dataPart = &(curr_slice->partArr[i]);
+        currStream = dataPart->bitstream;
+        currStream->stored_bits_to_go   = currStream->bits_to_go;
+        currStream->stored_byte_pos   = currStream->byte_pos;
+        currStream->stored_byte_buf   = currStream->byte_buf;
+
+        if (input->symbol_mode ==CABAC)
+        {
+          eep = &(dataPart->ee_cabac);
+          eep->ElowS            = eep->Elow;
+          eep->EhighS           = eep->Ehigh;
+          eep->EbufferS         = eep->Ebuffer;
+          eep->Ebits_to_goS     = eep->Ebits_to_go;
+          eep->Ebits_to_followS = eep->Ebits_to_follow;
+          eep->EcodestrmS       = eep->Ecodestrm;
+          eep->Ecodestrm_lenS   = eep->Ecodestrm_len;
+        }
       }
-    }
   }
 
   // Save the slice number of this macroblock. When the macroblock below
@@ -196,32 +228,30 @@ void start_macroblock()
         for (k=0; k < 2; k++)
           currMB->mvd[l][j][i][k] = 0;
 
-        for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
-          currMB->intra_pred_modes[i] = 0;
+  for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
+    currMB->intra_pred_modes[i] = 0;
 
 
-        // Initialize bitcounters for this macroblock
-        if(img->current_mb_nr == 0) // No slice header to account for
-        {
-          currMB->bitcounter[BITS_HEADER] = 0;
-        }
-        else
-          if (img->slice_numbers[img->current_mb_nr] == img->slice_numbers[img->current_mb_nr-1]) // current MB belongs to the
-            // same slice as the last MB
-          {
-            currMB->bitcounter[BITS_HEADER] = 0;
-          }
+  // Initialize bitcounters for this macroblock
+  if(img->current_mb_nr == 0) // No slice header to account for
+  {
+    currMB->bitcounter[BITS_HEADER] = 0;
+  }
+  else if (img->slice_numbers[img->current_mb_nr] == img->slice_numbers[img->current_mb_nr-1]) // current MB belongs to the
+  // same slice as the last MB
+  {
+    currMB->bitcounter[BITS_HEADER] = 0;
+  }
 
-          currMB->bitcounter[BITS_MB_MODE] = 0;
-          currMB->bitcounter[BITS_COEFF_Y_MB] = 0;
-          currMB->bitcounter[BITS_INTER_MB] = 0;
-          currMB->bitcounter[BITS_CBP_MB] = 0;
-          currMB->bitcounter[BITS_DELTA_QUANT_MB] = 0;
-          currMB->bitcounter[BITS_COEFF_UV_MB] = 0;
-
+  currMB->bitcounter[BITS_MB_MODE] = 0;
+  currMB->bitcounter[BITS_COEFF_Y_MB] = 0;
+  currMB->bitcounter[BITS_INTER_MB] = 0;
+  currMB->bitcounter[BITS_CBP_MB] = 0;
+  currMB->bitcounter[BITS_DELTA_QUANT_MB] = 0;
+  currMB->bitcounter[BITS_COEFF_UV_MB] = 0;
 
 #ifdef _FAST_FULL_ME_
-          ResetFastFullIntegerSearch ();
+  ResetFastFullIntegerSearch ();
 #endif
 }
 
@@ -235,8 +265,6 @@ void start_macroblock()
 void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
 {
   int i,x=0, y=0 ;
-  int mb_nr = img->current_mb_nr;
-  static int last_written_mb;
   Slice *currSlice = img->currentSlice;
   Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
   SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
@@ -245,18 +273,21 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
   Bitstream *currStream;
   int rlc_bits=0;
   EncodingEnvironmentPtr eep;
+  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
+  int new_slice = ( (img->current_mb_nr == 0) || img->mb_data[img->current_mb_nr-1].slice_nr != img->current_slice_nr);
+  static int skip = FALSE;
 
   switch(input->slice_mode)
   {
   case NO_SLICES:
     *recode_macroblock = FALSE;
-    if ((mb_nr+1) == img->total_number_mb) // maximum number of MBs
+    if ((img->current_mb_nr+1) == img->total_number_mb) // maximum number of MBs
       *end_of_slice = TRUE;
     break;
   case FIXED_MB:
     // For slice mode one, check if a new slice boundary follows
     *recode_macroblock = FALSE;
-    if ( ((mb_nr+1) % input->slice_argument == 0) || ((mb_nr+1) == img->total_number_mb) )
+    if ( ((img->current_mb_nr+1) % input->slice_argument == 0) || ((img->current_mb_nr+1) == img->total_number_mb) )
     {
       *end_of_slice = TRUE;
     }
@@ -267,7 +298,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
     // boundary before this macroblock and code the macroblock again
   case FIXED_RATE:
      // in case of skip MBs check if there is a slice boundary
-     // only for UVLC (img->cod_counter is always 0 in Case of CABAC)
+     // only for UVLC (img->cod_counter is always 0 in case of CABAC)
      if(img->cod_counter)
      {
        // write out the skip MBs to know how many bits we need for the RLC
@@ -278,57 +309,56 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
        dataPart->writeSyntaxElement(  currSE, dataPart);
        rlc_bits=currSE->len;
 
-       for (i=0; i<currSlice->max_part_nr; i++)
-       {
-         dataPart = &(currSlice->partArr[i]);
-         currStream = dataPart->bitstream;
-         // save the bitstream as it would be if we write the skip MBs
-         currStream->bits_to_go_skip  = currStream->bits_to_go;
-         currStream->byte_pos_skip    = currStream->byte_pos;
-         currStream->byte_buf_skip    = currStream->byte_buf;
-         // restore the bitstream
-         currStream->bits_to_go = currStream->stored_bits_to_go;
-         currStream->byte_pos = currStream->stored_byte_pos;
-         currStream->byte_buf = currStream->stored_byte_buf;
-       }
-     }
-     if (input->symbol_mode ==CABAC)
-     {
-       stat->bit_slice =0;
-       for (i=0; i<currSlice->max_part_nr; i++)
-       {
-         dataPart= &(currSlice->partArr[i]);
-         eep = &(dataPart->ee_cabac);
-         stat->bit_slice += arienco_bits_written(eep);
-       }
-     }
-     if (mb_nr > 0 && img->mb_data[mb_nr-1].slice_nr == img->current_slice_nr)
-     {
-       dataPart = &(currSlice->partArr[0]);
        currStream = dataPart->bitstream;
-       // in case of skip MBs we did'nt update the statistic yet, so - the bits we need for the RLC
-       if (stat->bit_slice > (input->slice_argument*8 - rlc_bits))
+       // save the bitstream as it would be if we write the skip MBs
+       currStream->bits_to_go_skip  = currStream->bits_to_go;
+       currStream->byte_pos_skip    = currStream->byte_pos;
+       currStream->byte_buf_skip    = currStream->byte_buf;
+       // restore the bitstream
+       currStream->bits_to_go = currStream->stored_bits_to_go;
+       currStream->byte_pos = currStream->stored_byte_pos;
+       currStream->byte_buf = currStream->stored_byte_buf;
+       skip = TRUE;
+     }
+     //! Check if the last coded macroblock fits into the size of the slice
+     //! But only if this is not the first macroblock of this slice
+     if (!new_slice)
+     {
+       if(slice_too_big(rlc_bits))
        {
          *recode_macroblock = TRUE;
          *end_of_slice = TRUE;
        }
-       else
-         last_written_mb = img->current_mb_nr - img->cod_counter;
+       else if(!img->cod_counter)
+         skip = FALSE;
      }
-     if ( (*recode_macroblock == FALSE) && ((mb_nr+1) == img->total_number_mb) )  // maximum number of MBs
+     // maximum number of MBs
+     if ((*recode_macroblock == FALSE) && ((img->current_mb_nr+1) == img->total_number_mb)) 
+     {
        *end_of_slice = TRUE;
+       if(!img->cod_counter)
+         skip = FALSE;
+     }
+   
+     //! (first MB OR first MB in a slice) AND bigger that maximum size of slice
+     if (new_slice && slice_too_big(rlc_bits))
+     {
+       *end_of_slice = TRUE;
+       if(!img->cod_counter)
+         skip = FALSE;
+     }
      break;
 
   case  CALLBACK:
-    if (mb_nr > 0 && img->mb_data[mb_nr-1].slice_nr == img->current_slice_nr)
+    if (img->current_mb_nr > 0 && !new_slice)
     {
-      if (currSlice->slice_too_big(stat->bit_slice))
+      if (currSlice->slice_too_big(rlc_bits))
       {
         *recode_macroblock = TRUE;
         *end_of_slice = TRUE;
       }
     }
-    if ( (*recode_macroblock == FALSE) && ((mb_nr+1) == img->total_number_mb) ) // maximum number of MBs
+    if ( (*recode_macroblock == FALSE) && ((img->current_mb_nr+1) == img->total_number_mb) ) // maximum number of MBs
       *end_of_slice = TRUE;
     break;
   default:
@@ -338,9 +368,59 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
 
   if(*recode_macroblock == TRUE)
   {
-    // Restore the state of the bitstream
-    // if SkipMBs at the end of a slice
-    if (img->current_mb_nr != (last_written_mb + 1))
+    // Restore everything
+    for (i=0; i<currSlice->max_part_nr; i++)
+    {
+      dataPart = &(currSlice->partArr[i]);
+      currStream = dataPart->bitstream;
+      currStream->bits_to_go = currStream->stored_bits_to_go;
+      currStream->byte_pos  = currStream->stored_byte_pos;
+      currStream->byte_buf  = currStream->stored_byte_buf;
+      if (input->symbol_mode == CABAC)
+      {
+        eep = &(dataPart->ee_cabac);
+        eep->Elow            = eep->ElowS;
+        eep->Ehigh           = eep->EhighS;
+        eep->Ebuffer         = eep->EbufferS;
+        eep->Ebits_to_go     = eep->Ebits_to_goS;
+        eep->Ebits_to_follow = eep->Ebits_to_followS;
+        eep->Ecodestrm       = eep->EcodestrmS;
+        eep->Ecodestrm_len   = eep->Ecodestrm_lenS;
+      }
+    }
+    // Restore image to avoid DeblockMB to operate twice
+    // Note that this can be simplified! The copy range!
+    for(y=0; y<img->height; y++)
+      for(x=0; x<img->width; x++)
+        imgY[y][x] = imgY_tmp[y][x];
+    for(i=0; i<2; i++)
+      for(y=0; y<img->height_cr; y++)
+        for(x=0; x<img->width_cr; x++)
+          imgUV[i][y][x] = imgUV_tmp[i][y][x];
+  }
+
+  if(*end_of_slice == TRUE  && skip == TRUE) //! TO 4.11.2001 Skip MBs at the end of this slice
+  { 
+    //! only for Slice Mode 2 or 3
+    // If we still have to write the skip, let's do it!
+    if(img->cod_counter && *recode_macroblock == TRUE) //! MB that did not fit in this slice
+    { 
+      // If recoding is true and we have had skip, 
+      // we have to reduce the counter in case of recoding
+      img->cod_counter--;
+      if(img->cod_counter)
+      {
+        dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+        currSE->value1 = img->cod_counter;
+        currSE->mapping = n_linfo2;
+        currSE->type = SE_MBTYPE;
+        dataPart->writeSyntaxElement(  currSE, dataPart);
+        rlc_bits=currSE->len;
+        currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
+        img->cod_counter = 0;
+      }
+    }
+    else //! MB that did not fit in this slice anymore is not a Skip MB
     {
       for (i=0; i<currSlice->max_part_nr; i++)
       {
@@ -352,64 +432,93 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
         currStream->byte_buf  = currStream->byte_buf_skip;
       }
       // update the statistics
-      currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
-      currMB->currSEnr++;
+      img->cod_counter = 0;
+      skip = FALSE;
     }
-    else
-    {
-      for (i=0; i<currSlice->max_part_nr; i++)
-      {
-        dataPart = &(currSlice->partArr[i]);
-        currStream = dataPart->bitstream;
-        currStream->bits_to_go = currStream->stored_bits_to_go;
-        currStream->byte_pos  = currStream->stored_byte_pos;
-        currStream->byte_buf  = currStream->stored_byte_buf;
-        if (input->symbol_mode == CABAC)
-        {
-          eep = &(dataPart->ee_cabac);
-          eep->Elow            = eep->ElowS;
-          eep->Ehigh           = eep->EhighS;
-          eep->Ebuffer         = eep->EbufferS;
-          eep->Ebits_to_go     = eep->Ebits_to_goS;
-          eep->Ebits_to_follow = eep->Ebits_to_followS;
-          eep->Ecodestrm       = eep->EcodestrmS;
-          eep->Ecodestrm_len   = eep->Ecodestrm_lenS;
-        }
-      }
-    }
-#if !defined LOOP_FILTER_MB
-    // Restore loopb and loopc before coding the MB again
-    for(x = 0 ; x<6 ; x++) for(y = 0 ; y<6 ; y++)
-      loopb[img->block_x+x][img->block_y+y] = img->tmp_loop_Y[x][y];
-    for(x=0 ; x<4 ; x++) for(y=0 ; y<4 ; y++)
-      loopc[img->block_x/2+x][img->block_y/2+y] = img->tmp_loop_UV[x][y];
-#endif
   }
-
-  if(*end_of_slice == TRUE)
+  
+  //! TO 4.11.2001 Skip MBs at the end of this slice for Slice Mode 0 or 1
+  if(*end_of_slice == TRUE && img->cod_counter && !use_bitstream_backing)
   {
-    // Put out last RunLength of a slice if the slice ended with skipped macroblocks
-    if(input->symbol_mode == UVLC && img->type != INTRA_IMG && img->types != SP_IMG && img->cod_counter > 0)
-    {
-
-      Slice *currSlice = img->currentSlice;
-
-
-      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-
-      currSE->value1 = img->cod_counter;
-      currSE->mapping = n_linfo2;
-      currSE->type = SE_MBTYPE;
-#if TRACE
-      snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
-#endif
-      dataPart->writeSyntaxElement( currSE, dataPart);
-      currMB->bitcounter[BITS_MB_MODE]+=currSE->len;
-      currMB->currSEnr++;
-    }
+    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    currSE->value1 = img->cod_counter;
+    currSE->mapping = n_linfo2;
+    currSE->type = SE_MBTYPE;
+    dataPart->writeSyntaxElement(  currSE, dataPart);
+    rlc_bits=currSE->len;
+    currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
+    img->cod_counter = 0;
   }
 }
 
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    For Slice Mode 2: Checks if one partition of one slice exceeds the 
+ *    allowed size
+ * 
+ * \return
+ *    FALSE if all Partitions of this slice are smaller than the allowed size
+ *    TRUE is at least one Partition exceeds the limit
+ *
+ * \para Parameters
+ *    
+ *    
+ *
+ * \para Side effects
+ *    none
+ *
+ * \para Other Notes
+ *    
+ *    
+ *
+ * \date
+ *    4 November 2001
+ *
+ * \author
+ *    Tobias Oelbaum      drehvial@gmx.net
+ *****************************************************************************/
+ 
+ int slice_too_big(int rlc_bits)
+ {
+   Slice *currSlice = img->currentSlice;
+   DataPartition *dataPart;
+   Bitstream *currStream;
+   EncodingEnvironmentPtr eep;
+   int i;
+   int size_in_bytes;
+   
+   //! UVLC
+   if (input->symbol_mode == UVLC)
+   {
+     for (i=0; i<currSlice->max_part_nr; i++)
+     {
+       dataPart = &(currSlice->partArr[i]);
+       currStream = dataPart->bitstream;
+       size_in_bytes = currStream->byte_pos;
+       if (currStream->bits_to_go < 8)
+         size_in_bytes++;
+       if (currStream->bits_to_go < rlc_bits)
+         size_in_bytes++;
+       if(size_in_bytes > input->slice_argument)
+         return TRUE;
+     }
+   }
+    
+   //! CABAC
+   if (input->symbol_mode ==CABAC)
+   {
+     for (i=0; i<currSlice->max_part_nr; i++)
+     {
+        dataPart= &(currSlice->partArr[i]);
+        eep = &(dataPart->ee_cabac);
+        if(arienco_bits_written(eep) > (input->slice_argument*8))
+          return TRUE;
+     }
+   }
+   return FALSE;
+ }
 /*!
  ************************************************************************
  * \brief
@@ -506,7 +615,7 @@ int MakeIntraPrediction(int *intra_pred_mode_2)
 
   // start making 4x4 intra prediction
   currMB->cbp     = 0;
-  img->mb_data[img->current_mb_nr].intraOrInter = INTRA_MB_4x4;
+  currMB->intraOrInter = INTRA_MB_4x4;
 
   tot_intra_sad=QP2QUANT[img->qp]*24;// sum of intra sad values, start with a 'handicap'
 
@@ -590,7 +699,7 @@ int MakeIntraPrediction(int *intra_pred_mode_2)
     currMB->cbp     = 0;              // cbp for 16x16 LUMA is signaled by the MB-mode
     tot_intra_sad   = tot_intra_sad2;            // update best intra sad if necessary
     img->imod = INTRA_MB_NEW;                          // one of the new modes is used
-    img->mb_data[img->current_mb_nr].intraOrInter = INTRA_MB_16x16;
+    currMB->intraOrInter = INTRA_MB_16x16;
     dct_luma2(*intra_pred_mode_2);
     for (i=0;i<4;i++)
       for (j=0;j<4;j++)
@@ -656,11 +765,7 @@ void LumaResidualCoding_P()
               for (i=0;i<4;i++)
               {
                 i2=i*8;
-#ifdef UMV
                 img->mpr[i+block_x][j+block_y]=UMVPelY_18 (mref[img->multframe_no], jj4+j2, ii4+i2);
-#else
-                img->mpr[i+block_x][j+block_y]=FastPelY_18 (mref[img->multframe_no], jj4+j2, ii4+i2);
-#endif
               }
             }
 
@@ -671,23 +776,12 @@ void LumaResidualCoding_P()
             jj4=(img->pix_y+block_y)*4+tmp_mv[1][pic_block_y][pic_block_x+4];
             for (j=0;j<4;j++)
             {
-#ifndef UMV
-              j2=j*4;
-#endif
-#ifdef UMV
               j2 = max (0, min(img->mvert,jj4+j*4));
-#endif
               for (i=0;i<4;i++)
               {
-#ifndef UMV
-                i2=i*4;
-                img->mpr[i+block_x][j+block_y]=mref[img->multframe_no][jj4+j2][ii4+i2];
-#endif
-#ifdef UMV
                 i2 = max(0, min(img->mhor, ii4+i*4));
                 img->mpr[i+block_x][j+block_y]=FastPelY_14 (mref[img->multframe_no], j2, i2);
 
-#endif
               }
             }
           }
@@ -818,18 +912,11 @@ void ChromaCoding_P(int *cr_cbp)
           pic_block_x=(img->pix_c_x+i)/2;
           ii=(img->pix_c_x+i)*f1+tmp_mv[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+tmp_mv[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0 = max (0, min (img->width_cr-1,ii/f1));
           jj0 = max (0, min (img->height_cr-1,jj/f1));
           ii1 = max (0, min (img->width_cr-1,(ii+f2)/f1));
           jj1 = max (0, min (img->height_cr-1,(jj+f2)/f1));
-#endif
 
           if1=(ii & f2);
           jf1=(jj & f2);
@@ -890,82 +977,6 @@ void SetRefFrameInfo_P()
 /*!
  ************************************************************************
  * \brief
- *    Set the filter strength for a macroblock of a I- or P-frame
- ************************************************************************
- */
-void SetLoopfilterStrength_P()
-{
-  int i,j;
-  int ii,jj;
-  int i3,j3,mvDiffX,mvDiffY;
-
-  if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW || img->types==SP_IMG)
-  {
-    for (i=0;i<BLOCK_MULTIPLE;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<BLOCK_MULTIPLE;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-        loopb[ii+1][jj+1]=3;
-        loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],2);
-        loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],2);
-        loopb[ii+2][jj+1]=max(loopb[ii+2][jj+1],2);
-        loopb[ii+1][jj+2]=max(loopb[ii+1][jj+2],2);
-
-        loopc[i3+1][j3+1]=2;
-        loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-        loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-        loopc[i3+2][j3+1]=max(loopc[i3+2][j3+1],1);
-        loopc[i3+1][j3+2]=max(loopc[i3+1][j3+2],1);
-      }
-    }
-  }
-  else
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = tmp_mv[0][jj][ii+4] - tmp_mv[0][jj][ii-1+4];
-        mvDiffY = tmp_mv[1][jj][ii+4] - tmp_mv[1][jj][ii-1+4];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if(jj > 0) //GH: bug fix to avoid tmp_mv[][-1][ii+4]
-        {
-          mvDiffX = tmp_mv[0][jj][ii+4] - tmp_mv[0][jj-1][ii+4];
-          mvDiffY = tmp_mv[1][jj][ii+4] - tmp_mv[1][jj-1][ii+4];
-
-          if(mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
  *    Encode one macroblock depending on chosen picture type
  ************************************************************************
  */
@@ -975,7 +986,7 @@ void encode_one_macroblock()
   int tot_intra_sad;
   int intra_pred_mode_2;  // best 16x16 intra mode
 
-  if ((img->type!=B_IMG && input->rdopt) || (input->rdopt>0))
+  if (input->rdopt)
   {
     RD_Mode_Decision ();
   }
@@ -1004,9 +1015,6 @@ void encode_one_macroblock()
       LumaResidualCoding_B(img);           // Residual coding of Luma (B-modes only)
       ChromaCoding_B(&cr_cbp);                              // Coding of Chrominance
 
-#if !defined LOOP_FILTER_MB
-      SetLoopfilterStrength_B();                     // depending on mode decision
-#endif
 
       SetRefFrameInfo_B();     // Set ref-frame info for mv-prediction of future MBs
     }
@@ -1017,10 +1025,6 @@ void encode_one_macroblock()
       // Coding of Luma in intra mode is done implicitly in MakeIntraPredicition
       ChromaCoding_P(&cr_cbp);                              // Coding of Chrominance
 
-#if !defined LOOP_FILTER_MB
-
-      SetLoopfilterStrength_P();         // strength is depending on mode decision
-#endif
       // Set reference frame information for motion vector prediction of future MBs
       SetRefFrameInfo_P();
 
@@ -1031,10 +1035,8 @@ void encode_one_macroblock()
         img->mb_mode=COPY_MB;
     }
 
-#if defined LOOP_FILTER_MB
     currMB->qp = img->qp; // this should (or has to be) done somewere else. where?
-    DeblockMb() ; // Deblock this MB ( pixels to the right and above are affected)
-#endif
+    DeblockMb(img, imgY, imgUV) ; // Deblock this MB ( pixels to the right and above are affected)
 
     if (img->imod==INTRA_MB_NEW)        // Set 16x16 intra mode and make "intra CBP"
     {
@@ -1043,7 +1045,7 @@ void encode_one_macroblock()
     }
 
 
-    if ((((img->type == INTER_IMG)||(img->types==SP_IMG))  &&((img->imod==INTRA_MB_NEW) || (img->imod==INTRA_MB_OLD)))
+    if ((((img->type == INTER_IMG)||(img->types==SP_IMG))  && ((img->imod==INTRA_MB_NEW) || (img->imod==INTRA_MB_OLD)))
       || (img->type == B_IMG && (img->imod==B_Backward || img->imod==B_Direct || img->imod==INTRA_MB_NEW || img->imod==INTRA_MB_OLD)))// gb b-frames too
       currMB->ref_frame = 0;
 
@@ -1547,17 +1549,6 @@ writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
         // proceed to next SE
         currSE++;
         currMB->currSEnr++;
-
-        #if !defined LOOP_FILTER_MB
-        if (level!=0 && filtering)
-          {
-            loopb[img->block_x+i+1][img->block_y+j+1]=max(loopb[img->block_x+i+1][img->block_y+j+1],2);
-            loopb[img->block_x+i  ][img->block_y+j+1]=max(loopb[img->block_x+i  ][img->block_y+j+1],1);
-            loopb[img->block_x+i+1][img->block_y+j  ]=max(loopb[img->block_x+i+1][img->block_y+j  ],1);
-            loopb[img->block_x+i+2][img->block_y+j+1]=max(loopb[img->block_x+i+2][img->block_y+j+1],1);
-            loopb[img->block_x+i+1][img->block_y+j+2]=max(loopb[img->block_x+i+1][img->block_y+j+2],1);
-          }
-        #endif
       }
     }
   }
@@ -1617,16 +1608,6 @@ writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
       currSE++;
       currMB->currSEnr++;
 
-      #if !defined LOOP_FILTER_MB
-        if (level!=0 && filtering)
-        {
-          loopb[img->block_x+i+1][img->block_y+j+1]=max(loopb[img->block_x+i+1][img->block_y+j+1],2);
-          loopb[img->block_x+i  ][img->block_y+j+1]=max(loopb[img->block_x+i  ][img->block_y+j+1],1);
-          loopb[img->block_x+i+1][img->block_y+j  ]=max(loopb[img->block_x+i+1][img->block_y+j  ],1);
-          loopb[img->block_x+i+2][img->block_y+j+1]=max(loopb[img->block_x+i+2][img->block_y+j+1],1);
-          loopb[img->block_x+i+1][img->block_y+j+2]=max(loopb[img->block_x+i+1][img->block_y+j+2],1);
-        }
-      #endif
     }
   }
 
@@ -1803,23 +1784,6 @@ writeMB_bits_for_DC_chroma (int filtering)
         // proceed to next SE
         currSE++;
         currMB->currSEnr++;
-
-        #if !defined LOOP_FILTER_MB
-          if (level != 0 && filtering)// fix from ver 4.1
-          {
-            for (j=0;j<2;j++)
-              for (i=0;i<2;i++)
-                loopc[m2+i+1][jg2+j+1]=max(loopc[m2+i+1][jg2+j+1],2);
-
-            for (i=0;i<2;i++)
-            {
-              loopc[m2+i+1][jg2    ]=max(loopc[m2+i+1][jg2    ],1);
-              loopc[m2+i+1][jg2+3  ]=max(loopc[m2+i+1][jg2+3  ],1);
-              loopc[m2    ][jg2+i+1]=max(loopc[m2    ][jg2+i+1],1);
-              loopc[m2+3  ][jg2+i+1]=max(loopc[m2+3  ][jg2+i+1],1);
-            }
-          }
-        #endif
       }
     }
   }
@@ -1896,17 +1860,6 @@ writeMB_bits_for_AC_chroma (int  filtering)
               // proceed to next SE
               currSE++;
               currMB->currSEnr++;
-
-              #if !defined LOOP_FILTER_MB
-                if (level != 0 && filtering)
-                  {
-                    loopc[m2+i1+1][jg2+j1+1]=max(loopc[m2+i1+1][jg2+j1+1],2);
-                    loopc[m2+i1  ][jg2+j1+1]=max(loopc[m2+i1  ][jg2+j1+1],1);
-                    loopc[m2+i1+1][jg2+j1  ]=max(loopc[m2+i1+1][jg2+j1  ],1);
-                    loopc[m2+i1+2][jg2+j1+1]=max(loopc[m2+i1+2][jg2+j1+1],1);
-                    loopc[m2+i1+1][jg2+j1+2]=max(loopc[m2+i1+1][jg2+j1+2],1);
-                  }
-              #endif
             }
           }
         }

@@ -107,6 +107,18 @@ SOURCE=.\ldecod\src\cabac.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\erc_api.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\erc_do_i.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\erc_do_p.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\errorconcealment.c
 # End Source File
 # Begin Source File
@@ -140,6 +152,10 @@ SOURCE=.\ldecod\src\nal_part.c
 # Begin Source File
 
 SOURCE=.\ldecod\src\output.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\rtp.c
 # End Source File
 # Begin Source File
 
@@ -183,6 +199,18 @@ SOURCE=.\ldecod\inc\elements.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\inc\erc_api.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\erc_do.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\erc_globals.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\global.h
 # End Source File
 # Begin Source File
@@ -196,6 +224,10 @@ SOURCE=.\ldecod\inc\image.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\macroblock.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\rtp.h
 # End Source File
 # Begin Source File
 

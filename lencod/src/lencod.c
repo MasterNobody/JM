@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ***********************************************************************
  *  \mainpage
@@ -8,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 8.4
+ *     TML 8.6
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -48,7 +80,7 @@
 #include "configfile.h"
 
 #define TML     "8"
-#define VERSION "8.50"
+#define VERSION "8.60"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -73,6 +105,8 @@ int initial_Bframes = 0;
  */
 int main(int argc,char **argv)
 {
+  int image_type;
+  
   p_dec = p_dec_u = p_dec_v = p_stat = p_log = p_datpart = p_trace = NULL;
 
   Configure (argc, argv);
@@ -101,9 +135,10 @@ int main(int argc,char **argv)
   information_init();
 
   // Write sequence header; open bitstream files
-  start_sequence();
+  stat->bit_slice = start_sequence();
   // B pictures
   Bframe_ctr=0;
+  img->refPicID=-1;  //WYK: Oct. 16, 2001
   tot_time=0;                 // time for total encoding session
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -114,15 +149,35 @@ int main(int argc,char **argv)
 
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
-    if (img->number == 0)
-      img->type = INTRA_IMG;        // set image type for first image to I-frame
+    if (input->intra_period == 0)
+    {
+      if (img->number == 0)
+      {
+        img->type = INTRA_IMG;        // set image type for first image to I-frame
+      }
+      else
+      {
+        img->type = INTER_IMG;        // P-frame
+        if (input->sp_periodicity)
+          if ((img->number % input->sp_periodicity) ==0)
+              img->types=SP_IMG;
+          else img->types=INTER_IMG;
+      }
+    }
     else
     {
-      img->type = INTER_IMG;        // P-frame
-      if (input->sp_periodicity)
-        if ((img->number % input->sp_periodicity) ==0)
-            img->types=SP_IMG;
-        else img->types=INTER_IMG;
+      if ((img->number%input->intra_period) == 0)
+      {
+        img->type = INTRA_IMG;
+      }
+      else
+      {
+        img->type = INTER_IMG;        // P-frame
+        if (input->sp_periodicity)
+          if ((img->number % input->sp_periodicity) ==0)
+              img->types=SP_IMG;
+          else img->types=INTER_IMG;
+       }
     }
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -133,6 +188,8 @@ int main(int argc,char **argv)
       }
 #endif
 
+    image_type = img->type;
+    
     encode_one_frame(); // encode one I- or P-frame
     if ((input->successive_Bframe != 0) && (img->number > 0)) // B-frame(s) to encode
     {
@@ -140,6 +197,16 @@ int main(int argc,char **argv)
       img->types= INTER_IMG;
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
         encode_one_frame();  // encode one B-frame
+    }
+    
+    if (image_type == INTRA_IMG || img->types==SP_IMG)
+    {
+        img->nb_references = 1;
+    }
+    else
+    {
+       img->nb_references += 1;
+       img->nb_references = min(img->nb_references, img->buf_cycle);
     }
   }
 
@@ -293,11 +360,8 @@ void malloc_slice()
       case PAR_DP_1:
         currSlice->max_part_nr = 1;
         break;
-      case PAR_DP_2:
-        error("Data Partitioning Mode 2 in 26L-Format not yet supported",600);
-        break;
-      case PAR_DP_4:
-        error("Data Partitioning Mode 4 in 26L-Format not yet supported",600);
+      case PAR_DP_3:
+        error("Data Partitioning not supported with bit stream file format",600);
         break;
       default:
         error("Data Partitioning Mode not supported!",600);
@@ -332,8 +396,8 @@ void malloc_slice()
         dataPart->bitstream->stored_byte_buf = 0;
       }
       return;
-    case PAR_OF_SLICE:
-      // NAL File Format
+    case PAR_OF_RTP:
+      // RTP packet file format
       img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
       if ( (currSlice = img->currentSlice) == NULL)
       {
@@ -351,11 +415,8 @@ void malloc_slice()
       case PAR_DP_1:
         currSlice->max_part_nr = 1;
         break;
-      case PAR_DP_2:
-        currSlice->max_part_nr = 2;
-        break;
-      case PAR_DP_4:
-        currSlice->max_part_nr = 4;
+      case PAR_DP_3:
+        currSlice->max_part_nr = 3;
         break;
       default:
         error("Data Partitioning Mode not supported!",600);
@@ -390,6 +451,7 @@ void malloc_slice()
         dataPart->bitstream->stored_byte_buf = 0;
       }
       return;
+
     default:
       snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", input->of_mode);
       error(errortext, 600);
@@ -600,6 +662,9 @@ void report()
     case PAR_DP_1:
       fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
       break;
+    case PAR_DP_3:
+      fprintf(stdout," Data Partitioning Mode            : 3 partitions \n");
+      break;
     default:
       fprintf(stdout," Data Partitioning Mode            : not supported\n");
       break;
@@ -609,7 +674,10 @@ void report()
     switch(input->of_mode)
     {
     case PAR_OF_26L:
-      fprintf(stdout," Output File Format                : H.26L File Format \n");
+      fprintf(stdout," Output File Format                : H.26L Bit Stream File Format \n");
+      break;
+    case PAR_OF_RTP:
+      fprintf(stdout," Output File Format                : RTP Packet File Format \n");
       break;
     default:
       fprintf(stdout," Output File Format                : not supported\n");
@@ -1001,19 +1069,6 @@ void init()
 
   InitMotionVectorSearchModule();
 
-  #if !defined LOOP_FILTER_MB
-    //  img->lpfilter is the table used for loop and post filter.
-    for (k=0; k < 6; k++)
-    {
-      for (i=1; i <= 100; i++)
-      {
-        ii=min(k,i);
-        img->lpfilter[k][i+300]= ii;
-        img->lpfilter[k][300-i]=-ii;
-      }
-    }
-  #endif
-
   /*  img->mv_bituse[] is the number of bits used for motion vectors.
   It is used to add a portion to the SAD depending on bit usage in the motion search
   */
@@ -1068,7 +1123,7 @@ void information_init()
   printf("--------------------------------------------------------------------------\n");
 
 
-  printf(" Frame  Bit/pic   QP   SnrY    SnrU    SnrV    Time(ms)\n");
+  printf(" Frame   Bit/pic   QP   SnrY    SnrU    SnrV    Time(ms) IntraMBs\n");
 }
 
 
@@ -1177,13 +1232,21 @@ int get_mem4global_buffers()
   // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
-  #if !defined LOOP_FILTER_MB
-    // allocate memory for filter strength for 4x4 lums and croma blocks:loopb, loopc
-    //byte loopb[91][75]; i.e.[x][y]
-    //byte loopc[47][39];
-    memory_size += get_mem2D(&loopb, img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
-    memory_size += get_mem2D(&loopc, img->width_cr/BLOCK_SIZE+3, img->height_cr/BLOCK_SIZE+3);
-  #endif
+  if (input->rdopt==2)
+  {
+    memory_size += get_mem2Dint(&resY, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    if ((decref = (byte****) calloc(input->NoOfDecoders,sizeof(byte***))) == NULL) 
+      no_mem_exit("get_mem4global_buffers: decref");
+    for (j=0 ; j<input->NoOfDecoders; j++)
+    {
+      memory_size += get_mem3D(&decref[j], img->buf_cycle+1, img->height, img->width);
+    }
+    memory_size += get_mem2D(&RefBlock, BLOCK_SIZE,BLOCK_SIZE);
+    memory_size += get_mem3D(&decY, input->NoOfDecoders, img->height, img->width);
+    memory_size += get_mem3D(&decY_best, input->NoOfDecoders, img->height, img->width);
+    memory_size += get_mem2D(&status_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
+  }
+
   return (memory_size);
 }
 
@@ -1202,7 +1265,7 @@ int get_mem4global_buffers()
  */
 void free_mem4global_buffers()
 {
-  int  j;
+  int  i,j;
 
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
@@ -1312,12 +1375,6 @@ void free_mem4global_buffers()
   free(refFrArr[0]);
   free(refFrArr);
 
-#if !defined LOOP_FILTER_MB
-  free(loopb[0]);    // free loop filter strength buffer for 4x4 blocks
-  free(loopb);
-  free(loopc[0]);
-  free(loopc);
-#endif
   // free mem, allocated in init_img()
   // free intra pred mode buffer for blocks
   free(img->ipredmode[0]);
@@ -1327,6 +1384,32 @@ void free_mem4global_buffers()
   if(input->UseConstrainedIntraPred)
   {
     free(img->intra_mb);
+  }
+
+  if (input->rdopt==2)
+  {
+    free(resY[0]);
+    free(resY);
+    free(RefBlock[0]);
+    free(RefBlock);
+    for (j=0; j<input->NoOfDecoders; j++)
+    {
+      free(decY[j][0]);
+      free(decY[j]);
+      free(decY_best[j][0]);
+      free(decY_best[j]);
+      for (i=0; i<img->buf_cycle+1; i++)
+      {
+        free(decref[j][i][0]);
+        free(decref[j][i]);
+      }
+      free(decref[j]);
+    }
+    free(decY);
+    free(decY_best);
+    free(decref);
+    free(status_map[0]);
+    free(status_map);
   }
 }
 

@@ -1,16 +1,52 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  **************************************************************************
  *  \file elements.h
  *  \brief  Header file for elements in H.26L streams
- *  \date 6.10.2000
+ *  \date 6.10.2000, 
  *  \version
- *      1.0
+ *      1.1
  *
+ * \note
+ *    Version 1.0 included three partition modes, no DP, 2 partitionsper slice
+ *      and 4 partitions per slice.  As per document VCEG-N72 this is changed
+ *      in version 1.1 to only two patrition modes, one without DP and one with 
+ *      3 partition per slice
+ *.
  *  \author Sebastian Purreiter     <sebastian.purreiter@mch.siemens.de>
+ *  \author Stephan Wenger          <stewe@cs.tu-berlin.de>
  *
- *      Siemens AG, Information and Communication Mobile
- *      P.O.Box 80 17 07
- *      D-81617 Munich, Germany
  **************************************************************************
  */
 
@@ -42,7 +78,7 @@
 
 
 
-#define MAXPARTITIONMODES 3 //!< maximum possible partition modes as defined in assignSE2partition[][]
+#define MAXPARTITIONMODES 2 //!< maximum possible partition modes as defined in assignSE2partition[][]
 
 /*!
  *  \brief  lookup-table to assign different elements to partition
@@ -58,10 +94,6 @@
  *      The texture elements luminance and chrominance are
  *      not ordered in the progressive form
  *      This may be changed in image.c \par
- *
- *      We also defined the proposed internet partition mode
- *      of Stephan Wenger here. To select the desired mode
- *      uncomment one of the two following lines. \par
  *
  *  -IMPORTANT:
  *      Picture- or Sliceheaders must be assigned to partition 0. \par
@@ -106,8 +138,7 @@ static int assignSE2partition[][SE_MAX_ELEMENTS] =
 {
   // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18  // elementnumber (no not uncomment)
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
-  {  0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 },   //!< internet partition mode
-  {  0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 0, 0, 0 }    //!< H.223 partition mode
+  {  0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 0, 0, 0 }    //!< three partitions per slice
 };
 
 #endif

@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ***********************************************************************
  *  \mainpage
@@ -8,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 8.4
+ *     TML 8.6
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,6 +94,7 @@
  *     - Sebastian Purreiter     <sebastian.purreiter@mch.siemens.de>
  *     - Byeong-Moon Jeon        <jeonbm@lge.com>
  *     - Gabi Blaettermann       <blaetter@hhi.de>
+ *     - Ye-Kui Wang                <wangy@cs.tut.fi>
  *
  ***********************************************************************
  */
@@ -81,12 +114,22 @@
 #include "global.h"
 #include "elements.h"
 #include "bitsbuf.h"
+#include "rtp.h"
+
+#if _ERROR_CONCEALMENT_
+#include "erc_api.h"
+#endif
 
 #define TML         "8"
-#define VERSION     "8.50"
+#define VERSION     "8.60"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
+
+#if _ERROR_CONCEALMENT_
+extern objectBuffer_t *erc_object_list;
+extern ercVariables_t *erc_errorVar;
+#endif
 
 /*!
  ***********************************************************************
@@ -112,16 +155,30 @@ int main(int argc, char **argv)
     error(errortext, 300);
   }
 
-    // Initializes Configuration Parameters with configuration file
+  // Initializes Configuration Parameters with configuration file
   init_conf(inp, argv[1]);
+
+  if (inp->of_mode == PAR_OF_RTP)
+  {
+    extern FILE *bits;
+    // Read the first RTP packet conmtaining a header packet, and set the initial parameter set
+    RTPSequenceHeader (img, inp, bits);
+  }
+// printf ("In main: some pictrue information: %d x %d, with %d reference frames %d\n", img->height, img->width, img->buf_cycle, inp->buf_cycle);
 
   img->UseConstrainedIntraPred = inp->UseConstrainedIntraPred;
 
-    // Allocate Slice data struct
+  // Allocate Slice data struct
   malloc_slice(inp,img);
+
+  // get_mem4global_buffers (inp, img); //!!KS!!
+
 
   init(img);
   img->number=0;
+  img->type = INTRA_IMG;
+  img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
+  img->refPicID = -1; // WYK: for detection of a new non-B frame
 
   // B pictures
   Bframe_ctr=0;
@@ -130,7 +187,7 @@ int main(int argc, char **argv)
   tot_time = 0;
   while (decode_one_frame(img, inp, snr) != EOS);
 
-    // B PICTURE : save the last P picture
+  // B PICTURE : save the last P picture
   write_prev_Pframe(img, p_out);
 
   report(inp, img, snr);
@@ -144,6 +201,10 @@ int main(int argc, char **argv)
   fclose(p_ref);
 #if TRACE
   fclose(p_trace);
+#endif
+
+#if _ERROR_CONCEALMENT_
+  ercClose(erc_errorVar);
 #endif
 
   free (inp);
@@ -163,8 +224,8 @@ int main(int argc, char **argv)
 void init(struct img_par *img)  //!< image parameters
 {
   int i;
-  // initilize quad matrix used in snr routine
 
+  // initilize quad matrix used in snr routine
   for (i=0; i <  256; i++)
   {
     img->quad[i]=i*i; // fix from TML 1, truncation removed
@@ -206,7 +267,7 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%*[^\n]");
 
     // Symbol mode
-  fscanf(fd,"%d,",&inp->symbol_mode);        // 0: UVLC 1: CABAC
+  fscanf(fd,"%d,",&inp->symbol_mode);        // 0: UVLC 1: CABAC, may be overwritten ni case of RTP NAL
   fscanf(fd,"%*[^\n]");
   if (inp->symbol_mode != UVLC && inp->symbol_mode != CABAC)
   {
@@ -215,7 +276,7 @@ void init_conf(struct inp_par *inp,
   }
 
   // UseConstrainedIntraPred
-  fscanf(fd,"%d,",&inp->UseConstrainedIntraPred);        // 0: UsePred   1: ConstrainPred
+  fscanf(fd,"%d,",&inp->UseConstrainedIntraPred);        // 0: UsePred   1: ConstrainPred, may be overwritten in case of RTP NAL
   fscanf(fd,"%*[^\n]");
   if(inp->UseConstrainedIntraPred != 0 && inp->UseConstrainedIntraPred != 1)
   {
@@ -224,7 +285,7 @@ void init_conf(struct inp_par *inp,
   }
 
   // Frame buffer size
-  fscanf(fd,"%d,",&inp->buf_cycle);
+  fscanf(fd,"%d,",&inp->buf_cycle);   // may be overwritten in case of RTP NAL
   fscanf(fd,"%*[^\n]");
   if (inp->buf_cycle < 1)
   {
@@ -235,7 +296,7 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%d",&(NAL_mode));                // NAL mode
     fscanf(fd,"%*[^\n]");
 
-    switch(NAL_mode)
+  switch(NAL_mode)
   {
   case 0:
     inp->of_mode = PAR_OF_26L;
@@ -243,16 +304,11 @@ void init_conf(struct inp_par *inp,
     inp->partition_mode = PAR_DP_1;
     break;
   case 1:
-    inp->of_mode = PAR_OF_SLICE;
-    inp->partition_mode = PAR_DP_1;
-    break;
-  case 2:
-    inp->of_mode = PAR_OF_SLICE;
-    inp->partition_mode = PAR_DP_2;
-    break;
-  case 3:
-    inp->of_mode = PAR_OF_SLICE;
-    inp->partition_mode = PAR_DP_4;
+    inp->of_mode = PAR_OF_RTP;
+    inp->partition_mode = PAR_DP_3;         // DP_3 forces malloc_slcie to reserve memory
+                                            // for three partitions.  In the RTP NAL, it can
+                                            // be chanegd on a slice basis whether to use
+                                            // one or three partitions
     break;
   default:
     snprintf(errortext, ET_SIZE, "NAL mode %i is not supported", NAL_mode);
@@ -295,7 +351,7 @@ void init_conf(struct inp_par *inp,
     fprintf(stdout," Input reference file                   : %s \n",inp->reffile);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 
-  fprintf(stdout,"Frame   TR    QP  SnrY    SnrU    SnrV   Time(ms)\n");
+  fprintf(stdout,"Frame    TR    QP  SnrY    SnrU    SnrV   Time(ms)\n");
 }
 
 /*!
@@ -470,11 +526,8 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
       case PAR_DP_1:
         currSlice->max_part_nr = 1;
         break;
-      case PAR_DP_2:
-        error("Data Partitioning Mode 2 in 26L-Format not yet supported",1);
-        break;
-      case PAR_DP_4:
-        error("Data Partitioning Mode 4 in 26L-Format not yet supported",1);
+      case PAR_DP_3:
+        error("Data Partitioning Mode 3 in 26L-Format not supported",1);
         break;
       default:
         error("Data Partitioning Mode not supported!",1);
@@ -501,8 +554,8 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
         error(errortext, 100);
       }
       return;
-    case PAR_OF_SLICE:
-      // NAL File Format
+    
+    case PAR_OF_RTP:
       img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
       if ( (currSlice = img->currentSlice) == NULL)
       {
@@ -522,25 +575,22 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
       case PAR_DP_1:
         currSlice->max_part_nr = 1;
         break;
-      case PAR_DP_2:
-        currSlice->max_part_nr = 2;
-        break;
-      case PAR_DP_4:
-        currSlice->max_part_nr = 4;
+      case PAR_DP_3:
+        currSlice->max_part_nr = 3;
         break;
       default:
         error("Data Partitioning Mode not supported!",1);
         break;
       }
 
-      currSlice->partArr = (DataPartition *) calloc(currSlice->max_part_nr, sizeof(DataPartition));
+      currSlice->partArr = (DataPartition *) calloc(3, sizeof(DataPartition));
       if (currSlice->partArr == NULL)
       {
         snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
         error(errortext, 100);
       }
 
-      for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
+      for (i=0; i<3; i++) // loop over all data partitions
       {
         dataPart = &(currSlice->partArr[i]);
         dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
@@ -557,6 +607,7 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
         }
       }
       return;
+
     default:
       snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", inp->of_mode);
       error(errortext, 600);
@@ -600,9 +651,10 @@ void free_slice(struct inp_par *inp, struct img_par *img)
       if (currSlice != NULL)
         free(img->currentSlice);
       break;
-    case PAR_OF_SLICE:
-      // NAL File Format
-      for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
+    case PAR_OF_RTP:
+      // RTP File Format.
+      // Here, mallocSLice is always called with 3 partitions, although sometimes only one is used
+      for (i=0; i<3; i++) // loop over all data partitions
       {
         dataPart = &(currSlice->partArr[i]);
         if (dataPart->bitstream->streamBuffer != NULL)
@@ -644,6 +696,8 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  */
 int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 {
+
+
   int j,memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
@@ -683,15 +737,8 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
   // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
-  // allocate memory for filter strength for 4x4 lums and croma blocks:loopb, loopc
-  //byte loopb[92][76]; i.e.[x][y]
-  //byte loopc[48][40];
-  #if !defined LOOP_FILTER_MB
-    memory_size += get_mem2D(&loopb, img->width/BLOCK_SIZE+4, img->height/BLOCK_SIZE+4);
-    memory_size += get_mem2D(&loopc, img->width_cr/BLOCK_SIZE+4, img->height_cr/BLOCK_SIZE+4);
-  #endif
   // allocate memory for reference frame in find_snr
-    // byte imgY_ref[288][352];
+  // byte imgY_ref[288][352];
   // byte imgUV_ref[2][144][176];
   memory_size += get_mem2D(&imgY_ref, img->height, img->width);
   memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
@@ -787,13 +834,6 @@ void free_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 
   if(refFrArr[0] != NULL) free(refFrArr[0]);
   if(refFrArr    != NULL) free(refFrArr);
-
-  #if !defined LOOP_FILTER_MB
-    if(loopb[0]    != NULL) free(loopb[0]); // free loop filter strength buffer for 4x4 blocks
-    if(loopb       != NULL) free(loopb);
-    if(loopc[0]    != NULL) free(loopc[0]);
-    if(loopc       != NULL) free(loopc);
-  #endif
 
   if(imgY_ref[0] != NULL) free(imgY_ref[0]);    // find_snr
   if(imgY_ref    != NULL) free(imgY_ref);

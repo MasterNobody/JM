@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file b_frame.c
@@ -28,198 +60,6 @@
 #ifdef _ADAPT_LAST_GROUP_
 extern int *last_P_no;
 #endif
-
-
-
-/*!
- ************************************************************************
- * \brief
- *    Set the filter strength for a macroblock of a B-frame
- ************************************************************************
- */
-void SetLoopfilterStrength_B()
-{
-  int i,j;
-  int ii,jj;
-  int i3,j3,mvDiffX,mvDiffY;
-
-  if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-        loopb[ii+1][jj+1]=3;
-        loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],2);
-        loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],2);
-        loopb[ii+2][jj+1]=max(loopb[ii+2][jj+1],2);
-        loopb[ii+1][jj+2]=max(loopb[ii+1][jj+2],2);
-
-        loopc[i3+1][j3+1]=2;
-        loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-        loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-        loopc[i3+2][j3+1]=max(loopc[i3+2][j3+1],1);
-        loopc[i3+1][j3+2]=max(loopc[i3+1][j3+2],1);
-      }
-    }
-  }
-  if (img->imod==B_Forward || img->imod==B_Bidirect)
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = tmp_fwMV[0][jj][ii+4] - tmp_fwMV[0][jj][ii-1+4];
-        mvDiffY = tmp_fwMV[1][jj][ii+4] - tmp_fwMV[1][jj][ii-1+4];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj >0)
-        {
-          mvDiffX = tmp_fwMV[0][jj][ii+4] - tmp_fwMV[0][jj-1][ii+4];
-          mvDiffY = tmp_fwMV[1][jj][ii+4] - tmp_fwMV[1][jj-1][ii+4];
-
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16))
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-  if(img->imod==B_Backward || img->imod==B_Bidirect)
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = tmp_bwMV[0][jj][ii+4] - tmp_bwMV[0][jj][ii-1+4];
-        mvDiffY = tmp_bwMV[1][jj][ii+4] - tmp_bwMV[1][jj][ii-1+4];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj > 0)
-        {
-          mvDiffX = tmp_bwMV[0][jj][ii+4] - tmp_bwMV[0][jj-1][ii+4];
-          mvDiffY = tmp_bwMV[1][jj][ii+4] - tmp_bwMV[1][jj-1][ii+4];
-
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-
-  // LG : loopb, loopc at Direct mode
-  if(img->imod==B_Direct)
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = dfMV[0][jj][ii+4] - dfMV[0][jj][ii-1+4];
-        mvDiffY = dfMV[1][jj][ii+4] - dfMV[1][jj][ii-1+4];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj > 0)
-        {
-          mvDiffX = dfMV[0][jj][ii+4] - dfMV[0][jj-1][ii+4];
-          mvDiffY = dfMV[1][jj][ii+4] - dfMV[1][jj-1][ii+4];
-
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = dbMV[0][jj][ii+4] - dbMV[0][jj][ii-1+4];
-        mvDiffY = dbMV[1][jj][ii+4] - dbMV[1][jj][ii-1+4];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj > 0)
-        {
-          mvDiffX = dbMV[0][jj][ii+4] - dbMV[0][jj-1][ii+4];
-          mvDiffY = dbMV[1][jj][ii+4] - dbMV[1][jj-1][ii+4];
-
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-}
 
 /*!
  ************************************************************************
@@ -347,11 +187,7 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*8;
-#ifdef UMV
                     img->mpr[i+block_x][j+block_y]=UMVPelY_18 (mref[img->fw_multframe_no], jj4+j2, ii4+i2); // refbuf
-#else
-                    img->mpr[i+block_x][j+block_y]=FastPelY_18 (mref[img->fw_multframe_no], jj4+j2, ii4+i2);  // refbuf
-#endif
                   }
                 }
               }
@@ -366,11 +202,7 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*4;
-#ifdef UMV
                     img->mpr[i+block_x][j+block_y]=UMVPelY_14 (mref[img->fw_multframe_no], jj4+j2, ii4+i2); // refbuf
-#else
-                    img->mpr[i+block_x][j+block_y]=FastPelY_14 (mref[img->fw_multframe_no], jj4+j2, ii4+i2);  // refbuf
-#endif
                   }
                 }
               }
@@ -459,11 +291,7 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*8;
-#ifdef UMV
                     img->mpr[i+block_x][j+block_y]=UMVPelY_18 (mref_P, jjj4+j2, iii4+i2); // refbuf
-#else
-                    img->mpr[i+block_x][j+block_y]=FastPelY_18 (mref_P, jjj4+j2, iii4+i2);  // refbuf
-#endif
                   }
                 }
               }
@@ -478,11 +306,7 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*4;
-#ifdef UMV
                     img->mpr[i+block_x][j+block_y]=UMVPelY_14 (mref_P, jjj4+j2, iii4+i2); // refbuf
-#else
-                    img->mpr[i+block_x][j+block_y]=FastPelY_14 (mref_P, jjj4+j2, iii4+i2);  // refbuf
-#endif
                   }
                 }
               }
@@ -572,13 +396,8 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*8;
-#ifdef UMV
                     fw_pred=UMVPelY_18 (mref[img->fw_multframe_no], jj4+j2, ii4+i2);  // refbuf
                     bw_pred=UMVPelY_18 (mref_P, jjj4+j2, iii4+i2);  // refbuf
-#else
-                    fw_pred=FastPelY_18 (mref[img->fw_multframe_no], jj4+j2, ii4+i2); // refbuf
-                    bw_pred=FastPelY_18 (mref_P, jjj4+j2, iii4+i2); // refbuf
-#endif
                     img->mpr[i+block_x][j+block_y]=(int)((fw_pred+bw_pred)/2.0+0.5);
                   }
                 }
@@ -596,13 +415,8 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*4;
-#ifdef UMV
                     fw_pred=UMVPelY_14 (mref[img->fw_multframe_no], jj4+j2, ii4+i2);  // refbuf
                     bw_pred=UMVPelY_14 (mref_P, jjj4+j2, iii4+i2);  // refbuf
-#else
-                    fw_pred=FastPelY_14 (mref[img->fw_multframe_no], jj4+j2, ii4+i2); // refbuf
-                    bw_pred=FastPelY_14 (mref_P, jjj4+j2, iii4+i2); // refbuf
-#endif
                     img->mpr[i+block_x][j+block_y]=(int)((fw_pred+bw_pred)/2.0+0.5);
                   }
                 }
@@ -700,19 +514,9 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*8;
-#ifdef UMV
                     df_pred=UMVPelY_18 (mref[ref_inx], jj4+j2, ii4+i2);
                     db_pred=UMVPelY_18 (mref_P, jjj4+j2, iii4+i2);
-#else
-                    df_pred=FastPelY_18 (mref[ref_inx], jj4+j2, ii4+i2);
-                    db_pred=FastPelY_18 (mref_P, jjj4+j2, iii4+i2);
-#endif
 
-                    // df_pred=get_eigthpix_pel(ii4+i2,jj4+j2,ref_inx);
-                    // db_pred=get_eigthpix_pel_P(iii4+i2,jjj4+j2);
-
-                    // df_pred=mref[ref_inx][jj4+j2][ii4+i2];
-                    // db_pred=mref_P[jjj4+j2][iii4+i2];
                     img->mpr[i+block_x][j+block_y]=(int)((df_pred+db_pred)/2.0+0.5);
                   }
                 }
@@ -737,13 +541,9 @@ void LumaResidualCoding_B()
                   for (i=0;i<4;i++)
                   {
                     i2=i*4;
-#ifdef UMV
                     df_pred=UMVPelY_14 (mref[ref_inx], jj4+j2, ii4+i2);
                     db_pred=UMVPelY_14 (mref_P, jjj4+j2, iii4+i2);
-#else
-                    df_pred=FastPelY_14 (mref[ref_inx], jj4+j2, ii4+i2);
-                    db_pred=FastPelY_14 (mref_P, jjj4+j2, iii4+i2);
-#endif
+
                     img->mpr[i+block_x][j+block_y]=(int)((df_pred+db_pred)/2.0+0.5);
                   }
                 }
@@ -852,18 +652,11 @@ void ChromaCoding_B(int *cr_cbp)
           pic_block_x=(img->pix_c_x+i)/2;
           ii=(img->pix_c_x+i)*f1+tmp_fwMV[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+tmp_fwMV[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0= max (0, min (img->width_cr-1, ii/f1));
           jj0= max (0, min (img->height_cr-1, jj/f1));
           ii1= max (0, min (img->width_cr-1, (ii+f2)/f1));
           jj1= max (0, min (img->height_cr-1, (jj+f2)/f1));
-#endif
 
           if1=(ii & f2);
           jf1=(jj & f2);
@@ -889,18 +682,12 @@ void ChromaCoding_B(int *cr_cbp)
 
           ii=(img->pix_c_x+i)*f1+tmp_bwMV[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+tmp_bwMV[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0= max (0, min (img->width_cr-1, ii/f1));
           jj0= max (0, min (img->height_cr-1, jj/f1));
           ii1= max (0, min (img->width_cr-1, (ii+f2)/f1));
           jj1= max (0, min (img->height_cr-1, (jj+f2)/f1));
-#endif
+
           if1=(ii & f2);
           jf1=(jj & f2);
           if0=f1-if1;
@@ -923,18 +710,11 @@ void ChromaCoding_B(int *cr_cbp)
 
           ii=(img->pix_c_x+i)*f1+tmp_fwMV[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+tmp_fwMV[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0= max (0, min (img->width_cr-1, ii/f1));
           jj0= max (0, min (img->height_cr-1, jj/f1));
           ii1= max (0, min (img->width_cr-1, (ii+f2)/f1));
           jj1= max (0, min (img->height_cr-1, (jj+f2)/f1));
-#endif
 
           if1=(ii & f2);
           jf1=(jj & f2);
@@ -947,18 +727,11 @@ void ChromaCoding_B(int *cr_cbp)
 
           ii=(img->pix_c_x+i)*f1+tmp_bwMV[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+tmp_bwMV[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0= max (0, min (img->width_cr-1, ii/f1));
           jj0= max (0, min (img->height_cr-1, jj/f1));
           ii1= max (0, min (img->width_cr-1, (ii+f2)/f1));
           jj1= max (0, min (img->height_cr-1, (jj+f2)/f1));
-#endif
 
           if1=(ii & f2);
           jf1=(jj & f2);
@@ -983,18 +756,11 @@ void ChromaCoding_B(int *cr_cbp)
 
           ii=(img->pix_c_x+i)*f1+dfMV[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+dfMV[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0= max (0, min (img->width_cr-1, ii/f1));
           jj0= max (0, min (img->height_cr-1, jj/f1));
           ii1= max (0, min (img->width_cr-1, (ii+f2)/f1));
           jj1= max (0, min (img->height_cr-1, (jj+f2)/f1));
-#endif
 
           if1=(ii & f2);
           jf1=(jj & f2);
@@ -1015,18 +781,11 @@ void ChromaCoding_B(int *cr_cbp)
 
           ii=(img->pix_c_x+i)*f1+dbMV[0][pic_block_y][pic_block_x+4];
           jj=(img->pix_c_y+j)*f1+dbMV[1][pic_block_y][pic_block_x+4];
-#ifndef UMV
-          ii0=ii/f1;
-          jj0=jj/f1;
-          ii1=(ii+f2)/f1;
-          jj1=(jj+f2)/f1;
-#endif
-#ifdef UMV
+
           ii0= max (0, min (img->width_cr-1, ii/f1));
           jj0= max (0, min (img->height_cr-1, jj/f1));
           ii1= max (0, min (img->width_cr-1, (ii+f2)/f1));
           jj1= max (0, min (img->height_cr-1, (jj+f2)/f1));
-#endif
 
           if1=(ii & f2);
           jf1=(jj & f2);
@@ -1533,27 +1292,15 @@ void get_bid(int *bid_sad, int fw_predframe_no)
             jjj4=(img->pix_y+block_y)*8+tmp_bwMV[1][pic_block_y][pic_block_x+4];
 
 
-#ifndef UMV           // DM : To prevent mv outside the frame
-            if((jj4>=img->height*8-24)||(jj4<0)||(ii4>=img->width*8-24)||(ii4<0)
-              ||(jjj4>=img->height*8-24)||(jjj4<0)||(iii4>=img->width*8-24)||(iii4<0))
-            {
-              *bid_sad= MAX_DIR_SAD;
-              return;
-            }
-#endif
             for (j=0;j<4;j++)
             {
               j2=j*8;
               for (i=0;i<4;i++)
               {
                 i2=i*8;
-#ifdef UMV
                 fw_pred = UMVPelY_18 (mref[img->fw_multframe_no],jj4+j2,ii4+i2);
                 bw_pred = UMVPelY_18 (mref_P, jjj4+j2, iii4+i2);
-#else
-                fw_pred = FastPelY_18 (mref[img->fw_multframe_no],jj4+j2,ii4+i2);
-                bw_pred = FastPelY_18 (mref_P, jjj4+j2, iii4+i2);
-#endif
+
                 bid_pred[i][j]=(int)((fw_pred+bw_pred)/2.0+0.5);
               }
             }
@@ -1565,28 +1312,15 @@ void get_bid(int *bid_sad, int fw_predframe_no)
             iii4=(img->pix_x+block_x)*4+tmp_bwMV[0][pic_block_y][pic_block_x+4];
             jjj4=(img->pix_y+block_y)*4+tmp_bwMV[1][pic_block_y][pic_block_x+4];
 
-#ifndef UMV
-            // DM : To prevent mv outside the frame
-            if((jj4>=img->height*4-12)||(jj4<0)||(ii4>=img->width*4-12)||(ii4<0)
-              ||(jjj4>=img->height*4-12)||(jjj4<0)||(iii4>=img->width*4-12)||(iii4<0))
-            {
-              *bid_sad= MAX_DIR_SAD;
-              return;
-            }
-#endif
             for (j=0;j<4;j++)
             {
               j2=j*4;
               for (i=0;i<4;i++)
               {
                 i2=i*4;
-#ifdef UMV
                 fw_pred=UMVPelY_14 (mref[img->fw_multframe_no], jj4+j2, ii4+i2);
                 bw_pred=UMVPelY_14 (mref_P, jjj4+j2, iii4+i2);
-#else
-                fw_pred=FastPelY_14 (mref[img->fw_multframe_no], jj4+j2, ii4+i2);
-                bw_pred=FastPelY_14 (mref_P, jjj4+j2, iii4+i2);
-#endif
+
                 bid_pred[i][j]=(int)((fw_pred+bw_pred)/2.0+0.5);
               }
             }
@@ -1682,18 +1416,6 @@ void get_dir(int *dir_sad)
             iii4=(img->pix_x+block_x)*8+dbMV[0][pic_block_y][pic_block_x+4];
             jjj4=(img->pix_y+block_y)*8+dbMV[1][pic_block_y][pic_block_x+4];
 
-#ifndef UMV
-            // To prevent mv outside the frame
-            if( (jj4  >= 8*(img->height-1) - 24) || (jj4  < 0 ) ||
-              (ii4  >= 8*(img->width -1) - 24) || (ii4  < 0 ) ||
-              (jjj4 >= 8*(img->height-1) - 24) || (jjj4 < 0 ) ||
-              (iii4 >= 8*(img->width -1) - 24) || (iii4 < 0 )  )
-            {
-              *dir_sad= MAX_DIR_SAD;
-              return;
-            }
-            else
-#endif
             {
               // next P is intra mode
               if(refFrArr[pic_block_y][pic_block_x]==-1)
@@ -1708,13 +1430,9 @@ void get_dir(int *dir_sad)
                 for (i=0;i<4;i++)
                 {
                   i2=i*8;
-#ifdef UMV
                   df_pred = UMVPelY_18 (mref[ref_inx], jj4 +j2,  ii4+i2);
                   db_pred = UMVPelY_18 (mref_P,        jjj4+j2, iii4+i2);
-#else
-                  df_pred = FastPelY_18 (mref[ref_inx], jj4 +j2,  ii4+i2);
-                  db_pred = FastPelY_18 (mref_P,        jjj4+j2, iii4+i2);
-#endif
+
                   dir_pred[i][j]=(int)((df_pred+db_pred)/2.0+0.5);
                 }
               }
@@ -1736,18 +1454,6 @@ void get_dir(int *dir_sad)
             iii4=(img->pix_x+block_x)*4+dbMV[0][pic_block_y][pic_block_x+4];
             jjj4=(img->pix_y+block_y)*4+dbMV[1][pic_block_y][pic_block_x+4];
 
-#ifndef UMV
-            // LG : To prevent mv outside the frame
-            if( (jj4  >= 4*(img->height-1) - 12) || (jj4  < 0 ) ||
-              (ii4  >= 4*(img->width -1) - 12) || (ii4  < 0 ) ||
-              (jjj4 >= 4*(img->height-1) - 12) || (jjj4 < 0 ) ||
-              (iii4 >= 4*(img->width -1) - 12) || (iii4 < 0 )  )
-            {
-              *dir_sad= MAX_DIR_SAD;
-              return;
-            }
-            else
-#endif
             {
               // next P is intra mode
               if(refFrArr[pic_block_y][pic_block_x]==-1)
@@ -1762,13 +1468,9 @@ void get_dir(int *dir_sad)
                 for (i=0;i<4;i++)
                 {
                   i2=i*4;
-#ifdef UMV
                   df_pred=UMVPelY_14 (mref[ref_inx], jj4+j2, ii4+i2);
                   db_pred=UMVPelY_14 (mref_P, jjj4+j2, iii4+i2);
-#else
-                  df_pred=FastPelY_14 (mref[ref_inx], jj4+j2, ii4+i2);
-                  db_pred=FastPelY_14 (mref_P, jjj4+j2, iii4+i2);
-#endif
+
                   dir_pred[i][j]=(int)((df_pred+db_pred)/2.0+0.5);
                 }
               }

@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file header.c
@@ -18,6 +50,7 @@
 
 #include "elements.h"
 #include "header.h"
+#include "rtp.h"
 
 
 // A little trick to avoid those horrible #if TRACE all over the source code
@@ -31,7 +64,6 @@
 static int PutSliceStartCode(Bitstream *s);
 static int PutPictureStartCode (Bitstream *s);
 static int PutStartCode (int Type, Bitstream *s, char *ts);
-// static void select_picture_type (SyntaxElement *symbol);
 
 // End local Functions
 
@@ -43,8 +75,8 @@ int PictureHeader()
 // This is one of the dirtiest hacks if have seen so far from people who
 // usually know what they are doing :-)
 // img->type has one of three possible values (I, P, B), the picture type as coded
-// distiguishes further by nidicating whether one or more reference frames are
-// used for P and B frames 9hence 5 values).  See decoder/defines.h
+// distiguishes further by indicating whether one or more reference frames are
+// used for P and B frames (hence 5 values).  See decoder/defines.h
 // The mapping is performed in image.c select_picture_type()
 
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
@@ -103,11 +135,17 @@ int PictureHeader()
   SYMTRACESTRING("Hacked Picture Type Symbol");
   len+= writeSyntaxElement_UVLC (&sym, partition);
 
-  // Now always put TR
-  // Finally, write Reference Picture ID (same as TR here).
-  sym.value1 = img->tr%256;         // TR, variable length
-  SYMTRACESTRING("PHRefPicID");
-  len += writeSyntaxElement_UVLC (&sym, partition);
+  // Finally, write Reference Picture ID 
+  // WYK: Oct. 16, 2001. Now I use this for the reference frame ID (non-B frame ID). 
+  // If current frame is a B-frame, it will not change; otherwise it is increased by 1 based
+  // on refPicID of the previous frame. Thus, the decoder can know how many  non-B 
+  // frames are lost, and then can adjust the reference frame buffers correctly.
+  if (1)
+  {
+    sym.value1 = img->refPicID%16;         // refPicID, variable length
+    SYMTRACESTRING("PHRefPicID");
+    len += writeSyntaxElement_UVLC (&sym, partition);
+  }
 
   return len;
 }
@@ -192,11 +230,29 @@ int SliceHeader(int UseStartCode)
 }
 
 
+
+
 int SequenceHeader (FILE *outf)
 {
-  // int LenInBytes = 0;
+  int LenInBytes = 0;
   int HeaderInfo;         // Binary coded Headerinfo to be written in file
   int ProfileLevelVersionHash;
+
+
+  // Handle the RTP case
+  if (input->of_mode == PAR_OF_RTP)
+  {
+    if ((LenInBytes = RTPSequenceHeader (outf)) < 0)
+    {
+      snprintf (errortext, ET_SIZE, "SequenceHeaqder(): Problems writing the RTP Parameter Packet");
+      error (errortext, 600);
+      return -1;
+    }
+    else
+      return LenInBytes*8;
+  }
+  // Non RTP-type file formats follow
+
 
   switch (input->SequenceHeaderType)
   {
@@ -252,7 +308,7 @@ int SequenceHeader (FILE *outf)
     assert ("to be hacked");
     return -1;
   default:
-    snprintf (errortext, ET_SIZE, "Unspported Sequence Header Type (should not happen since checked in n=input module, exiting");
+    snprintf (errortext, ET_SIZE, "Unspported Sequence Header Type (should not happen since checked in input module, exiting");
     error (errortext, 600);
     return -1;
   }
@@ -460,51 +516,4 @@ void LastMBInSlice()
   writeSyntaxElement_UVLC (&sym, partition);
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Writes Datapartitioning SliceHeader
- ************************************************************************
- */
-void DP_SliceHeader(FILE *out, int bytes_written, int part_nr)
-{
-  Slice *currSlice = img->currentSlice;
-  int d_MB_Nr;
 
-  d_MB_Nr = img->current_mb_nr-img->currentSlice->start_mb_nr;
-  if (d_MB_Nr == img->total_number_mb)
-    d_MB_Nr = 0;
-
-  fwrite (&bytes_written, 4, 1, out);
-    fwrite (&currSlice->picture_id, 4, 1, out); // can be reconstructed easily from the rtp-timestamp,
-  // write slice header for interim file format
-  fwrite (&part_nr, 4, 1, out);
-  fwrite (&currSlice->picture_type, 4, 1, out);
-  fwrite (&currSlice->dp_mode, 4, 1, out);
-  fwrite (&img->height, 4, 1, out);
-  fwrite (&img->width, 4, 1, out);
-  fwrite (&currSlice->qp, 4, 1, out);
-  fwrite (&currSlice->start_mb_nr, 4, 1, out);
-  fwrite (&input->mv_res, 4, 1, out);
-
-  if(input->symbol_mode == CABAC)
-    fwrite(&d_MB_Nr, 4, 1, out);
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Writes Datapartitioning PartitionHeader according to VCEG-M52
- ************************************************************************
- */
-void DP_PartHeader(FILE *out, int bytes_written, int part_nr)
-{
-  Slice *currSlice = img->currentSlice;
-
-  // write nal info
-  fwrite (&bytes_written, 4, 1, out);
-    fwrite (&currSlice->picture_id, 4, 1, out); // can be reconstructed easily from the rtp-timestamp,
-  // write partition header for interim file format
-  fwrite (&part_nr, 4, 1, out);
-
-}

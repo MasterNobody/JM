@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ************************************************************************
  * \file  nal_part.c
@@ -26,31 +58,6 @@
 extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
 
-/*!
- ************************************************************************
- * \brief
- *    read all Partitions of one Slice
- * \return
- *    SOS if this is not a new frame                                    \n
- *    SOP if this is a new frame                                        \n
- *    EOS if end of sequence reached
- ************************************************************************
- */
-int readSliceSLICE(struct img_par *img, struct inp_par *inp)
-{
-  Slice *currSlice = img->currentSlice;
-  int eos;
-
-  eos = ReadPartitionsOfSlice (img, inp);
-
-  if(eos)
-    return EOS;
-
-  if(currSlice->start_mb_nr)
-    return SOS;
-  else
-    return SOP;
-}
 
 /*!
  ************************************************************************
@@ -79,74 +86,6 @@ int slice_startcode_follows(struct img_par *img, struct inp_par *inp)
     else
       return FALSE;
   }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    read next UVLC codeword from SLICE-partition and
- *    map the corresponding syntax element
- *     Add Errorconceilment if necessary
- ************************************************************************
- */
-int readSyntaxElement_SLICE(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
-{
-  Bitstream   *currStream = dP->bitstream;
-
-  if (slice_symbols_available(currStream))    // check on existing elements in partition
-  {
-    slice_get_symbol(sym, currStream);
-  }
-  else
-  {
-    set_ec_flag(sym->type);           // otherwise set error concealment flag
-  }
-  get_concealed_element(sym);
-
-  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
-
-#if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
-#endif
-
-  return 1;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    checks if thererare symbols to read in the
- *    appropriate partition
- ************************************************************************
- */
-int slice_symbols_available (Bitstream *currStream)
-{
-  byte *buf = currStream->streamBuffer;
-  int frame_bitoffset = currStream->frame_bitoffset;
-  int info;
-
-  if (currStream->ei_flag)
-    return FALSE;
-  if (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length))
-    return FALSE;
-  else
-    return TRUE;
-};
-
-/*!
- ************************************************************************
- * \brief
- *    gets info and len of symbol
- ************************************************************************
- */
-void slice_get_symbol(SyntaxElement *sym, Bitstream *currStream)
-{
-  int frame_bitoffset = currStream->frame_bitoffset;
-  byte *buf = currStream->streamBuffer;
-  int BitstreamLengthInBytes = currStream->bitstream_length;
-
-  sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
-  currStream->frame_bitoffset += sym->len;
 }
 
 /*!

@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file bitsbuf.c
@@ -10,6 +42,9 @@
  *  and info 0 for Picture Start code, and info = 1 for Slice start code.
  *  The module should be used for all entropy coding schemes, including UVLC
  *  and CABAC.
+ *
+ * \author
+ *    Stephan Wenger   stewe@cs,tu-berlin.de
  *************************************************************************************
  */
 
@@ -20,7 +55,30 @@
 #include "bitsbuf.h"
 
 static int SourceBitBufferPtr;    //!< the position for the next byte-write into the bit buffer
-static FILE *bits;                //!< the bit stream file
+FILE *bits;                //!< the bit stream file
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    return the byte position of the bitstream file
+ ************************************************************************
+ */
+int getBitsPos()
+{
+  return ftell(bits);
+}
+/*!
+ ************************************************************************
+ * \brief
+ *    set the position of the bitsream file
+ ************************************************************************
+ */
+int setBitsPos(int offset)
+{
+printf ("in setBitsPos (%d)\n", offset);
+  return fseek(bits, offset, SEEK_SET);
+}
 
 
 /*!
@@ -48,7 +106,7 @@ void InitializeSourceBitBuffer()
  *  but the current implementation gives us more freedom to define what a
  *  start code actually is
  *  Note that this function could be easily extended to search for non
- *  byte alogned start codes, by simply checking all 8 bit positions
+ *  byte aligned start codes, by simply checking all 8 bit positions
  *  (and not only the zero position
  ************************************************************************
  */
@@ -89,12 +147,13 @@ static int TypeOfStartCode (byte *Buf)
  *
  ************************************************************************
  */
-int GetOneSliceIntoSourceBitBuffer(byte *Buf)
+int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byte *Buf)
 {
   int info, pos;
   int StartCodeFound;
+  Slice *currSlice = img->currentSlice;
 
-  InitializeSourceBitBuffer();
+  InitializeSourceBitBuffer(); // WYK: Useless, can be erased. Why use this?
   // read the first 32 bits (which MUST contain a start code, or eof)
   if (4 != fread (Buf, 1, 4, bits))
   {
@@ -117,7 +176,11 @@ int GetOneSliceIntoSourceBitBuffer(byte *Buf)
   while (!StartCodeFound)
   {
     if (feof (bits))
-      return pos;
+    // WYK: Oct. 8, 2001. for detection of frame and slice loss.
+    {
+      currSlice->next_header = EOS;
+      return pos-1; // modified to "pos-1" instead of "pos" 
+    }
     Buf[pos++] = fgetc (bits);
 
     info = TypeOfStartCode(&Buf[pos-4]);
@@ -188,149 +251,4 @@ int GetOnePartitionIntoSourceBitBuffer(int PartitionSize, byte *Buf)
   return pos;
 }
 
-/*!
- ************************************************************************
- * \brief
- *    read all partitions of one slice
- * \return
- *    TRUE if EOF reached                                               \n
- *    FALSE Else
- ************************************************************************
- */
-int ReadPartitionsOfSlice (struct img_par *img, struct inp_par *inp)
-{
-  Slice *currSlice = img->currentSlice;
-  Bitstream *currStream;
-  DecodingEnvironmentPtr dep;
-  byte *buf;
-  int *read_len;
-  int PartitionSize;
-  int i=0, dt=0, j;
-  unsigned int last_mb=0, picid=0;
-  int eiflag=1;
-  static int first=1;
 
-
-  if (first)
-  {
-    currSlice->max_part_nr = MAX_PART_NR;
-    first = FALSE;
-  }
-
-  for (i=0; i<currSlice->max_part_nr; i++)
-  {
-    if (fread (&eiflag, 1, 1, bits) !=1)  // delivered by the NAL
-      return TRUE;    // EOF indication
-    if (!eiflag)
-    {
-      fread (&PartitionSize, 4, 1, bits);   // delivered by the NAL
-      // header in interim file format
-      fread (&currSlice->picture_id, 4, 1, bits);
-      fread (&dt, 4, 1, bits);
-      if (!dt)
-      {
-        fread (&currSlice->picture_type, 4, 1, bits);
-        fread (&currSlice->dp_mode, 4, 1, bits);
-        fread (&img->height, 4, 1, bits);
-        fread (&img->width, 4, 1, bits);
-        fread (&currSlice->qp, 4, 1, bits);
-        fread (&currSlice->start_mb_nr, 4, 1, bits);
-        fread (&img->mv_res, 4, 1, bits);
-        if (inp->symbol_mode == CABAC)
-        {
-          fread (&last_mb, 4, 1, bits);
-        }
-        DP_SliceHeader(last_mb,img,inp);
-      }
-      currStream = currSlice->partArr[dt].bitstream;
-      read_len= &(currStream->read_len);
-
-      free_Partition(currStream);
-
-      buf = currStream->streamBuffer;
-      currStream->bitstream_length = GetOnePartitionIntoSourceBitBuffer(PartitionSize, buf);
-      if(inp->symbol_mode == CABAC)
-      {
-        dep = &((currSlice->partArr[dt]).de_cabac);
-        arideco_start_decoding(dep, buf, 0, read_len);
-      }
-    }
-    else
-    {
-      for(j=i; j<currSlice->max_part_nr; j++)
-      {
-        currStream = currSlice->partArr[j].bitstream;
-        currStream->ei_flag =1;
-      }
-      if (!i)
-        ec_header(img);
-    }
-  }
-  currStream = currSlice->partArr[0].bitstream;
-  if(currStream->ei_flag && inp->symbol_mode != CABAC)
-    get_last_mb(img, inp);
-
-  return FALSE;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    go back to start of current slice (in case of lost partitions/slices)
- ************************************************************************
- */
-void seek_back(int back)
-{
-  fseek (bits, -back, SEEK_CUR);
-}
-
-/*!
- ************************************************************************
- * \brief
- *    find last mb of slice
- ************************************************************************
- */
-void get_last_mb(struct img_par *img, struct inp_par *inp)
-{
-  Slice *currSlice = img->currentSlice;
-  int back=0;
-  int PartitionSize, picture_id;
-  int eiflag=1;
-  int dt=0;
-  int height, width, picture_type, dp_mode, mv_res;
-
-  for (;;)
-  {
-    if (fread (&eiflag, 1, 1, bits) !=1)  // delivered by the NAL
-      break;    // EOF indication
-    if(!eiflag)
-    {
-      fread (&PartitionSize, 4, 1, bits);   // delivered by the NAL
-      fread (&picture_id, 4, 1, bits);
-      fread (&dt, 4, 1, bits);
-      back += 12;
-      if(!dt)
-      {
-        fread (&height, 4, 1, bits);
-        fread (&width, 4, 1, bits);
-        fread (&picture_type, 4, 1, bits);
-        fread (&dp_mode, 4, 1, bits);
-        fread (&currSlice->last_mb_nr, 4, 1, bits);
-        fread (&mv_res, 4, 1, bits);
-        back += 24;
-      }
-      else
-      {
-        fread (&currSlice->last_mb_nr, 4, 1, bits);
-        back += 4;
-      }
-
-      if(picture_id != img->tr)
-        currSlice->last_mb_nr = img->max_mb_nr;
-
-      break;
-    }
-    back += 1;
-  }
-  seek_back(back); // go back the header we have read
-}

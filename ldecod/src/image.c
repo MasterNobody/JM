@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ***********************************************************************
  * \file image.c
@@ -14,6 +46,7 @@
  *    - Byeong-Moon Jeon                <jeonbm@lge.com>
  *    - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *    - Gabi Blaettermann               <blaetter@hhi.de>
+ *    - Ye-Kui Wang                       <wangy@cs.tut.fi>
  ***********************************************************************
  */
 
@@ -30,6 +63,17 @@
 #include "elements.h"
 #include "image.h"
 
+#if _ERROR_CONCEALMENT_
+#include "erc_api.h"
+extern objectBuffer_t *erc_object_list;
+extern ercVariables_t *erc_errorVar;
+extern frame erc_recfr;
+extern int erc_mvperMB;
+extern struct img_par *erc_img;
+#endif
+
+extern int getBitsPos();
+extern int setBitsPos(int);
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
@@ -47,9 +91,13 @@ int *last_P_no;
 
 int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr)
 {
-
   int current_header;
   Slice *currSlice = img->currentSlice;
+
+#if _ERROR_CONCEALMENT_
+  int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
+  frame recfr;
+#endif
 
   time_t ltime1;                  // for time measurement
   time_t ltime2;
@@ -80,28 +128,82 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
     // read new slice
     current_header = read_new_slice(img, inp);
-    img->current_mb_nr = currSlice->start_mb_nr;
+
+    if (current_header == EOS)
+      return EOS;
+
     if (inp->symbol_mode == CABAC)
     {
       init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);
       init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);
     }
 
-    if (current_header == EOS)
-      return EOS;
     // init new frame
     if (current_header == SOP)
       init_frame(img, inp);
 
+#if _ERROR_CONCEALMENT_
+    if (current_header == SOP)
+    {
+      if (img->number == 0) 
+        ercInit(img->width, img->height, 1);
+      // reset all variables of the error concealmnet instance before decoding of every frame.
+      // here the third parameter should, if perfectly, be equal to the number of slices per frame.
+      // using little value is ok, the code will alloc more memory if the slice number is larger
+      ercReset(erc_errorVar, img->max_mb_nr, MAX_SLICES_PER_FRAME);
+      erc_mvperMB = 0;
+    }
+    // mark the start of a slice 
+    ercStartSegment(currSlice->start_mb_nr, ((currSlice->start_mb_nr == 0) ? 0 : -1), 0 , erc_errorVar);
+#endif
+    
     // decode main slice information
-    if (current_header == SOP || current_header == SOS)
+    if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
       decode_one_slice(img,inp);
+
+#if _ERROR_CONCEALMENT_
+    if(!currSlice->ei_flag)  // slice received
+    {
+      ercStopSegment(img->current_mb_nr-1, -1, 0, erc_errorVar); // stop the current slice 
+      ercMarkCurrSegmentOK(currSlice->start_mb_nr, img->width, erc_errorVar);
+      received_mb_nr += img->current_mb_nr - currSlice->start_mb_nr;
+    }
+    else    // at least one slice lost
+    {
+      ercStopSegment(currSlice->last_mb_nr, -1, 0, erc_errorVar);
+      ercMarkCurrSegmentLost(currSlice->start_mb_nr, img->width, erc_errorVar);
+      received_mb_nr += (currSlice->last_mb_nr + 1) - currSlice->start_mb_nr;
+      //! Should never happen, but to be sure
+      //! Changed TO 12.11.2001
+      if(received_mb_nr > img->max_mb_nr)
+        received_mb_nr = img->max_mb_nr;
+      img->current_mb_nr = currSlice->last_mb_nr + 1;
+    }
+#endif
+    
+    if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+      currSlice->next_header = SOS;
+    
     img->current_slice_nr++;
 
   }
-#if !defined LOOP_FILTER_MB
-  loopfilter(img);
+
+#if _ERROR_CONCEALMENT_
+  
+  recfr.yptr = &imgY[0][0];
+  recfr.uptr = &imgUV[0][0][0];
+  recfr.vptr = &imgUV[1][0][0];
+
+  /* call the right error concealment function depending on the frame type.
+      here it is simulated that only the first frame is Intra, the rest is Inter. */
+  erc_mvperMB /= received_mb_nr;
+  erc_img = img;
+  if(img->type == INTRA_IMG) // I-frame
+    ercConcealIntraFrame(&recfr, img->width, img->height, erc_errorVar);
+  else
+    ercConcealInterFrame(&recfr, erc_object_list, img->width, img->height, erc_errorVar);
 #endif
+
   if(img->number == 0)
     copy2mref(img);
 
@@ -118,16 +220,16 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   tot_time=tot_time + tmp_time;
 
   if(img->type == INTRA_IMG) // I picture
-    fprintf(stdout,"%3d(I) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+    fprintf(stdout,"%3d(I)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
         frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictures
-    fprintf(stdout,"%3d(P) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+    fprintf(stdout,"%3d(P)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
     frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if(img->type == SP_IMG_1 || img->type == SP_IMG_MULT) // SP pictures
-    fprintf(stdout,"%3d(P) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+    fprintf(stdout,"%3d(SP) %3d %5d %7.4f %7.4f %7.4f %5d\n",
     frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else // B pictures
-    fprintf(stdout,"%3d(B) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+    fprintf(stdout,"%3d(B)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
         frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
 
   fflush(stdout);
@@ -138,6 +240,15 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
   else // I or B pictures
     write_frame(img,inp->postfilter,p_out);         // write image to output YUV file
+
+  //! TO 19.11.2001 Known Problem: for init_frame we have to know the picture type of the actual frame
+  //! in case the first slice of the P-Frame following the I-Frame was lost we decode this P-Frame but 
+  //! do not write it because it was assumed to be an I-Frame in init_frame. So we force the decoder to
+  //! guess the right picture type. This is a hack a should be removed by the time there is a clean
+  //! solution where we do not have to know the picture type for the function init_frame.
+  if(img->type == INTRA_IMG)
+    img->type = INTER_IMG_1;
+  //! End TO 19.11.2001
 
   if(img->type <= INTRA_IMG || img->type >= SP_IMG_1)   // I or P pictures
     img->number++;
@@ -191,6 +302,9 @@ void find_snr(
   int diff_y,diff_u,diff_v;
   int uv;
   int  status;
+  static int modulo_ctr = 0;
+  static int pic_id_old = 0, pic_id_old_b = 0;
+  Slice *currSlice = img->currentSlice;
 #ifndef _ADAPT_LAST_GROUP_
   byte       diff;
 #else
@@ -206,16 +320,27 @@ void find_snr(
     frame_no=(img->number-1)*P_interval-diff;
   }
 #else
+  // TO 5.11.2001 We do have some problems finding the correct frame in the original sequence
+  // if errors appear. In this case the method of using this p_frame_no, nextP_tr, prevP_tr
+  // variables does not work. So I use the picture_id instead.
   if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) // I, P
   {
     if (img->number > 0)
-      frame_no = p_frame_no += (256 + img->tr - last_P_no[0]) % 256;
+    {
+      if (currSlice->picture_id < pic_id_old)
+        modulo_ctr++;
+      frame_no = currSlice->picture_id + (256*modulo_ctr);
+      pic_id_old = currSlice->picture_id;
+    }
     else
-      frame_no = p_frame_no  = 0;
+      frame_no = 0;
   }
   else // B
   {
-    frame_no = p_frame_no - (256 + nextP_tr - img->tr) % 256;
+    if (currSlice->picture_id < pic_id_old_b)
+      modulo_ctr++;
+    frame_no = currSlice->picture_id + (256*modulo_ctr);
+    pic_id_old_b = currSlice->picture_id;
   }
 #endif
 
@@ -286,401 +411,6 @@ void find_snr(
   }
 }
 
-#if !defined LOOP_FILTER_MB
-
-
-static unsigned char
-  overallActivity[256], qp_overallActivity = 255;
-static int
-  beta;
-
-/*!
- ************************************************************************
- * \brief
- *    Filter to reduce blocking artifacts. The filter strengh
- *    is QP dependent.
- ************************************************************************
- */
-void loopfilter(struct img_par *img)
-{
-  static int MAP[32];
-
-  int x,y,y4,x4,k,uv,str1,str2;
-
-  if (qp_overallActivity != img->qp)
-  {
-    int
-      i, alpha,
-      ALPHA_TABLE[32] = {
-        0,  0,  0,  0,  0,  0,  0,  0,
-        3,  3,  3,  7,  7,  7, 12, 17,
-       17, 22, 28, 34, 40, 47, 60, 67,
-       82, 89,112,137,153,187,213,249
-      },
-      BETA_TABLE[32] = {
-        0,  0,  0,  0,  0,  0,  0,  0,
-        3,  3,  3,  4,  4,  4,  6,  6,
-        6,  7,  8,  8,  9,  9, 10, 10,
-       11, 11, 12, 12, 13, 13, 14, 14
-      };
-
-    for (i=0; i<32; i++)
-      MAP[i] = QP2QUANT[i]-1;
-
-    /*
-     * ALPHA(img->qp) = ceil(2.0 * MAP(img->qp) * ln(MAP(img->qp)))
-     */
-    alpha = ALPHA_TABLE[img->qp];
-
-    /*
-     * BETA(img->qp) = floor(4.0 * log(MAP[img->qp]) + 0.5)
-     */
-    beta = BETA_TABLE[img->qp];
-
-    for (k=0; k<256; k++)
-      if (2*k >= alpha+(alpha/2))
-        overallActivity[k] = 1;
-      else if (2*k >= alpha)
-        overallActivity[k] = 2;
-      else
-        overallActivity[k] = 3;
-
-    qp_overallActivity = img->qp;
-
-  }
-
-  // Luma hor
-  for(y=0;y<img->height;y++)
-    for(x=0;x<img->width;x++)
-      imgY_tmp[y][x]=imgY[y][x];
-
-  for(y=0;y<img->height;y++)
-  {
-    y4=y/4;
-    for(x=4;x<img->width;x=x+4)
-    {
-      x4=x/4;
-
-      str1 = loopb[x4][y4+1];
-      str2 = loopb[x4+1][y4+1];
-
-      if((str1!=0)&&(str2!=0))
-      {
-        /*
-         * Copy one line of 4+4 reconstruction pels into the filtering buffer.
-         */
-        for(k=0;k<8;k++)
-          img->li[k]=imgY_tmp[y][x-4+k];
-
-        /*
-         * Check for longer filtering on macroblock border if either block is intracoded.
-         */
-        if(!(x4%4) && (str1 == 3 || str2 == 3))
-        {
-          if(loop(img,str1,str2, 1, 0))
-          {
-            imgY_tmp[y][x-4+6] = img->lu[6];
-            imgY[y][x-3]       = img->lu[1];
-            imgY[y][x+2]       = img->lu[6];
-          }
-        }
-        else
-          loop(img,str1,str2, 0, 0);
-
-        /*
-         * Place back the filtered values into the filtered reconstruction buffer.
-         */
-        for (k=2;k<6;k++)
-          imgY[y][x-4+k]=img->lu[k];
-      }
-    }
-  }
-
-  // Luma vert
-  for(y=0;y<img->height;y++)
-    for(x=0;x<img->width;x++)
-      imgY_tmp[y][x]=imgY[y][x];
-
-  for(x=0;x<img->width;x++)
-  {
-    x4=x/4;
-    for(y=4;y<img->height;y=y+4)
-    {
-      y4=y/4;
-
-      str1 = loopb[x4+1][y4];
-      str2 = loopb[x4+1][y4+1];
-
-      if((str1 != 0) && (str2 != 0))
-      {
-        /*
-         * Copy one line of 4+4 reconstruction pels into the filtering buffer.
-         */
-        for(k=0;k<8;k++)
-          img->li[k]=imgY_tmp[y-4+k][x];
-
-        /*
-         * Check for longer filtering on macroblock border if either block is intracoded.
-         */
-        if(!(y4%4) && (str1 == 3 || str2 == 3))
-        {
-          if(loop(img,str1,str2, 1, 0))
-          {
-            imgY_tmp[y-4+6][x] = img->lu[6];
-            imgY[y-3][x]       = img->lu[1];
-            imgY[y+2][x]       = img->lu[6];
-          }
-        }
-        else
-          loop(img,str1,str2, 0, 0);
-
-        /*
-         * Place back the filtered values into the filtered reconstruction buffer.
-         */
-        for (k=2;k<6;k++)
-          imgY[y-4+k][x]=img->lu[k];
-      }
-    }
-  }
-
-  // chroma
-
-  for (uv=0;uv<2;uv++)
-  {
-    // horizontal chroma
-    for(y=0;y<img->height_cr;y++)
-      for(x=0;x<img->width_cr;x++)
-        imgUV_tmp[uv][y][x]=imgUV[uv][y][x];
-
-    for(y=0;y<img->height_cr;y++)
-    {
-      y4=y/4;
-      for(x=4;x<img->width_cr;x=x+4)
-      {
-        x4=x/4;
-
-        str1 = loopc[x4][y4+1];
-        str2 = loopc[x4+1][y4+1];
-
-        if((str1 != 0) && (str2 != 0))
-        {
-          /*
-           * Copy one line of 4+4 reconstruction pels into the filtering buffer.
-           */
-          for(k=0;k<8;k++)
-            img->li[k]=imgUV_tmp[uv][y][x-4+k];
-
-          /*
-           * Check for longer filtering on macroblock border if either block is intracoded.
-           */
-          if(!(x4%2) && (loopb[2*x4][2*y4+1] == 3 || loopb[2*x4+1][2*y4+1] == 3))
-            loop(img,str1,str2, 1, 1);
-          else
-            loop(img,str1,str2, 0, 1);
-
-          /*
-           * Place back the filtered values into the filtered reconstruction buffer.
-           */
-          for (k=2;k<6;k++)
-            imgUV[uv][y][x-4+k]=img->lu[k];
-        }
-      }
-    }
-
-    // vertical chroma
-    for(y=0;y<img->height_cr;y++)
-      for(x=0;x<img->width_cr;x++)
-        imgUV_tmp[uv][y][x]=imgUV[uv][y][x];
-
-    for(x=0;x<img->width_cr;x++)
-    {
-      x4=x/4;
-      for(y=4;y<img->height_cr;y=y+4)
-      {
-        y4=y/4;
-
-        str1 = loopc[x4+1][y4];
-        str2 = loopc[x4+1][y4+1];
-
-        if((str1 != 0) && (str2 != 0))
-        {
-          /*
-           * Copy one line of 4+4 reconstruction pels into the filtering buffer.
-           */
-          for(k=0;k<8;k++)
-            img->li[k]=imgUV_tmp[uv][y-4+k][x];
-
-          /*
-           * Check for longer filtering on macroblock border if either block is intracoded.
-           */
-          if(!(y4%2) && (loopb[2*x4+1][2*y4] == 3 || loopb[2*x4+1][2*y4+1] == 3))
-            loop(img,str1,str2, 1, 1);
-          else
-            loop(img,str1,str2, 0, 1);
-
-          /*
-           * Place back the filtered values into the filtered reconstruction buffer.
-           */
-          for (k=2;k<6;k++)
-            imgUV[uv][y-4+k][x]=img->lu[k];
-        }
-      }
-    }
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Filter 4 or 6 from 8 pix input
- ************************************************************************
- */
-int loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma)
-{
-  int
-    delta, halfLim, dr, dl, i, truncLimLeft, truncLimRight,
-    diff, clip, clip_left, clip_right;
-
-  /* Limit the difference between filtered and nonfiltered based
-   * on QP and strength
-   */
-  clip_left  = FILTER_STR[img->qp][ibl];
-  clip_right = FILTER_STR[img->qp][ibr];
-
-  // The step across the block boundaries
-  delta   = abs(img->li[3]-img->li[4]);
-
-  // Find overall activity parameter (n/2)
-  halfLim = overallActivity[delta];
-
-  // Truncate left limit to 2 for small stengths
-  if (ibl <= 1)
-    truncLimLeft = (halfLim > 2) ? 2 : halfLim;
-  else
-    truncLimLeft = halfLim;
-
-  // Truncate right limit to 2 for small stengths
-  if (ibr <= 1)
-    truncLimRight = (halfLim > 2) ? 2 : halfLim;
-  else
-    truncLimRight = halfLim;
-
-  // Find right activity parameter dr
-  for (dr=1; dr<truncLimRight; dr++)
-  {
-    if (dr*abs(img->li[4]-img->li[4+dr]) > beta)
-      break;
-  }
-
-  // Find left activity parameter dl
-  for (dl=1; dl<truncLimLeft; dl++)
-  {
-    if (dl*abs(img->li[3]-img->li[3-dl]) > beta)
-      break;
-  }
-
-  if(dr < 2 || dl < 2)
-  {
-    // no filtering when either one of activity params is below two
-    img->lu[2] = img->li[2];
-    img->lu[3] = img->li[3];
-    img->lu[4] = img->li[4];
-    img->lu[5] = img->li[5];
-
-    return 0;
-  }
-
-  if(longFilt)
-  {
-    if(dr    == 3 && dl    == 3 &&
-       delta >= 2 && delta <  img->qp/4)
-    {
-      if(chroma)
-      {
-        img->lu[3] = (25*(img->li[1] + img->li[5]) + 26*(img->li[2] + img->li[3] + img->li[4]) + 64) >> 7;
-        img->lu[2] = (25*(img->li[0] + img->li[4]) + 26*(img->li[1] + img->li[2] + img->lu[3]) + 64) >> 7;
-        img->lu[4] = (25*(img->li[2] + img->li[6]) + 26*(img->li[3] + img->li[4] + img->li[5]) + 64) >> 7;
-        img->lu[5] = (25*(img->li[3] + img->li[7]) + 26*(img->lu[4] + img->li[5] + img->li[6]) + 64) >> 7;
-
-        return 0;
-      }
-      else
-      {
-        img->lu[3] = (25*(img->li[1] + img->li[5]) + 26*(img->li[2] + img->li[3] + img->li[4]) + 64) >> 7;
-        img->lu[2] = (25*(img->li[0] + img->li[4]) + 26*(img->li[1] + img->li[2] + img->lu[3]) + 64) >> 7;
-        img->lu[1] = (25*(img->li[1] + img->lu[3]) + 26*(img->li[0] + img->li[1] + img->lu[2]) + 64) >> 7;
-        img->lu[4] = (25*(img->li[2] + img->li[6]) + 26*(img->li[3] + img->li[4] + img->li[5]) + 64) >> 7;
-        img->lu[5] = (25*(img->li[3] + img->li[7]) + 26*(img->lu[4] + img->li[5] + img->li[6]) + 64) >> 7;
-        img->lu[6] = (25*(img->lu[4] + img->li[6]) + 26*(img->lu[5] + img->li[6] + img->li[7]) + 64) >> 7;
-
-        return 1;
-      }
-    }
-  }
-
-  // Filter pixels at the edge
-  img->lu[4] = (21*(img->li[3] + img->li[5]) + 22*img->li[4] + 32) >> 6;
-  img->lu[3] = (21*(img->li[2] + img->li[4]) + 22*img->li[3] + 32) >> 6;
-
-  if(dr == 3)
-    img->lu[5] = (21*(img->lu[4] + img->li[6]) + 22*img->li[5] + 32) >> 6;
-  else
-    img->lu[5] = img->li[5];
-
-  if(dl == 3)
-    img->lu[2] = (21*(img->li[1] + img->lu[3]) + 22*img->li[2] + 32) >> 6;
-  else
-    img->lu[2] = img->li[2];
-
-  // Clipping parameter depends on one table and left and right act params
-  clip = (clip_left + clip_right + dl + dr) / 2;
-
-  // Pixels at the edge are clipped differently
-  for (i=3; i<=4; i++)
-  {
-    diff = (int)img->lu[i] - (int)img->li[i];
-
-    if (diff)
-    {
-      if (diff > clip)
-        diff = clip;
-      else if (diff < -clip)
-        diff = -clip;
-
-      img->lu[i] = img->li[i] + diff;
-    }
-  }
-
-  // pixel from left is clipped
-  diff = (int)img->lu[2] - (int)img->li[2];
-
-  if (diff)
-  {
-    if (diff > clip_left)
-      diff = clip_left;
-    else if (diff < -clip_left)
-      diff = -clip_left;
-
-    img->lu[2] = img->li[2] + diff;
-  }
-
-  // pixel from right is clipped
-  diff = (int)img->lu[5] - (int)img->li[5];
-
-  if (diff)
-  {
-    if (diff > clip_right)
-      diff = clip_right;
-    else if (diff < -clip_right)
-      diff = -clip_right;
-
-    img->lu[5] = img->li[5] + diff;
-  }
-
-  return 0;
-}
-
-#endif
 
 
 /*!
@@ -1101,6 +831,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   static int first_P = TRUE;
   int i,j;
 
+
   img->current_mb_nr=0;
   img->current_slice_nr=0;
 
@@ -1108,6 +839,24 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
   img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
 
+  //WYK: When entire non-B frames are lost, adjust the reference buffers
+  //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
+  //! Should remove this one time!
+  
+  if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
+  {                              //! does not affect any other input mode where this refPicID is not supported
+    j = img->refPicID-img->refPicID_old;
+    if(j<0) j += 16;    // img->refPicID is 4 bit, wrapps at 15
+    if(j > 1) //at least one non-B frame has been lost  
+    {
+      for(i=1; i<j; i++)  // j-1 non-B frames are lost
+      {
+        img->number++;
+        copy2mref(img);
+      }
+    }
+  }
+  
   if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // P pictures
   {
 #ifdef _ADAPT_LAST_GROUP_
@@ -1122,10 +871,11 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 
   if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
   {
+
     if(first_P) // first P picture
     {
       first_P = FALSE;
-      P_interval=nextP_tr-prevP_tr;
+      P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
     }
     else // all other P pictures
     {
@@ -1142,11 +892,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
   // allocate memory for frame buffers
-  if (img->number == 0)  get_mem4global_buffers(inp, img);
-
-#if !defined LOOP_FILTER_MB
-  init_loop_filter(img);
-#endif
+  if (img->number == 0)  get_mem4global_buffers(inp, img); //!!KS!!
 
   for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
     img->ipredmode[i+1][0]=-1;
@@ -1158,16 +904,199 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
       img->intra_mb[i] = 1; // default 1 = intra mb
   }
+
+  // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
+  for(i=0; i<img->max_mb_nr; i++)
+    img->mb_data[i].slice_nr = -1;
+
 }
 
-
+/*!
+ ************************************************************************
+ * \brief
+ *    exit a frame
+ ************************************************************************
+ */
 void exit_frame(struct img_par *img, struct inp_par *inp)
 {
     if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
         copy2mref(img);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    write the encoding mode and motion vectors of current 
+ *    MB to the buffer of the error concealment module.
+ ************************************************************************
+ */
+#if _ERROR_CONCEALMENT_
+void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
+{
+  extern objectBuffer_t *erc_object_list;
+  int i, ii, jj, currMBNum = img->current_mb_nr;
+  int mbx = xPosMB(currMBNum,img->width), mby = yPosMB(currMBNum,img->width);
+  objectBuffer_t *currRegion, *pRegion;
+  Macroblock *currMB = &img->mb_data[currMBNum];
 
+  currRegion = erc_object_list + (currMBNum<<2);
+
+  if(img->type != B_IMG_1 && img->type != B_IMG_MULT) //non-B frame
+  {
+    if(currMB->intraOrInter == INTRA_MB_16x16)
+    {
+      for(i=0; i<4; i++)
+      {
+        pRegion = currRegion + i;
+        pRegion->regionMode = REGMODE_INTRA;
+        pRegion->mv[0] = 0;
+        pRegion->mv[1] = 0;
+        pRegion->mv[2] = currMB->ref_frame;
+      }
+    }
+    else if(currMB->intraOrInter == INTRA_MB_4x4)
+    {
+      for(i=0; i<4; i++)
+      {
+        pRegion = currRegion + i;
+        pRegion->regionMode = REGMODE_INTRA_8x8;
+        pRegion->mv[0] = 0;
+        pRegion->mv[1] = 0;
+        pRegion->mv[2] = currMB->ref_frame;
+      }
+    }
+    else //if(currMB->intraOrInter == INTER_MB)
+    {
+      switch(img->mb_mode)
+      {
+      case COPY_MB:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_COPY;
+          pRegion->mv[0] = 0;
+          pRegion->mv[1] = 0;
+          pRegion->mv[2] = currMB->ref_frame;
+        }
+        break;
+      case M16x16_MB:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_PRED;
+          pRegion->mv[0] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
+          pRegion->mv[1] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
+          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+          pRegion->mv[2] = currMB->ref_frame;
+        }
+        break;
+      case M16x8_MB:
+      case M8x16_MB:
+      case M8x8_MB:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
+          pRegion->mv[0] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
+          pRegion->mv[1] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
+          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+          pRegion->mv[2] = currMB->ref_frame;
+        }
+        break;
+      case M8x4_MB:
+      case M4x8_MB:
+      case M4x4_MB:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
+          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
+          pRegion->mv[0] = (img->mv[ii][jj][0] + img->mv[ii+1][jj][0] + img->mv[ii][jj+1][0] + img->mv[ii+1][jj+1][0] + 2)/4;
+          pRegion->mv[1] = (img->mv[ii][jj][1] + img->mv[ii+1][jj][1] + img->mv[ii][jj+1][1] + img->mv[ii+1][jj+1][1] + 2)/4;
+          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+          pRegion->mv[2] = currMB->ref_frame;
+        }
+        break;
+      default:
+        snprintf(errortext, ET_SIZE, "INTER MB mode %i is not supported\n", img->mb_mode);
+        error (errortext, 200);
+      }
+    }
+  }
+  else  //B-frame
+  {
+    if(currMB->intraOrInter == INTRA_MB_16x16)
+    {
+      for(i=0; i<4; i++)
+      {
+        pRegion = currRegion + i;
+        pRegion->regionMode = REGMODE_INTRA;
+        pRegion->mv[0] = 0;
+        pRegion->mv[1] = 0;
+        pRegion->mv[2] = currMB->ref_frame;
+      }
+    }
+    else if(currMB->intraOrInter == INTRA_MB_4x4)
+    {
+      for(i=0; i<4; i++)
+      {
+        pRegion = currRegion + i;
+        pRegion->regionMode = REGMODE_INTRA_8x8;
+        pRegion->mv[0] = 0;
+        pRegion->mv[1] = 0;
+        pRegion->mv[2] = currMB->ref_frame;
+      }
+    }
+    else //if(currMB->intraOrInter == INTER_MB)
+    {
+      switch(img->imod)
+      {
+      case B_Forward:
+      case B_Bidirect:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
+          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
+          pRegion->mv[0] = (img->fw_mv[ii][jj][0] + img->fw_mv[ii+1][jj][0] + img->fw_mv[ii][jj+1][0] + img->fw_mv[ii+1][jj+1][0] + 2)/4;
+          pRegion->mv[1] = (img->fw_mv[ii][jj][1] + img->fw_mv[ii+1][jj][1] + img->fw_mv[ii][jj+1][1] + img->fw_mv[ii+1][jj+1][1] + 2)/4;
+          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+          pRegion->mv[2] = (currMB->ref_frame-1+img->buf_cycle) % img->buf_cycle; //ref_frame_fw
+        }
+        break;
+      case B_Backward:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
+          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
+          pRegion->mv[0] = (img->bw_mv[ii][jj][0] + img->bw_mv[ii+1][jj][0] + img->bw_mv[ii][jj+1][0] + img->bw_mv[ii+1][jj+1][0] + 2)/4;
+          pRegion->mv[1] = (img->bw_mv[ii][jj][1] + img->bw_mv[ii+1][jj][1] + img->bw_mv[ii][jj+1][1] + img->bw_mv[ii+1][jj+1][1] + 2)/4;
+          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
+        }
+        break;
+      case B_Direct:
+        for(i=0; i<4; i++)
+        {
+          pRegion = currRegion + i;
+          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
+          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
+          pRegion->mv[0] = (img->dbMV[ii][jj][0] + img->dbMV[ii+1][jj][0] + img->dbMV[ii][jj+1][0] + img->dbMV[ii+1][jj+1][0] + 2)/4;
+          pRegion->mv[1] = (img->dbMV[ii][jj][1] + img->dbMV[ii+1][jj][1] + img->dbMV[ii][jj+1][1] + img->dbMV[ii+1][jj+1][1] + 2)/4;
+          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+          pRegion->mv[2] = (img->frame_cycle +img->buf_cycle)% img->buf_cycle; //ref_frame_bw
+        }
+        break;
+      default:
+        snprintf(errortext, ET_SIZE, "B-frame img->imod %i is not supported\n", img->imod);
+        error (errortext, 200);
+      }
+    }
+
+  }
+}
+#endif
 
 /*!
  ************************************************************************
@@ -1190,7 +1119,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   {
 
 #if TRACE
-    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", img->tr, img->current_mb_nr, img->slice_numbers[img->current_mb_nr]);
+    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->current_mb_nr, img->slice_numbers[img->current_mb_nr], img->type);
 #endif
 
     // Initializes the current macroblock
@@ -1214,30 +1143,14 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
     default:
         printf("need to trigger error concealment or something here\n ");
     }
-#if defined LOOP_FILTER_MB
-    DeblockMb( img ) ;
+
+#if _ERROR_CONCEALMENT_
+    ercWriteMBMODEandMV(img,inp);
 #endif
+
+    DeblockMb( img ) ;
     end_of_slice=exit_macroblock(img,inp);
   }
   reset_ec_flags();
-}
-
-/*!
- ************************************************************************
- * \brief
- *    initializes loop filter
- ************************************************************************
- */
-void init_loop_filter(struct img_par *img)
-{
-  int i, j;
-
-  for (i=0;i<img->width/4+2;i++)
-    for (j=0;j<img->height/4+2;j++)
-      loopb[i+1][j+1]=0;
-
-  for (i=0;i<img->width_cr/4+2;i++)
-    for (j=0;j<img->height_cr/4+2;j++)
-      loopc[i+1][j+1]=0;
 }
 

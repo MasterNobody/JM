@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ***************************************************************************
  * \file rdopt.c
@@ -485,18 +517,36 @@ RDCost_Macroblock (RateDistortion  *rd,
    *=====   GET DISTORTION OF LUMINANCE AND INIT COST   =====*
    *=====                                               =====*
    *=========================================================*/
-  if (copy)
+  if (input->rdopt==2)
   {
-    refidx = (img->number-1) % img->buf_cycle; // reference frame index
-    for   (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
-      for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
-        rd->distortion += img->quad [abs (imgY_org[j][i] - mref[refidx][j<<2][i<<2])];
+    int k;
+    for (k=0; k < input->NoOfDecoders ;k++)
+    {
+      decode_one_macroblock(k, mode, ref_or_i16mode);
+      for (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
+        for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
+        {
+          rd->distortion += img->quad[abs (imgY_org[j][i] - decY[k][j][i])];
+        }
+    }
+    rd->distortion /= input->NoOfDecoders;
+    refidx = (img->number-1) % img->buf_cycle; /* reference frame index */
   }
   else
   {
-    for   (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
-      for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
-        rd->distortion += img->quad [abs (imgY_org[j][i] - imgY[j][i])];
+    if (copy)
+    {
+      refidx = (img->number-1) % img->buf_cycle; // reference frame index
+      for   (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
+        for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
+          rd->distortion += img->quad [abs (imgY_org[j][i] - mref[refidx][j<<2][i<<2])];
+    }
+    else
+    {
+      for   (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
+        for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
+          rd->distortion += img->quad [abs (imgY_org[j][i] - imgY[j][i])];
+    }
   }
   //=== init and check rate-distortion cost ===
   rd->rdcost = (double)rd->distortion;
@@ -791,6 +841,20 @@ RDCost_Macroblock (RateDistortion  *rd,
         rdopt->bw_mv[j][i][1] = tmp_bwMV[1][img->block_y+j][img->block_x+4+i];
       }
 
+  if (input->rdopt==2)
+  {
+    int k;
+    for (k=0; k<input->NoOfDecoders; k++)
+    {
+      for (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
+        for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
+        {
+          /* Keep the decoded values of each MB for updating the ref frames*/
+          decY_best[k][j][i] = decY[k][j][i];
+        }
+    }
+  }
+
   return 1; // new best mode
 }
 
@@ -888,14 +952,15 @@ RD_Mode_Decision ()
       }
   }
 
-
+  if (img->type==INTER_IMG && img->types== SP_IMG)
+    valid_mode[MBMODE_COPY] =0;
 
   //===== LOOP OVER ALL MACROBLOCK MODES =====
   for (mode = 0; mode < NO_MAX_MBMODES; mode++)
     if (valid_mode[mode])
     {
     /*==================================================================*
-     *===  MOTION ESTIMATION, INTRA PREDICTION and COST CALCULATION  ===*
+     *===  MOTION ESTIMATION, INTRA PREDICTION and COST CALCULATION  ===*
      *==================================================================*/
        if (mode == MBMODE_INTRA4x4)
        {
@@ -1368,26 +1433,26 @@ RD_Mode_Decision ()
    *===========================================================*/
   if (!bframe)
   {
-#if !defined LOOP_FILTER_MB
-    // Set loop filter strength depending on mode decision
-    SetLoopfilterStrength_P();
-#endif
     // Set reference frame information for motion vector prediction of future MBs
     SetRefFrameInfo_P();
   }
   else
   {
-#if !defined LOOP_FILTER_MB
-    // Set loop filter strength depending on mode decision
-    SetLoopfilterStrength_B();
-#endif
     // Set reference frame information for motion vector prediction of future MBs
     SetRefFrameInfo_B();
   }
-#if defined LOOP_FILTER_MB
   currMB->qp       = img->qp ;    // this should (or has to be) done somewere else, but where???
-  DeblockMb() ;   // filter this macroblock ( pixels to the right and above the MB are affected )
-#endif
+  DeblockMb(img, imgY, imgUV) ;   // filter this macroblock ( pixels to the right and above the MB are affected )
+  if (input->rdopt == 2)
+  {
+    for (j=0 ; j<input->NoOfDecoders ; j++)
+      DeblockMb(img, decY_best[j],NULL);
+  }
+
+  if (img->current_mb_nr==0)
+    intras=0;
+  if (img->number && (mode==MBMODE_INTRA4x4 || mode==MBMODE_INTRA16x16))
+    intras++;
 
 }
 

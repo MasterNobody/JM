@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file mv-search.c
@@ -1005,13 +1037,15 @@ UnifiedMotionSearch (int tot_intra_sad, int **refFrArr, int ***tmp_mv,
   // Loop through all reference frames under consideration
   // P-Frames, B-Forward: All reference frames
   // P-Backward: use only the last reference frame, stored in mref_P
+  
+
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
-  for (ref_frame=0; ref_frame < min(img->number,img->buf_cycle); ref_frame++)
-    if (ref_frame <  input->no_multpred ||
-        ref_frame == input->add_ref_frame)
+  for (ref_frame=0; ref_frame < img->nb_references; ref_frame++)
+    if ((ref_frame <  input->no_multpred) || (ref_frame == input->add_ref_frame))
 #else
-  for (ref_frame=0; ref_frame < min(img->number,input->no_multpred); ref_frame++)
+  for (ref_frame=0; ref_frame < img->nb_references; ref_frame++)
 #endif
+
   {
     ref_inx = (img->number-ref_frame-1)%img->buf_cycle;
 
@@ -1225,11 +1259,6 @@ SingleUnifiedMotionSearch (int    ref_frame,
       // The following was deleted to support UMV.  See Remak regarding UMV performance for B
       // in the Readme File (to be provided)
       // Search center corrected to prevent vectors outside the frame, this is not permitted in this model.
-#ifndef UMV
-      center_x=max(min(center_x,img->width-1-pic_pix_x-(blockshape_x-1)-curr_search_range),curr_search_range-pic_pix_x);
-      center_y=max(min(center_y,img->height_err-pic_pix_y-(blockshape_y-1)-curr_search_range),curr_search_range-pic_pix_y);
-      PelYline_11 = FastLine16Y_11;
-#else
       if ((pic_pix_x + center_x > curr_search_range) &&
           (pic_pix_y + center_y > curr_search_range) &&
           (pic_pix_x + center_x < img->width  - 1 - curr_search_range - blockshape_x) &&
@@ -1241,7 +1270,6 @@ SingleUnifiedMotionSearch (int    ref_frame,
       {
         PelYline_11 = UMVLine16Y_11;
       }
-#endif
 
       best_inter_sad = IntegerSpiralSearch (mv_mul, center_x, center_y, ip0, ip1,
                                             blockshape_x, blockshape_y, curr_search_range,
@@ -1264,11 +1292,6 @@ SingleUnifiedMotionSearch (int    ref_frame,
       center_v2 *=4;
 
 
-#ifndef UMV
-      center_h2 = max(2-pic4_pix_x,min(center_h2,(img->width-1-pic_pix_x-(blockshape_x-1))*4-2));
-      center_v2 = max(2-pic4_pix_y,min(center_v2,(img->height_err-pic_pix_y-(blockshape_y-1))*4-2));
-      PelY_14 = FastPelY_14;
-#else
       if ((pic4_pix_x + center_h2 > 1) &&
           (pic4_pix_y + center_v2 > 1) &&
           (pic4_pix_x + center_h2 < 4*(img->width  - blockshape_x + 1) - 2) &&
@@ -1276,7 +1299,7 @@ SingleUnifiedMotionSearch (int    ref_frame,
         PelY_14 = FastPelY_14;
       else
         PelY_14 = UMVPelY_14;
-#endif
+
       //  1/2 pixel search.  In this version the search is over 9 vector positions.
       best_inter_sad = HalfPelSearch (pic4_pix_x, pic4_pix_y, mv_mul, blockshape_x, blockshape_y,
                                       &s_pos_x1, &s_pos_y1, &s_pos_x2, &s_pos_y2, center_h2, center_v2,
@@ -1287,11 +1310,6 @@ SingleUnifiedMotionSearch (int    ref_frame,
 
 
       //  1/4 pixel search.
-#ifndef UMV
-      s_pos_x2 = max(1-pic4_pix_x,min(s_pos_x2,(img->width-1-pic_pix_x-(blockshape_x-1))*4-1));
-      s_pos_y2 = max(1-pic4_pix_y,min(s_pos_y2,(img->height_err-pic_pix_y-(blockshape_y-1))*4-1));
-      PelY_14 = FastPelY_14;
-#else
       if ((pic4_pix_x + s_pos_x2 > 0) &&
           (pic4_pix_y + s_pos_y2 > 0) &&
           (pic4_pix_x + s_pos_x2 < 4*(img->width  - blockshape_x + 1) - 1) &&
@@ -1299,7 +1317,7 @@ SingleUnifiedMotionSearch (int    ref_frame,
         PelY_14 = FastPelY_14;
       else
         PelY_14 = UMVPelY_14;
-#endif
+
       best_inter_sad = QuarterPelSearch (pic4_pix_x, pic4_pix_y, mv_mul, blockshape_x, blockshape_y,
                                          &s_pos_x1, &s_pos_y1, &s_pos_x2, &s_pos_y2, center_h2, center_v2,
                                          ip0, ip1, blocktype, mo, CurrRefPic, tmp_mv, all_mv, block_x, block_y, ref_frame,
@@ -1312,11 +1330,7 @@ SingleUnifiedMotionSearch (int    ref_frame,
       {
         pic8_pix_x=2*pic4_pix_x;
         pic8_pix_y=2*pic4_pix_y;
-#ifndef UMV
-        s_pos_x2=max(1-pic8_pix_x,min(s_pos_x2,(img->width-1-pic_pix_x-(blockshape_x-1))*8-1));
-        s_pos_y2=max(1-pic8_pix_y,min(s_pos_y2,(img->height_err-pic_pix_y-(blockshape_y-1))*8-1));
-        PelY_18 = FastPelY_18;
-#else
+
         if ((pic8_pix_x + s_pos_x2 > 0) &&
             (pic8_pix_y + s_pos_y2 > 0) &&
             (pic8_pix_x + s_pos_x2 < 8*(img->width  - blockshape_x + 1) - 2) &&
@@ -1324,7 +1338,7 @@ SingleUnifiedMotionSearch (int    ref_frame,
           PelY_18 = FastPelY_18;
         else
           PelY_18 = UMVPelY_18;
-#endif
+
         best_inter_sad = EighthPelSearch(pic8_pix_x, pic8_pix_y, mv_mul, blockshape_x, blockshape_y,
                                         &s_pos_x1, &s_pos_y1, &s_pos_x2, &s_pos_y2, center_h2, center_v2,
                                         ip0, ip1, blocktype, mo, CurrRefPic, tmp_mv, all_mv, block_x, block_y, ref_frame,

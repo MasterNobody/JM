@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ************************************************************************
  *  \file
@@ -47,8 +79,7 @@ typedef unsigned char byte;    //!< byte type definition
 typedef enum
 {
   PAR_DP_1,   //!< no data partitioning is supported
-  PAR_DP_2,   //!< data partitioning with 2 partitions
-  PAR_DP_4,   //!< data partitioning with 4 partitions
+  PAR_DP_3,   //!< data partitioning with 3 partitions
 } PAR_DP_TYPE;
 
 
@@ -56,7 +87,7 @@ typedef enum
 typedef enum
 {
   PAR_OF_26L,    //!< Current TML description
-  PAR_OF_SLICE,  //!< Slice File Format
+  PAR_OF_RTP     //!< RTP packets in outfile
 } PAR_OF_TYPE;
 
 //! Boolean Type
@@ -312,8 +343,6 @@ byte   **imgY_org;           //!< Reference luma image
 byte  ***imgUV_org;          //!< Reference croma image
 byte   **imgY_pf;            //!< Post filter luma image
 byte  ***imgUV_pf;           //!< Post filter croma image
-byte   **loopb;              //!< array containing filter strenght for 4x4 luma block
-byte   **loopc;              //!< array containing filter strenght for 4x4 chroma block
 byte  ***mref;               //!< 1/4 pix luma
 byte ****mcef;               //!< pix chroma
 int    **img4Y_tmp;          //!< for quarter pel interpolation
@@ -338,6 +367,14 @@ byte ***nextP_imgUV;
 pel_t **Refbuf11;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t  *Refbuf11_P;          //!< 1/1th pel P picture buffer
 
+// Buffers for rd optimization with packet losses, Dim. Kontopodis
+int  **resY;             //!< Residue of Luminance
+byte ***decY;            //!< Decoded values at the simulated decoders
+byte ****decref;         //!< Reference frames of the simulated decoders
+byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
+byte **RefBlock;
+byte **status_map;
+int intras;       //!< Counts the intra updates in each frame.
 
 int  Bframe_ctr, frame_no, nextP_tr;
 int  tot_time;
@@ -391,6 +428,7 @@ typedef struct
   char outfile[100];            //!< H.26L compressed output bitstream
   char ReconFile[100];          //!< Reconstructed Pictures
   char TraceFile[100];          //!< Trace Outputs
+  int intra_period;             //!< Random Access period though intra
 
   // B pictures
   int successive_Bframe;        //!< number of B frames that will be used
@@ -434,12 +472,16 @@ typedef struct
   int add_ref_frame;
 #endif
 
+  int LossRate;
+  int NoOfDecoders;
+
 } InputParameters;
 
 //! ImageParameters
 typedef struct
 {
   int number;                  //!< current image number to be encoded
+  int nb_references;
   int current_mb_nr;
   int total_number_mb;
   int current_slice_nr;
@@ -506,15 +548,10 @@ typedef struct
   int mhor;
   int mvert;
 
-  byte li[8];                  //!< 8 pix input for new filter routine loop()
-  byte lu[6];                  //!< 4 pix output for new filter routine loop()
-
-  #if !defined LOOP_FILTER_MB
-    int lpfilter[6][602];      //!< for use in loopfilter
-  #endif
+  int tr;
+  int refPicID;                         //<! temporal reference for reference frames (non-B frames), added by WYK
 
   // B pictures
-  int tr;
   int b_interval;
   int p_interval;
   int b_frame_to_code;
@@ -624,10 +661,7 @@ void init_frame();
 void select_picture_type(SyntaxElement *symbol);
 void read_one_new_frame();
 void write_reconstructed_image();
-void init_loop_filter();
-int loop(int ibl, int ibr, int longFilt, int chroma);
-void loopfilter();
-void DeblockMb() ;
+void DeblockMb(ImageParameters *img, byte **, byte ***) ;
 
 // dynamic mem allocation
 int  get_mem4global_buffers();
@@ -652,12 +686,12 @@ void  encode_one_macroblock();
 void  start_macroblock();
 
 void  terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock);
+int   slice_too_big(int rlc_bits);
 void  write_one_macroblock();
 void  proceed2nextMacroblock();
 void  LumaResidualCoding_P();
 void  ChromaCoding_P(int *cr_cbp);
 void  SetRefFrameInfo_P();
-void  SetLoopfilterStrength_P();
 int   MakeIntraPrediction(int *intra_pred_mode_2);
 void  CheckAvailabilityOfNeighbors();
 int   writeMotionInfo2NAL_Pframe();
@@ -724,7 +758,6 @@ void get_dir(int *dir_sad);
 void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad);
 void LumaResidualCoding_B();
 void ChromaCoding_B(int *cr_cbp);
-void SetLoopfilterStrength_B();
 void SetRefFrameInfo_B();
 int  writeMotionInfo2NAL_Bframe();
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
@@ -753,6 +786,17 @@ int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int**
 void  clear_rdopt      ();
 void  init_rdopt       ();
 void  RD_Mode_Decision ();
+//============= rate-distortion opt with packet losses ===========
+void decode_one_macroblock();
+void Get_Reference_Block(byte **imY, int block_y, int block_x, int mvhor, int mvver, byte **out);
+byte Get_Reference_Pixel(byte **imY, int y, int x);
+int Half_Upsample(byte **imY, int j, int i);
+void DecOneForthPix(byte **dY, byte ***dref);
+void compute_residue(int mode);
+void UpdateDecoders();
+void Build_Status_Map(byte **s_map);
+void Error_Concealment(byte **inY, byte **s_map, byte ***refY);
+void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY);
 
 //============= fast full integer search =======================
 #ifdef _FAST_FULL_ME_

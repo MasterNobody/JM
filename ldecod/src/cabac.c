@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file cabac.c
@@ -467,7 +499,7 @@ void readBiMVD2Buffer_CABAC( SyntaxElement *se,
   se->value1 = act_sym;
 
 #if TRACE
-  fprintf(p_trace, "@%d      %s\t\t\t%d ",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d      %s\t\t\t%3d \n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
@@ -494,7 +526,7 @@ void readBiDirBlkSize2Buffer_CABAC( SyntaxElement *se,
   se->value1 = unary_bin_max_decode(dep_dp,ctx->mb_type_contexts[1]+act_ctx,1,6);
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
@@ -651,7 +683,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
     se->value1 = curr_mb_type;
 
 #if TRACE
-    fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+    fprintf(p_trace, "@%d%s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
     fflush(p_trace);
 #endif
 }
@@ -686,7 +718,7 @@ void readIntraPredModeFromBuffer_CABAC( SyntaxElement *se,
     count=0;
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 
@@ -733,7 +765,7 @@ void readRefFrameFromBuffer_CABAC(  SyntaxElement *se,
   se->value1 = act_sym;
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%3d",symbolCount++, se->tracestring, se->value1);
   fprintf(p_trace," c: %d :%d \n",ctx->ref_no_contexts[act_ctx].cum_freq[0],ctx->ref_no_contexts[act_ctx].cum_freq[1]);
   fflush(p_trace);
 #endif
@@ -816,7 +848,7 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
     se->value1 = mv_pred_res;
 
 #if TRACE
-    fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+    fprintf(p_trace, "@%d%s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
     fflush(p_trace);
 #endif
 }
@@ -855,7 +887,7 @@ void readDquantFromBuffer_CABAC(SyntaxElement *se,
   se->value1 = act_sym;
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 
@@ -953,7 +985,7 @@ void readCBPFromBuffer_CABAC(SyntaxElement *se,
   se->value1 = cbp;
 
 #if TRACE
-  fprintf(p_trace, "@%d      %s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d      %s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
@@ -1000,7 +1032,7 @@ void readRunLevelFromBuffer_CABAC(SyntaxElement *se,
 
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d ",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%3d \n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 
@@ -1042,11 +1074,12 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   int BitstreamLengthInBytes;
   int info;
   int BitsUsedByHeader = 0, ByteStartPosition;
+  int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
 
   currStream->frame_bitoffset =0;
 
   memset (code_buffer, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
-  BitstreamLengthInBytes = currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(code_buffer);
+  BitstreamLengthInBytes = currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, code_buffer);
 
   // Here we are ready to interpret the picture and slice headers.  Since
   // PictureHeader() and SliceHeader() get their data out of the UVLC's len/info
@@ -1066,7 +1099,15 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   currStream->frame_bitoffset +=31;
   BitsUsedByHeader+=PictureHeader(img, inp);
 
-  if (!currSlice->start_mb_nr)
+  //WYK: Oct. 8, 2001, change the method to find a new frame
+  if(img->tr != img->tr_old)
+    newframe = 1;
+  else 
+    newframe = 0;
+  img->tr_old = img->tr;
+    
+  // if the TR of current slice is not identical to the TR of previous received slice, we have a new frame
+  if(newframe)
     current_header = SOP;
   else
     current_header = SOS;

@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file header.c
@@ -85,7 +117,7 @@ int PictureHeader(struct img_par *img, struct inp_par *inp)
     UsedBits+= sym.len;
   }
 
-  // 4. Picture Type indication (I, P, Mult_P, B , Mult_B)
+  // 4. Picture Type indication (I, P, Mult_P, B , Mult_B, SP, Mult_SP)
   SYMTRACESTRING("PHPictureType");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->picture_type = img->type = sym.value1;
@@ -103,12 +135,19 @@ int PictureHeader(struct img_par *img, struct inp_par *inp)
   // parameter "PHPictureType". So, I changed the if-statement again to be
   // compatible with the encoder.
 
+  // WYK: Oct. 16, 2001. Now I use this for the reference frame ID (non-B frame ID). 
+  // Thus, we can know how many  non-B frames are lost, and then we can adjust 
+  // the reference frame buffers correctly.
   if (1)
-    // if ((img->type == INTER_IMG_MULT) || (img->type == B_IMG_MULT))
-  { // more than one reference frames
-    // TR, variable length
+  {
+    // refPicID, variable length
     SYMTRACESTRING("PHRefPicID");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
+    if (img->refPicID != sym.value1)
+    {
+      img->refPicID_old = img->refPicID;
+      img->refPicID = sym.value1;
+    }
     UsedBits += sym.len;
   }
 
@@ -176,43 +215,3 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   return UsedBits;
 }
 
-/*!
- ************************************************************************
- * \brief
- *    get info of SliceHeader (interim file format) according to VCEG-M52
- ************************************************************************
- */
-void DP_SliceHeader(int last_mb, struct img_par *img, struct inp_par *inp)
-{
-  Slice *currSlice = img->currentSlice;
-
-  switch (currSlice->dp_mode)
-  {
-    case 0:
-      currSlice->max_part_nr = 1;
-      break;
-    case 1:
-      currSlice->max_part_nr = 2;
-      break;
-    case 2:
-      currSlice->max_part_nr = 4;
-      break;
-    default:
-      currSlice->max_part_nr = 1;
-  }
-
-  img->tr = currSlice->picture_id;
-  img->type = currSlice->picture_type;
-  img->qp = currSlice->qp;
-  img->height_cr = (img->height)/2;
-  img->width_cr = (img->width)/2;
-  img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
-
-  if (inp->symbol_mode ==CABAC)
-  {
-    currSlice->last_mb_nr = currSlice->start_mb_nr+last_mb;
-    // Note: if the last MB in this slice == last MB in frame then the number of MBs in this slice is coded as 0
-    if (currSlice->last_mb_nr == currSlice->start_mb_nr)
-      currSlice->last_mb_nr = img->max_mb_nr;
-  }
-}

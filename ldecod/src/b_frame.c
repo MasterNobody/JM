@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file b_frame.c
@@ -22,186 +54,6 @@
 #include "elements.h"
 
 #define POS 0
-
-
-/*!
- ************************************************************************
- * \brief
- *    Set the filter strength for a macroblock of a B-frame
- ************************************************************************
- */
-void SetLoopfilterStrength_B(struct img_par *img)
-{
-  int i,j;
-  int ii,jj;
-  int i3,j3,mvDiffX,mvDiffY;
-
-  if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-        loopb[ii+1][jj+1]=3;
-        loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],2);
-        loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],2);
-        loopb[ii+2][jj+1]=max(loopb[ii+2][jj+1],2);
-        loopb[ii+1][jj+2]=max(loopb[ii+1][jj+2],2);
-
-        loopc[i3+1][j3+1]=2;
-        loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-        loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-        loopc[i3+2][j3+1]=max(loopc[i3+2][j3+1],1);
-        loopc[i3+1][j3+2]=max(loopc[i3+1][j3+2],1);
-      }
-    }
-  }
-
-  if (img->imod==B_Forward || img->imod==B_Bidirect) // inter one direction
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = img->fw_mv[ii+4][jj][0] - img->fw_mv[ii-1+4][jj][0];
-        mvDiffY = img->fw_mv[ii+4][jj][1] - img->fw_mv[ii-1+4][jj][1];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj >0)
-        {
-          mvDiffX = img->fw_mv[ii+4][jj][0] - img->fw_mv[ii+4][jj-1][0];
-          mvDiffY = img->fw_mv[ii+4][jj][1] - img->fw_mv[ii+4][jj-1][1];
-
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-
-
-
-  if(img->imod==B_Backward || img->imod==B_Bidirect) // inter other direction
-  {
-    for (i=0;i<4;i++)
-    {
-      ii=img->block_x+i;
-      i3=ii/2;
-      for (j=0;j<4;j++)
-      {
-        jj=img->block_y+j;
-        j3=jj/2;
-
-        mvDiffX = img->bw_mv[ii+4][jj][0] - img->bw_mv[ii-1+4][jj][0];
-        mvDiffY = img->bw_mv[ii+4][jj][1] - img->bw_mv[ii-1+4][jj][1];
-
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj > 0)
-        {
-          mvDiffX = img->bw_mv[ii+4][jj][0] - img->bw_mv[ii+4][jj-1][0];
-          mvDiffY = img->bw_mv[ii+4][jj][1] - img->bw_mv[ii+4][jj-1][1];
-
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-
-  if(img->imod==B_Direct)
-  {
-    for(j=0;j<MB_BLOCK_SIZE/BLOCK_SIZE;j++)
-    {
-      jj=img->block_y+j;
-      for(i=0;i<MB_BLOCK_SIZE/BLOCK_SIZE;i++)
-      {
-        ii=img->block_x+i;
-        i3=ii/2;
-        j3=jj/2;
-
-        mvDiffX = img->dfMV[ii+4][jj][0] - img->dfMV[ii-1+4][jj][0];
-        mvDiffY = img->dfMV[ii+4][jj][1] - img->dfMV[ii-1+4][jj][1];
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-
-        if (jj > 0)
-        {
-
-          mvDiffX = img->dfMV[ii+4][jj][0] - img->dfMV[ii+4][jj-1][0];
-          mvDiffY = img->dfMV[ii+4][jj][1] - img->dfMV[ii+4][jj-1][1];
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-
-        mvDiffX = img->dbMV[ii+4][jj][0] - img->dbMV[ii-1+4][jj][0];
-        mvDiffY = img->dbMV[ii+4][jj][1] - img->dbMV[ii-1+4][jj][1];
-        if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
-        {
-          loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-          loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-          loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-          loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-        }
-        if (jj > 0)
-        {
-
-          mvDiffX = img->dbMV[ii+4][jj][0] - img->dbMV[ii+4][jj-1][0];
-          mvDiffY = img->dbMV[ii+4][jj][1] - img->dbMV[ii+4][jj-1][1];
-          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
-          {
-            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-          }
-        }
-      }
-    }
-  }
-}
 
 /*!
  ************************************************************************
@@ -458,7 +310,8 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
           img->fw_refFrArr[img->block_y+j][img->block_x+i] = fw_predframe_no;
         }
       }
-    } else
+    } 
+    else
       fw_predframe_no = currMB->predframe_no;
   }
 
@@ -514,14 +367,14 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
     // forward : note realtion between blocktype and img->mb_mode
     // bidirect : after reading fw_blk_size, fw_pmv is obtained
     if(img->mb_mode==1)
-            blocktype=1;
+      blocktype=1;
     else if(img->mb_mode>3)
-            blocktype=img->mb_mode/2;
+      blocktype=img->mb_mode/2;
     else if(img->mb_mode==3)
-            blocktype=fw_blocktype;
+      blocktype=fw_blocktype;
 
-        img->fw_blc_size_h = BLOCK_STEP[blocktype][0]*4;
-        img->fw_blc_size_v = BLOCK_STEP[blocktype][1]*4;
+    img->fw_blc_size_h = BLOCK_STEP[blocktype][0]*4;
+    img->fw_blc_size_v = BLOCK_STEP[blocktype][1]*4;
 
     ie=4-BLOCK_STEP[blocktype][0];
     for(j=0;j<4;j=j+BLOCK_STEP[blocktype][1])   // Y position in 4-pel resolution
@@ -622,8 +475,6 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
             break;
           }
 
-
-
 #if TRACE
           snprintf(currSE->tracestring, TRACESTRING_SIZE, " MVD(%d) ",k);
 #endif
@@ -645,9 +496,9 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
 
           vec = currSE->value1;
 
-            for (l=0; l < BLOCK_STEP[blocktype][1]; l++)
-              for (m=0; m < BLOCK_STEP[blocktype][0]; m++)
-                currMB->mvd[0][j+l][i+m][k] =  vec;
+          for (l=0; l < BLOCK_STEP[blocktype][1]; l++)
+            for (m=0; m < BLOCK_STEP[blocktype][0]; m++)
+              currMB->mvd[0][j+l][i+m][k] =  vec;
 
           vec=vec+pred_vec;
 
@@ -658,6 +509,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
               img->fw_mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
             }
           }
+
         }
       }
     }
@@ -801,16 +653,16 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
 
           vec = currSE->value1;
 
-            for (l=0; l < BLOCK_STEP[blocktype][1]; l++)
-              for (m=0; m < BLOCK_STEP[blocktype][0]; m++)
-                currMB->mvd[1][j+l][i+m][k] =  vec;
+          for (l=0; l < BLOCK_STEP[blocktype][1]; l++)
+            for (m=0; m < BLOCK_STEP[blocktype][0]; m++)
+              currMB->mvd[1][j+l][i+m][k] =  vec;
+
           vec=vec+pred_vec;
 
           for(ii=0;ii<BLOCK_STEP[blocktype][0];ii++)
           {
             for(jj=0;jj<BLOCK_STEP[blocktype][1];jj++)
             {
-              img->bw_mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
               img->bw_mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
             }
           }
@@ -981,7 +833,7 @@ int decode_one_macroblock_Bframe(struct img_par *img)
           {
             img->dfMV[i4+BLOCK_SIZE][j4][hv]=img->dbMV[i4+BLOCK_SIZE][j4][hv]=0;
           }
-                    ref_frame = (img->number -1+ img->buf_cycle)% img->buf_cycle;
+          ref_frame = (img->number -1+ img->buf_cycle)% img->buf_cycle;
         }
         // next P is skip or inter mode
         else
@@ -1124,19 +976,11 @@ int decode_one_macroblock_Bframe(struct img_par *img)
               if1=(i4+ii)/2;
               i1=(img->pix_c_x+ii+ioff)*f1+img->fw_mv[if1+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+img->fw_mv[if1+4][jf][1];
-#ifndef UMV
-              ii0=i1/f1;
-              jj0=j1/f1;
-              ii1=(i1+f2)/f1;
-              jj1=(j1+f2)/f1;
-#endif
-#ifdef UMV
+
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
               ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
               jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
-#endif
-
 
               if1=(i1 & f2);
               jf1=(j1 & f2);
@@ -1163,18 +1007,10 @@ int decode_one_macroblock_Bframe(struct img_par *img)
               i1=(img->pix_c_x+ii+ioff)*f1+img->bw_mv[if1+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+img->bw_mv[if1+4][jf][1];
 
-#ifndef UMV
-              ii0=i1/f1;
-              jj0=j1/f1;
-              ii1=(i1+f2)/f1;
-              jj1=(j1+f2)/f1;
-#endif
-#ifdef UMV
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
               ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
               jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
-#endif
 
               if1=(i1 & f2);
               jf1=(j1 & f2);
@@ -1201,18 +1037,11 @@ int decode_one_macroblock_Bframe(struct img_par *img)
               ifx=(i4+ii)/2;
               i1=(img->pix_c_x+ii+ioff)*f1+img->fw_mv[ifx+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+img->fw_mv[ifx+4][jf][1];
-#ifndef UMV
-              ii0=i1/f1;
-              jj0=j1/f1;
-              ii1=(i1+f2)/f1;
-              jj1=(j1+f2)/f1;
-#endif
-#ifdef UMV
+
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
               ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
               jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
-#endif
               if1=(i1 & f2);
               jf1=(j1 & f2);
               if0=f1-if1;
@@ -1225,18 +1054,11 @@ int decode_one_macroblock_Bframe(struct img_par *img)
 
               i1=(img->pix_c_x+ii+ioff)*f1+img->bw_mv[ifx+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+img->bw_mv[ifx+4][jf][1];
-#ifndef UMV
-              ii0=i1/f1;
-              jj0=j1/f1;
-              ii1=(i1+f2)/f1;
-              jj1=(j1+f2)/f1;
-#endif
-#ifdef UMV
+
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
               ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
               jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
-#endif
               if1=(i1 & f2);
               jf1=(j1 & f2);
               if0=f1-if1;
@@ -1265,18 +1087,11 @@ int decode_one_macroblock_Bframe(struct img_par *img)
               i1=(img->pix_c_x+ii+ioff)*f1+img->dfMV[ifx+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+img->dfMV[ifx+4][jf][1];
 
-#ifndef UMV
-              ii0=i1/f1;
-              jj0=j1/f1;
-              ii1=(i1+f2)/f1;
-              jj1=(j1+f2)/f1;
-#endif
-#ifdef UMV
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
               ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
               jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
-#endif
+
               if1=(i1 & f2);
               jf1=(j1 & f2);
               if0=f1-if1;
@@ -1295,18 +1110,12 @@ int decode_one_macroblock_Bframe(struct img_par *img)
 
               i1=(img->pix_c_x+ii+ioff)*f1+img->dbMV[ifx+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+img->dbMV[ifx+4][jf][1];
-#ifndef UMV
-              ii0=i1/f1;
-              jj0=j1/f1;
-              ii1=(i1+f2)/f1;
-              jj1=(j1+f2)/f1;
-#endif
-#ifdef UMV
+
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
               ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
               jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
-#endif
+
               if1=(i1 & f2);
               jf1=(j1 & f2);
               if0=f1-if1;
@@ -1338,9 +1147,6 @@ int decode_one_macroblock_Bframe(struct img_par *img)
   imgUV[1][img->pix_c_y][img->pix_c_x]= color;
 #endif
 
-  #if !defined LOOP_FILTER_MB
-    SetLoopfilterStrength_B(img);
-  #endif
   return DECODING_OK;
 }
 

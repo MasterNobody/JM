@@ -1,24 +1,24 @@
 # Microsoft Developer Studio Project File - Name="lencod" - Package Owner=<4>
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
-# ** DO NOT EDIT **
+# ** NICHT BEARBEITEN **
 
 # TARGTYPE "Win32 (x86) Console Application" 0x0103
 
 CFG=lencod - Win32 Debug
-!MESSAGE This is not a valid makefile. To build this project using NMAKE,
-!MESSAGE use the Export Makefile command and run
+!MESSAGE Dies ist kein gültiges Makefile. Zum Erstellen dieses Projekts mit NMAKE
+!MESSAGE verwenden Sie den Befehl "Makefile exportieren" und führen Sie den Befehl
 !MESSAGE 
 !MESSAGE NMAKE /f "lencod.mak".
 !MESSAGE 
-!MESSAGE You can specify a configuration when running NMAKE
-!MESSAGE by defining the macro CFG on the command line. For example:
+!MESSAGE Sie können beim Ausführen von NMAKE eine Konfiguration angeben
+!MESSAGE durch Definieren des Makros CFG in der Befehlszeile. Zum Beispiel:
 !MESSAGE 
 !MESSAGE NMAKE /f "lencod.mak" CFG="lencod - Win32 Debug"
 !MESSAGE 
-!MESSAGE Possible choices for configuration are:
+!MESSAGE Für die Konfiguration stehen zur Auswahl:
 !MESSAGE 
-!MESSAGE "lencod - Win32 Release" (based on "Win32 (x86) Console Application")
-!MESSAGE "lencod - Win32 Debug" (based on "Win32 (x86) Console Application")
+!MESSAGE "lencod - Win32 Release" (basierend auf  "Win32 (x86) Console Application")
+!MESSAGE "lencod - Win32 Debug" (basierend auf  "Win32 (x86) Console Application")
 !MESSAGE 
 
 # Begin Project
@@ -107,6 +107,10 @@ SOURCE=.\lencod\src\configfile.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\decoder.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\filehandle.c
 # End Source File
 # Begin Source File
@@ -144,6 +148,10 @@ SOURCE=.\lencod\src\rdopt_coding_state.c
 # Begin Source File
 
 SOURCE=.\lencod\src\refbuf.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\rtp.c
 # End Source File
 # Begin Source File
 
@@ -216,6 +224,10 @@ SOURCE=.\lencod\inc\rdopt_coding_state.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\refbuf.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\rtp.h
 # End Source File
 # End Group
 # Begin Source File

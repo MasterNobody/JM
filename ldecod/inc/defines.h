@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  **************************************************************************
  * \file defines.h
@@ -18,15 +50,14 @@
 #define _DEFINES_H_
 
 
+#define _ERROR_CONCEALMENT_   1   //!< 0: off; 1: on
+#define MAX_SLICES_PER_FRAME  396
 #define _ADAPT_LAST_GROUP_
 
 #define MAX_INFO_WORD  300000               //!< for one frame
 #define MAX_CODED_FRAME_SIZE 200000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
-#define TRACE           0                   //!< 0:Trace off 1:Trace on
-#define UMV
-#define LOOP_FILTER_MB
-
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 #define MAX_VALUE       999999              //!< used for start value for some variables
@@ -137,7 +168,7 @@
 
 #define MAX_SYMBOLS_PER_MB  600  //!< Maximum number of different syntax elements for one MB
 
-#define MAX_PART_NR     8        /*!< Maximum number of different data partitions.
+#define MAX_PART_NR     3        /*!< Maximum number of different data partitions.
                                       Some reasonable number which should reflect
                                       what is currently defined in the SE2Partition
                                       map (elements.h) */

@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ***********************************************************************
  * \file
@@ -192,7 +224,7 @@ char *GetConfigFileContent (char *Filename)
     snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.\n", Filename);
     error (errortext, 300);
   }
-    ;
+
   FileSize = ftell (f);
   if (FileSize < 0 || FileSize > 60000)
   {
@@ -207,7 +239,7 @@ char *GetConfigFileContent (char *Filename)
 
   if ((buf = malloc (FileSize + 1))==NULL) no_mem_exit("GetConfigFileContent: buf");
 
-  // Note that ftell() gives us the file size as teh file system sees it.  The actual file size,
+  // Note that ftell() gives us the file size as the file system sees it.  The actual file size,
   // as reported by fread() below will be often smaller due to CR/LF to CR conversion and/or
   // control characters after the dos EOF marker in the file.
 
@@ -414,14 +446,7 @@ static void PatchInp ()
 
   // consistency check no_multpred
   if (input->no_multpred<1) input->no_multpred=1;
-#if 0   // Do not check anymore
-  // consistency check no_multpred
-  if(input->no_multpred > MAX_MULT_PRED)
-  {
-    snprintf(errortext, ET_SIZE, "Error : input parameter 'no_multpred' exceeds limit (1...5), check configuration file ");
-    error (errortext, 400);
-  }
-#endif
+
 
   // consistency check size information
 
@@ -452,7 +477,7 @@ static void PatchInp ()
     input->blc_size[3][0]= 8;
     input->blc_size[3][1]=16;
   }
-  if (input->InterSearch16x16)
+  if (input->InterSearch8x8)
   {
     input->blc_size[4][0]= 8;
     input->blc_size[4][1]= 8;
@@ -473,15 +498,15 @@ static void PatchInp ()
     input->blc_size[7][1]= 4;
   }
 
-  if (input->partition_mode < 0 || input->partition_mode > 2)
+  if (input->partition_mode < 0 || input->partition_mode > 1)
   {
-    snprintf(errortext, ET_SIZE, "Unsupported Partition mode, must be between 0 and 2");
+    snprintf(errortext, ET_SIZE, "Unsupported Partition mode, must be between 0 and 1");
     error (errortext, 400);
   }
 
-  if (input->of_mode < 0 || input->of_mode > 1)
+  if (input->of_mode < 0 || input->of_mode > 3)
   {
-    snprintf(errortext, ET_SIZE, "Unsupported Outpout file mode, must be between 0 and 1");
+    snprintf(errortext, ET_SIZE, "Unsupported Outpout file mode, must be between 0 and 2");
     error (errortext, 400);
   }
 

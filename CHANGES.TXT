@@ -1,3 +1,79 @@
+Changes for Version 8.7 to Version 8.6
+--------------------------------------
+
+* Code cleanups (KS)
+  - removed old Loopfilter Code (#if !defined LOOP_FILTER_MB)
+  - removed non UMV code (#if !defined UMV)
+* Bug fixing (KS)
+  - correct SP frame coding for RTP file format
+* Intra frame period (YL/KS)
+  - known bug: decoder writes frames in wrong order
+* Bug fix  (YW)
+  - GOB update
+
+Encoder:
+
+* Removed the Interim File Format (TO)
+* Bugfixes for Slice Mode 2 in case of small slices (TO)
+* Bugfixes for Loopfilter and Slice Mode 2 (TS)
+* RTP-File Format added (SW)
+  - currently only one partition per slice is allowed
+  - Support for multiple (3) partitions per slice will follow
+* RD Optimization for error prone channles added (DK)
+* Minor cleanups (cosmetical work) (TO)
+* Added new parameters to the Configfile (DK)
+* Added headerbits to the statistics 
+
+Decoder
+* Removed the Interim File Format (TO)
+* RTP-File Format added (StW)
+  - currently only one partition per slice is allowed
+  - Support for multiple (3) partitions per slice will follow
+* Changes in find_snr for case of slice losses (TO)
+* Some Bugfixes for the new added EC mode (TO)
+* Modifications to detect slice/frame losses in RTP File Format (TO)
+* Some modifications to enhance the robustness to loss of slices (TO)
+* Changes in the Configfile for the new RTP File Mode (SW)
+  - note that if the RTP File Format was chosen the Entropy coding mode
+    that is given in the Configfile is ignored
+
+Known Bugs
+Encoder
+* If Slice Mode 2 is chosen a tracefile name must be given
+* A new parameter was added to the picture header of the 26L Format 
+  to deal with packet losses. As no errors or packet losses appear in
+  a bitstream environment this is nonsense and should be removed one time 
+  (not really a bug)
+
+Decoder
+* The equivalent for item two of the known bugs in the encoder
+
+Changes for Version 8.6 relative to Version 8.5
+-----------------------------------------------
+
+Decoder:
+
+* the error concealment algorithms (EC) in VCEG-N62 has been supported (WYK, VV)
+  - six files (3 .c files and 3 .h files beginning with "erc_") added
+  - important modifications in other files are marked with "_ERROR_CONCEALMENT_"
+    or "WYK", and EC can be disabled as stated in "defines.h"
+  - modifications to make decoder robust and correct to slice/frame losses
+  - all picture types (I, P, B, SP) are supported
+* some trivial modifications (WYK)
+  - some unused codes and bad brace and code indentations cleaned
+  - encoded SP-frames displayed as "SP" instead of "P"
+
+Encoder:
+
+* The picture header as slightly changed (WYK)
+  - the last parameter are utilized as RefPicID, the ID of non-B frames
+  - a variable "int refPicID" added into the structure ImageParameters
+* bug fixed for mismatch in SP-frames when RD-optimization enabled (RK)
+* some trivial modifications (WYK)
+  - some unused codes and bad brace and code indentations cleaned
+  - encoded SP-frames displayed as "SP" instead of "P"
+
+
 Changes for Version 8.5 relative to Version 8.4
 -----------------------------------------------
 
@@ -114,6 +190,7 @@ Changes for Version 8.0 relative to Version 6.1
 People:
 KS      Karsten Sühring         suehring@hhi.de
 
+DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 GB      Gabi Blättermann        blaetter@hhi.de
 GS      Gary Sullivan		garysull@microsoft.com
@@ -121,8 +198,14 @@ HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 PL      Peter List              Peter.List@t-systems.de
+RK	Ragip Kurceren 		ragip.kurceren@nokia.com
 RS      Rickard Sjöberg         Rickard.Sjoberg@era.ericsson.se
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
-TO      Tobias Oelbaum          oelbaum@hhi.de
+TO      Tobias Oelbaum          drehvial@gmx.net
+TSt	Thomas Stockhammer	stockhammer@lnt.ei.tum.de
 TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
+VV	Viktor Varsa		viktor.varsa@nokia.com
+WYK	Ye-Kui Wang		wangy@cs.tut.fi
+YL      Yann Lemaguet		yann.lemaguet@philips.com
+YW      Ye-Kui Wang             wangy@cs.tut.fi

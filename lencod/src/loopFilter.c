@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  *************************************************************************************
  * \file loopFilter.c
@@ -157,11 +189,11 @@ int GetVecDif( ImageParameters *img, int dir, int blk_y, int blk_x )
  *    The main MB-filtering function
  *****************************************************************************************
  */
-void DeblockMb()
+void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV)
 {
   int           ofs_x, ofs_y ;
   int           blk_x, blk_y ;
-  int           x, y ;
+  int           x, y, EdgeX, EdgeY ;
   int           VecDif ;                                    // TRUE if x or ydifference to neighboring mv is >= 4
   int           dir ;                                                         // horizontal or vertical filtering
   int           CbpMaskQ ;
@@ -178,15 +210,20 @@ void DeblockMb()
       for( x = xFirst ; x < 16 ; x++ )
         bufferY[20*y+x+84] = imgY[img->pix_y+y][img->pix_x+x];
 
-    for( y = yFirst ; y < 8 ; y++ )
-      for( x = xFirst ; x < 8 ; x++ )
-      {
-        bufferU[12*y+x+52] = imgUV[0][img->pix_c_y+y][img->pix_c_x+x];
-        bufferV[12*y+x+52] = imgUV[1][img->pix_c_y+y][img->pix_c_x+x];
-      }
+    if (imgUV!=NULL)
+      for( y = yFirst ; y < 8 ; y++ )
+        for( x = xFirst ; x < 8 ; x++ )
+        {
+          bufferU[12*y+x+52] = imgUV[0][img->pix_c_y+y][img->pix_c_x+x];
+          bufferV[12*y+x+52] = imgUV[1][img->pix_c_y+y][img->pix_c_x+x];
+        }
 
-    for( ofs_y=(!dir || img->block_y)? 0:1 ; ofs_y<4 ; ofs_y++ )             // go  vertically through 4x4 blocks
-      for( ofs_x=( dir || img->block_x)? 0:1 ; ofs_x<4 ; ofs_x++ )          // go horicontally through 4x4 blocks
+    EdgeX = ( dir || img->block_x)? 0:1 ;
+    EdgeY = (!dir || img->block_y)? 0:1 ;
+
+
+    for( ofs_y=EdgeY ; ofs_y<4 ; ofs_y++ )             // go  vertically through 4x4 blocks
+      for( ofs_x=EdgeX ; ofs_x<4 ; ofs_x++ )          // go horicontally through 4x4 blocks
       {
         blk_y    = img->block_y + ofs_y ;                                                 // absolute 4x4 address
         blk_x    = img->block_x + ofs_x ;
@@ -196,11 +233,14 @@ void DeblockMb()
         CbpMaskQ = (ofs_y<<2) + ofs_x ;
         EdgeLoop( imgY[blk_y<<2] + (blk_x<<2), bufferY + ((20*ofs_y+ofs_x)<<2) + 84, MbP, MbQ, VecDif, dir, 1<<MASK_L[dir][CbpMaskQ], 1<<CbpMaskQ, img->width, 20, 1 ) ;
 
-        if( (!dir && !(ofs_x & 1)) || (dir && !(ofs_y & 1)) )                      // do the same for chrominance
+        if (imgUV!=NULL)
         {
-          CbpMaskQ = (ofs_y & 0xfe) + (ofs_x>>1) ;
-          EdgeLoop( imgUV[0][blk_y<<1] + ((blk_x)<<1), bufferU + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x010000<<MASK_C[dir][CbpMaskQ], 0x010000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
-          EdgeLoop( imgUV[1][blk_y<<1] + ((blk_x)<<1), bufferV + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x100000<<MASK_C[dir][CbpMaskQ], 0x100000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
+          if( (!dir && !(ofs_x & 1)) || (dir && !(ofs_y & 1)) )                      // do the same for chrominance
+          {
+            CbpMaskQ = (ofs_y & 0xfe) + (ofs_x>>1) ;
+            EdgeLoop( imgUV[0][blk_y<<1] + ((blk_x)<<1), bufferU + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x010000<<MASK_C[dir][CbpMaskQ], 0x010000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
+            EdgeLoop( imgUV[1][blk_y<<1] + ((blk_x)<<1), bufferV + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x100000<<MASK_C[dir][CbpMaskQ], 0x100000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
+          }
         }
       }
   }

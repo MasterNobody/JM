@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ************************************************************************
  *  \file
@@ -34,6 +66,8 @@
 
 
 typedef unsigned char   byte;                   //!<  8 bit unsigned
+typedef int             int32;
+typedef unsigned int    u_int32;
 
 
 // global picture format dependend buffers, mem allocation in decod.c ******************
@@ -45,9 +79,6 @@ byte ***imgUV_pf;                               //<! Post filter luma image
 
 byte ***mref;                                   //<! 1/1 pix luma for direct interpolation
 byte ****mcef;                                  //<! pix chroma
-
-byte **loopb;                                   //<! Array for loop filter strength luma
-byte **loopc;                                   //<! Array for loop filter strength chroma
 
 // B pictures
 byte **imgY_prev;
@@ -78,8 +109,7 @@ char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 typedef enum
 {
   PAR_DP_1,    //<! no data partitioning is supported
-  PAR_DP_2,    //<! data partitioning with 2 partitions
-  PAR_DP_4     //<! data partitioning with 4 partitions
+  PAR_DP_3,    //<! data partitioning with 3 partitions
 } PAR_DP_TYPE;
 
 
@@ -87,7 +117,7 @@ typedef enum
 typedef enum
 {
   PAR_OF_26L,   //<! Current TML description
-  PAR_OF_SLICE  //<! Slice File Format
+  PAR_OF_RTP    //<! RTP Packet Output format
 } PAR_OF_TYPE;
 
 //! Boolean Type
@@ -117,7 +147,7 @@ typedef enum {
   SE_DELTA_QUANT,
   SE_BFRAME,
   SE_EOS,
-  SE_MAX_ELEMENTS //!< number of maximum syntax elements
+  SE_MAX_ELEMENTS //!< number of maximum syntax elements, this MUST be the last one!
 } SE_type;        // substituting the definitions in element.h
 
 
@@ -239,8 +269,8 @@ typedef struct syntaxelement
   unsigned int  bitpattern;            //!< UVLC bitpattern
   int           context;               //!< CABAC context
 #if TRACE
-  #define       TRACESTRING_SIZE 100   //!< size of trace string
-  char          tracestring[100];      //!< trace string
+  #define       TRACESTRING_SIZE 100           //!< size of trace string
+  char          tracestring[TRACESTRING_SIZE]; //!< trace string
 #endif
 
   //! for mapping of UVLC to syntaxElement
@@ -300,20 +330,21 @@ typedef struct datapartition
 //! Slice
 typedef struct
 {
-  int                 picture_id;
-  int                 slice_nr;      //!< not necessary but o.k.
+  int                 ei_flag;       //!< 0 if the partArr[0] contains valid information
+  int                 picture_id;    //!< MUST be set by NAL even in case ei_flag == 1
+  int                 slice_nr;      //!< MUST be set by NAL even in case ei_flag == 1
   int                 qp;
   int                 picture_type;  //!< picture type
-  int                 start_mb_nr;
+  int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
+  int                 max_part_nr;
   int                 dp_mode;       //!< data partioning mode
-  int                 max_part_nr;   //!< number of different partitions
   int                 eos_flag;      //!< end of sequence flag
   int                 next_header;
-  int                 last_mb_nr;
+  int                 next_eiflag;
+  int                 last_mb_nr;    //!< only valid when entropy coding == CABAC
   DataPartition       *partArr;      //!< array of partitions
   MotionInfoContexts  *mot_ctx;      //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;      //!< pointer to struct of context models for use in CABAC
-
   int     (*readSlice)(struct img_par *, struct inp_par *);
 
 } Slice;
@@ -329,6 +360,9 @@ struct img_par
   int *slice_numbers;
   int *intra_mb;                              //<! 1 = intra mb, 0 = not intra mb
   int tr;                                     //<! temporal reference, 8 bit, wrapps at 255
+  int tr_old;                                     //<! old temporal reference, for detection of a new frame, added by WYK
+  int refPicID;                         //<! temporal reference for reference frames (non-B frames), 4 bit, wrapps at 15, added by WYK
+  int refPicID_old;                  //<! to detect how many reference frames are lost, added by WYK
   int frame_cycle;                            //<! cycle through all stored reference frames
   int qp;                                     //<! quant for the current frame
   int qpsp;                                   //<! quant for SP-picture predicted frame
@@ -358,8 +392,6 @@ struct img_par
   int UseConstrainedIntraPred;
 
   int cod_counter;                            //<! Current count of number of skipped macroblocks in a row
-  byte li[8];                                 //<! 8 pix input to loopfilter routine
-  byte lu[8];                                 //<! 8 pix output from loopfilter routine
 
   int ***dfMV;                                //<! [92][72][3];
   int ***dbMV;                                //<! [92][72][3];
@@ -438,9 +470,6 @@ void free_slice(struct inp_par *inp, struct img_par *img);
 int  decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr);
 void init_frame(struct img_par *img, struct inp_par *inp);
 void exit_frame(struct img_par *img, struct inp_par *inp);
-void init_loop_filter(struct img_par *img);
-void loopfilter(struct img_par *img);
-int  loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma);
 void DeblockMb(struct img_par *img ) ;
 
 void write_frame(struct img_par *img,int,FILE *p_out);
@@ -508,22 +537,11 @@ int  (*nal_startcode_follows) ();
 // NAL functions TML/CABAC bitstream
 int  uvlc_startcode_follows();
 int  cabac_startcode_follows();
-
-// SLICE
-int  ReadPartitionsOfSlice (struct img_par *img, struct inp_par *inp);
 int  GetOnePartitionIntoSourceBitBuffer(int PartitionSize, byte *Buf);
-int  readSyntaxElement_SLICE(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
-int  readSliceSLICE(struct img_par *img, struct inp_par *inp);
-int  slice_symbols_available (Bitstream *currStream);
-void slice_get_symbol(SyntaxElement *sym, Bitstream *currStream);
 void free_Partition(Bitstream *currStream);
-void DP_SliceHeader(int last_mb, struct img_par *img, struct inp_par *inp);
-
 
 // ErrorConcealment
 void reset_ec_flags();
-void seek_back(int back);
-void ec_header(struct img_par *img);
 
 // CABAC
 void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buffer, int firstbyte, int *code_len );

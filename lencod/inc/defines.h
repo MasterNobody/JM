@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  **************************************************************************
  * \file defines.h
@@ -20,20 +52,13 @@
 
 #define VCEG_M79_PICTURE_HEADER
 
-#define LOOP_FILTER_MB
 #define NO_RDQUANT
-#define UMV
 
 #define _FAST_FULL_ME_
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
 #define _CHANGE_QP_
 #define _ADDITIONAL_REFERENCE_FRAME_
-
-// The fast integer search is implemented for UMV only
-#ifdef  _FAST_FULL_ME_
-#define UMV
-#endif
 
 #define TRACE           1        //!< 0:Trace off 1:Trace on
 

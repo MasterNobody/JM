@@ -1,3 +1,35 @@
+/*
+***********************************************************************
+* COPYRIGHT AND WARRANTY INFORMATION
+*
+* Copyright 2001, International Telecommunications Union, Geneva
+*
+* DISCLAIMER OF WARRANTY
+*
+* These software programs are available to the user without any
+* license fee or royalty on an "as is" basis. The ITU disclaims
+* any and all warranties, whether express, implied, or
+* statutory, including any implied warranties of merchantability
+* or of fitness for a particular purpose.  In no event shall the
+* contributor or the ITU be liable for any incidental, punitive, or
+* consequential damages of any kind whatsoever arising from the
+* use of these programs.
+*
+* This disclaimer of warranty extends to the user of these programs
+* and user's customers, employees, agents, transferees, successors,
+* and assigns.
+*
+* The ITU does not represent or warrant that the programs furnished
+* hereunder are free of infringement of any third-party patents.
+* Commercial implementations of ITU-T Recommendations, including
+* shareware, may be subject to royalty fees to patent holders.
+* Information regarding the ITU-T patent policy is available from
+* the ITU Web site at http://www.itu.int.
+*
+* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
+************************************************************************
+*/
+
 /*!
  ************************************************************************
  * \file uvlc.c
@@ -7,9 +39,9 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
- *    - Detlev Marpe                    <marpe@hhi.de>
- *    - Gabi Blaettermann               <blaetter@hhi.de>
+ *    - Inge Lille-Langøy                <inge.lille-langoy@telenor.com>
+ *    - Detlev Marpe                     <marpe@hhi.de>
+ *    - Gabi Blaettermann             <blaetter@hhi.de>
  ************************************************************************
  */
 #include "contributors.h"
@@ -240,13 +272,13 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
   SyntaxElement sym;
   int dummy;
   byte *buf = currStream->streamBuffer;
-  // static int first=TRUE;
 
   int code_word_ctr=0;
   int len, info;
+  int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
 
   memset (buf, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
-  currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(buf);
+  currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, buf);
   if (currStream->bitstream_length > 4)  // More than just a start code
   {
     sym.type = SE_HEADER;
@@ -263,8 +295,16 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
 
     // TO 28.08.2001 Note, that we write PictureHeader at the start of any Slice!
     dummy = PictureHeader(img,inp);
-    // if the start_mb entry == 0 we have a new frame
-    if(!currSlice->start_mb_nr)
+
+    //WYK: Oct. 8, 2001, change the method to find a new frame
+    if(img->tr != img->tr_old)
+      newframe = 1;
+    else 
+      newframe = 0;
+    img->tr_old = img->tr;
+    
+    // if the TR of current slice is not identical to the TR  of previous received slice, we have a new frame
+    if(newframe)
       return SOP;
     else
       return SOS;
@@ -359,7 +399,7 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
 {
 
   register int inf;
-  long byteoffset;      // byte from start of frame
+  long byteoffset;      // byte from start of buffer
   int bitoffset;      // bit from start of byte
   int ctr_bit=0;      // control bit for current bit posision
   int bitcounter=1;
@@ -396,7 +436,9 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
         inf = (inf << 1);
     bitcounter+=2;
     if (byteoffset > bytecount)
+    {
       return -1;
+    }
   }
   *info = inf;
   return bitcounter;           // return absolute offset in bit from start of frame
