@@ -31,45 +31,32 @@
 */
 
 /*!
- ************************************************************************
- * \file  nal_part.c
+ *************************************************************************************
+ * \file context_ini.h
  *
  * \brief
- *    Network Adaptation layer for partition file
+ *    CABAC context initializations
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Tobias Oelbaum <oelbaum@hhi.de, oelbaum@drehvial.de>
- ************************************************************************
+ *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Heiko Schwarz                   <hschwarz@hhi.de>
+ **************************************************************************************
  */
 
-#include <string.h>
+#ifndef _CONTEXT_INI_
+#define _CONTEXT_INI_
 
-#include "contributors.h"
-#include "global.h"
-#include "elements.h"
 
-int assignSE2partition[][SE_MAX_ELEMENTS] =
-{
-  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19  // elementnumber (no not uncomment)
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
-  {  0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 0, 0 }    //!< three partitions per slice
-};
+void  create_context_memory ();
+void  free_context_memory   ();
 
-int PartitionMode;
+void  init_contexts  ();
+void  store_contexts ();
 
-/*!
- ************************************************************************
- * \brief
- *    Resets the entries in the bitstream struct
- ************************************************************************
- */
-void free_Partition(Bitstream *currStream)
-{
-  byte *buf = currStream->streamBuffer;
+void  update_field_frame_contexts (int);
 
-  currStream->bitstream_length = 0;
-  currStream->frame_bitoffset = 0;
-  currStream->ei_flag =0;
-  memset (buf, 0x00, MAX_CODED_FRAME_SIZE);
-}
+void  SetCtxModelNumber ();
+
+#endif
+

@@ -33,7 +33,7 @@
 /*!
  ***************************************************************************
  *
- * \file scatter.h
+ * \file fmo.h
  *
  * \brief
  *    Support for Flexilble Macroblock Ordering (FMO)
