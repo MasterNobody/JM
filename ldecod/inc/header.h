@@ -45,3 +45,4 @@
 int SliceHeader(struct img_par *img, struct inp_par *inp);
 
 #endif
+
