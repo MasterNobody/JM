@@ -42,7 +42,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /MLd /W3 /GX /Zi /I "lencod\inc" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
+# ADD CPP /nologo /W3 /GX /O2 /Ob2 /I "lencod\inc" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
 BSC32=bscmake.exe
@@ -66,7 +66,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /W3 /GX /Zi /I "lencod/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
+# ADD CPP /nologo /W3 /GX /ZI /O2 /I "lencod/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -87,11 +87,23 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\lencod\src\B_frame.c
+SOURCE=.\lencod\src\b_frame.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\biariencode.c
 # End Source File
 # Begin Source File
 
 SOURCE=.\lencod\src\block.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\cabac.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\filehandle.c
 # End Source File
 # Begin Source File
 
@@ -107,19 +119,7 @@ SOURCE=.\lencod\src\macroblock.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\src\nal_bits.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\nal_part.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\stream.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\vlc.c
+SOURCE=.\lencod\src\uvlc.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -127,7 +127,11 @@ SOURCE=.\lencod\src\vlc.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\lencod\inc\B_frame.h
+SOURCE=.\lencod\inc\b_frame.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\biariencode.h
 # End Source File
 # Begin Source File
 
@@ -135,7 +139,15 @@ SOURCE=.\lencod\inc\block.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\cabac.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\contributors.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\defines.h
 # End Source File
 # Begin Source File
 
@@ -152,22 +164,6 @@ SOURCE=.\lencod\inc\image.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\macroblock.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\inc\nal_bits.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\inc\nal_part.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\inc\stream.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\inc\vlc.h
 # End Source File
 # End Group
 # End Target

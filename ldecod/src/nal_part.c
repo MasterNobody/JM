@@ -436,8 +436,336 @@ static int ReadSlice (
 	static int FinishedLastPicture = FALSE;
 
 	if (FinishedLastPicture)
-		return (FALSE);						/* EOS found */
+		return (FALSE);					/* EOS found */
 	if (GetSlice (p_in) == EOF_DETECT)	/* Read Partition data of a slice into p */
+		FinishedLastPicture = TRUE;		/* EOF or error in ReadFrame */
+
+	return TRUE;
+}
+
+/******************************************************************************/
+/* Slice Stuff starts here													  */
+/******************************************************************************/
+
+/*!
+ *	\fn		int slice_tml_symbols_available (int type) {
+ *	\brief	checks if element type remains in partition
+ *	\return	TRUE	elements to read remain in partition
+ *			FALSE	no more elements in partition
+ */
+int slice_tml_symbols_available (
+	int type)	/*!< syntaxelementtype */
+{
+	int partitionid;
+	partitionid = assignSE2partition[PartitionMode][type];
+
+	if (p[partitionid] == NULL)
+		return FALSE;
+	else
+		return ((p[partitionid]->symptr < p[partitionid]->symbols));
+};
+
+
+/*!
+ *	\fn		int slice_tml_get_symbol (int *len, int *info, int type)
+ *	\brief	gets symbol out of partition/slice/frame
+ *
+ *	\return check if partition contains requested element
+ *			TRUE	element exist
+ *			FALSE	partition does not contain any more elements
+ *	\note
+ *	- Side effects:
+ *			Removes the read symbol from buffer
+ *			Terminates decoder through assert() if there is no more symbol of the
+ *			requested type available.  This can never happen in case of uncorrupted
+ *			partition files.
+ *	- Shortcomings:
+ *			A more prudent reaction to missing data may be desirable if bit errors
+ *			in partitions can occur.  Completely lost partitions should be handled
+ *			elsewhere if possible, as this function is called really frequently.
+ */
+void slice_tml_get_symbol(
+	int *len,	/*!< pointer to length of element (modified) */
+	int *info,  /*!< pointer to infoword (modified) */
+	int type)	/*!< Data Type (Partition ID) of symbol requested */
+{
+	int partitionid;
+
+
+
+//#if TRACE
+	static int count =0;
+	if (type == 0)
+		count =0;
+//#endif
+
+	partitionid = assignSE2partition[PartitionMode][type];
+
+	/* Picture type is not in buffer */
+	if(type == SE_PTYPE)
+	{
+		if (p[partitionid]->PictureType == INTRA_IMG)
+		{
+			*len=3;
+			*info=1;
+		}
+		else if((p[partitionid]->PictureType == INTER_IMG_1)) /* inter single reference frame */
+		{
+			*len=1;
+			*info=0;
+		}
+		else if((p[partitionid]->PictureType == INTER_IMG_MULT)) /* inter multiple reference frames */
+		{
+			*len=3;
+			*info=0;
+		}
+		else if((p[partitionid]->PictureType == B_IMG_1))	
+		{
+			*len=5; 
+			*info=0;
+		}
+		else if((p[partitionid]->PictureType == B_IMG_MULT))
+		{
+			*len=5;
+			*info=1;
+		}
+		else
+		{		
+			fprintf(stderr, "Picture Type not supported!");
+		}			
+	}
+	else
+	{
+		assert (p[partitionid] != NULL);
+
+		*len = p[partitionid]->len[p[partitionid]->symptr];
+		*info = p[partitionid]->info[p[partitionid]->symptr++];
+	}
+#if TRACE
+	if (type == SE_MBTYPE)
+		printf("partition %3d %20s %3d %3d %3d\n",partitionid, SEtypes[type], (int)*len, (int)*info, ++count);
+	else
+		printf("partition %3d %20s %3d %3d \n",partitionid, SEtypes[type], (int)*len, (int)*info);
+#endif
+
+}
+
+
+/*!
+ *	\fn		void slice_tml_init()
+ *	\brief	Initialization code for this module
+ */
+void slice_tml_init()
+{
+	int i;
+
+	for (i=0; i<MAXPARTITION; i++)
+		p[i]=NULL;
+}
+
+
+/*!
+ *	\fn		void tml_finit()
+ *	\brief	Finalization code for this module
+ */
+void slice_tml_finit()
+{}
+
+
+/*!
+ *	\fn		slice_tml_find_startcode()
+ *
+ *	\return	tr, qp, mb_nr, format	Picture/Slice Header content
+ *			0 == End of sequence, 
+ *			1 == Startcode found
+ *			2 == Headerpartition lost
+ *	\note
+ *	-Side effects:
+ *			Reads a complete partition.  Throws out any pictures that contain
+ *			not at least a TYPE_HEADER and a TYPE_MBTYPE Partition
+ *  -Remarks:
+ *			In a bitstream environment, this routine is necessary.  In a packet environment
+ *			that assumes no packet corruption, however, there is no need to search for
+ *			a start code.  By definition, every Slice/Picture has a start code partition,
+ *			and, by convention of the file format, this partition is the first partition
+ *			of the slice/picture in the file.  Therefore, part_nal_find_startcode() reads
+ *			a slice/picture (using ReadSlice() ) and simply returns the values found in
+ *			the individual fields of the file structure.
+ *
+ *			New in Version 5.1: When employing packetization as discussed in section 8 of
+ *			the test model document, it is possible that pictures without necessary
+ *			partitions are fed into the decoder (e.g. when the 'First' packet is lost).
+ *			Therefore, part_tml_find_startcode ignores all unfinshed pictures that do
+ *			not contain at least the TYPE_HEADER and TYPE_MBHEADER partitions.
+ */
+int slice_tml_find_startcode(
+	FILE *p_in,		/*!< Input file containing Partition structures */
+	int *tr,		/*!< Temporal Reference of current frame (modified) */
+	int *qp,		/*!< Quantization Parameter (modified) */
+	int *mb_nr,		/*!< Macroblock number of slice-start (modified) */
+	int *format)	/*!< Picture format CIF/QCIF (modified) */
+{
+
+	int headerpart = assignSE2partition[PartitionMode][SE_HEADER];	/* header partition is partition containing header element */
+
+	if (ReadSliceSlice(p_in) == FALSE)
+		return FALSE;
+		/*!
+		 * \note
+		 * Condition to decode frame/slice is that partitions containing Header and MB_TYPE 
+		 * elements are available.
+		 */
+
+	// Now all partitions are read into the buffer and all VLC codes are transformed.
+	// Just return the tr, qp, mb_nr, format values, as read for any partition.
+	// Here, I currently use the header partition, but those values should be
+	// identical for any partition.  Note that sooner or later this section should
+	// change.  There is really no point in having this side information both in
+	// the VLC-coded headers and in side information of the packet file.
+
+	*tr = p[headerpart]->PicID;
+	*qp = p[headerpart]->QP;
+	*mb_nr = p[headerpart]->StartMB;
+	if (p[headerpart]->StartMB == 0)		// Only if Picture Start code write Format,
+		*format = p[headerpart]->Format;	// else leave it untouched
+	return TRUE;
+}
+
+
+/*!
+ *	\fn		int slice_tml_startcode_follows()
+ *	\brief	Input file containing Partition structures
+ *	\return	TRUE if a startcode follows (meaning that all symbols are used.
+ *			FALSE otherwise.
+ */
+int slice_tml_startcode_follows()
+{
+	int i;
+	int ok = TRUE;
+
+	for (i=0;i<MAXPARTITION;i++)
+	{
+		if (p[i] != NULL && p[i]->PicID >=0)	/* Check only valid entries */
+		{		
+			ok = ok && (p[i]->symbols == p[i]->symptr);
+		}
+	}
+	return ok;
+}
+
+
+/*!
+ *	\fn		int GetSlice (FILE *in)
+ *	\brief	Allocates all necessary partition buffers
+ *			reads VLC-coded data bits into the buffer, and sets size information
+ *			Moves the read pointer of the partition forward by one symbol
+ *			Sets PicId, SliceID, StartMB, QP, PicFormat as found in the file 
+ *			(not using VLC coded information) \par
+ *
+ *			Terminates the decoder through assert() in case of read failures due to
+ *			corrupted input file \par
+ *
+ *			In case of corrupted Psync or Slicemarker the function reads until it gets 
+ *			a uncorrupted headerpartition. \par
+ *
+ *	\return	EOF indication (0 == success, 1 == EOF)
+ */
+static int GetSliceSlice (
+	FILE *in)	/*!< Input file containing Partition structures */
+{
+	static int currentPicID = 0, currentFormat = 0;
+	static int sliceid = 0;
+	int dt = 0, bitcount = 0;
+	int firsttime = TRUE;
+	int picid=0, startmb=0, qp=0, format, picture_type, eos_flag, max_part_nr, dp_mode;
+	int bytecount, res, i;
+	int headerpart;
+
+
+
+	/* Cleanup from last time */
+	res = NO_HEADER_DETECT;
+
+	for (i=0; i<MAXPARTITION; i++)
+		FreePartition (i);
+
+	/* Read Partitions of one Slice */
+	if (fread(&picid, 4, 1, in) != 1)
+	{
+		return EOF_DETECT;		/* EOF indication */
+	}
+
+	assert (1 == fread (&startmb, 4, 1, in));
+	assert (1 == fread (&qp, 4, 1, in));
+	assert (1 == fread (&format, 4, 1, in));
+	assert (1 == fread (&picture_type, 4, 1, in));
+	assert (1 == fread (&eos_flag, 4, 1, in));
+	assert (1 == fread (&max_part_nr, 4, 1, in));
+	assert (1 == fread (&dp_mode, 4, 1, in));
+		
+	headerpart = assignSE2partition[dp_mode][SE_HEADER];
+
+
+#if TRACE
+		printf ("GetSlice: pic %d | SMB %d | QP %d | ft %d | PT %d | EOS %d | MPN %d  | DPM %d\n", picid, startmb, qp, format, picture_type, eos_flag, max_part_nr, dp_mode);
+		//getchar();
+#endif
+	for(dt=0; dt<max_part_nr; dt++)
+		{
+			assert (1 == fread (&bitcount, 4, 1, in));
+#ifdef TRACE
+			printf ("Get Partition: Id %d | bitcount %d\n", dt, bitcount);
+#endif
+			/* calculate necessary bytes to read from file */
+			bytecount = bitcount / 8;
+			if ((bitcount % 8) != 0)
+				bytecount++;
+	
+			MallocPartition (dt);
+			p[dt]->PicID		= currentPicID;
+			p[dt]->SliceID		= sliceid;
+			p[dt]->Format		= format;
+			p[dt]->QP		    = qp;
+			p[dt]->PartID		= dt;
+			p[dt]->StartMB		= startmb;
+			p[dt]->PictureType  = picture_type;
+			p[dt]->bytecount	= bytecount;
+			p[dt]->bitcount		= bitcount;
+			if (bitcount > 0) 
+			{
+					assert (bytecount == (int) fread (p[dt]->d, 1, bytecount, in));
+					ConvertPartition(dt);
+			} 
+		}
+
+
+	if(startmb)
+		res = SLICE_DETECT;
+	else
+		res = HEADER_DETECT;
+
+	sliceid++;
+	return (res);
+}
+
+
+
+
+/*!
+ *	\fn		int ReadSliceSlice (FILE *in)
+ *	\brief	Fills complete partition structures for a whole slice
+ *	\retuen	0 for EOF, 1 for success.  This is for historic reasons:
+ *			TELENOR's read_frame returned the number of symbols read
+ *			(although this info was never used (?))
+ */
+static int ReadSliceSlice (
+	FILE *p_in)		/*!< Input file in partition format */
+{
+	static int FinishedLastPicture = FALSE;
+
+	if (FinishedLastPicture)
+		return (FALSE);					/* EOS found */
+	if (GetSliceSlice (p_in) == EOF_DETECT)	/* Read Partition data of a slice into p */
 		FinishedLastPicture = TRUE;		/* EOF or error in ReadFrame */
 
 	return TRUE;

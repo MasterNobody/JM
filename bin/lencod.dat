@@ -1,0 +1,43 @@
+5  .................... 1:  Number of frames to be coded
+27 ..................... 2:  Quant. param for first frame (intra) (0-31)
+27 ..................... 3:  Quant. param for remaining frames (0-31)
+2  ..................... 4:  Number of frames to be skipped in input (e.g 2 will code every third frame)
+1  ......................5:  Hadamard transform (0=not used, 1=used)
+16 ......................6:  Max search range 
+5  ......................7:  Number of previous frames used for inter motion search (1-5)
+2  ......................8:  Image format (0=SubQCIF 1=QCIF, 2=CIF 3=4CIF,4=16QCIF 5=CUSTOM)
+720  ....................9:  Image width  (only if image format=CUSTOM, must be multiple of 16 pels)
+576  ...................10:  Image height (only if image format=CUSTOM, must be multiple of 16 pels)
+1  .....................11:  YUV format (0=4:0:0, 1=4:2:0, 2=4:2:2, 3=4:4:4,currently only 4:2:0 is supported)
+8  .....................12:  YUV color depth per component in bit/pel (currently only 8 bit/pel is supported)
+0  .....................13:  Error robustness(extra intra macro block updates)(0=off, N: One GOB every N frames are intra coded) 
+1  .....................14:  Write internal decoded image to file (0=OFF 1=ON)
+1  .....................15:  Inter block search 16x16 (0=disable, 1=enable)
+1  .....................16:  Inter block search 16x8  (0=disable, 1=enable)
+1  .....................17:  Inter block search 8x16  (0=disable, 1=enable)
+1  .....................18:  Inter block search 8x8   (0=disable, 1=enable)
+1  .....................19:  Inter block search 8x4   (0=disable, 1=enable)
+1  .....................20:  Inter block search 4x8   (0=disable, 1=enable)
+1  .....................21:  Inter block search 4x4   (0=disable, 1=enable)
+G:\CIF\akiyo.cif .....22:  Input sequence, YUV 4:2:0
+akiyo.26l  .............23:  Output bitstream in Telenor H.26L format
+0  .....................24:  Data Partitioning & Outfile Mode (0 = H26L & NO DP, ..., 7)
+0  .....................25:  Slice mode (0=off 1=fixed #mb in slice 2=fixed #bytes in slice 3=use callback)
+33 .....................26:  Slice argument (Arguments to modes 1 and 2 above)
+0  .....................27:  Number of B frames inserted (0=not used)
+19 .....................28:  Quant. param for B frames (0-31)
+1  .....................29:  Symbol mode (Entropy coding method: 0=UVLC, 1=CABAC)
+
+
+This is a file containing input parameters to the Telenor H.26L encoder.
+The text line following each parameter is discarded by the encoder.
+
+
+
+
+
+
+
+ 
+
+ 

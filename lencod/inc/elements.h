@@ -16,6 +16,8 @@
 #ifndef _ELEMENTS_H_
 #define _ELEMENTS_H_
 
+#include "global.h"
+
 /*!  
  *	definition of H.26L syntaxelements
  *  order of elements follow dependencies for picture reconstruction
@@ -36,24 +38,8 @@
  *  TYPE_EOS        | SE_EOS
 */
 
-#define SE_HEADER			0	
-#define SE_PTYPE			1
-#define SE_MBTYPE			2
-#define SE_REFFRAME			3
-#define SE_INTRAPREDMODE	4
-#define SE_MVD				5
-#define SE_CBP_INTRA		6
-#define SE_LUM_DC_INTRA		7
-#define SE_CHR_DC_INTRA		8
-#define SE_LUM_AC_INTRA		9
-#define SE_CHR_AC_INTRA		10
-#define SE_CBP_INTER		11
-#define SE_LUM_DC_INTER		12
-#define SE_CHR_DC_INTER		13
-#define SE_LUM_AC_INTER		14
-#define SE_CHR_AC_INTER		15
-#define SE_EOS				16	/*!< End of Slice => use same partition as SE_PTYPE */
-#define SE_MAX_ELEMENTS		17  /*!< number of maximum syntax elements */
+
+
 
 #define MAXPARTITIONMODES	3	/*!< maximum possible partition modes as defined in assignSE2partition[][] */	
 
@@ -84,12 +70,12 @@
 
 static int assignSE2partition[][SE_MAX_ELEMENTS] = 
 {
-	// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16		// elementnumber (no not uncomment)
-	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },		/*!< all elements in one partition */
-	{  0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 0 },		/*!< H.223 partition mode */
-	{  0, 0, 1, 1, 1, 2, 3, 4, 5, 4, 6, 3, 4, 5, 4, 6, 7 }		/*!< internet partition mode */
+	// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17		// elementnumber (no not uncomment)
+	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },		/*!< all elements in one partition no data partitioning */
+	{  0, 0, 1, 1, 1, 2, 3, 4, 5, 4, 6, 3, 4, 5, 4, 6, 0, 7 },		/*!< internet partition mode */
+	{  0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0 }		/*!< H.223 partition mode */
 };
 
-int PartitionMode;
+
 
 #endif

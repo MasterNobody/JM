@@ -15,10 +15,6 @@
 #ifndef _MACROBLOCK_H_
 #define _MACROBLOCK_H_
 
-#define SINGLE_SCAN 0
-#define DOUBLE_SCAN 1
-
-int  tmp_mv[2][72][92];
 
 /* just to make new temp intra mode table */ 
 const int  MODTAB[3][2]= 

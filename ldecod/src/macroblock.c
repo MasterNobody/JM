@@ -1102,7 +1102,7 @@ int macroblock(
 int inter_intra(
 	struct img_par *img)  /*!< pointer to image struct */
 {
-	if ( img->imod == INTRA_MB_OLD )
+	if ( img->imod == INTRA_MB_OLD ||  img->imod == INTRA_MB_NEW ) // bug fix, DM 14/03/01
 	{
 		return INTRA_CODED_MB;
 	}

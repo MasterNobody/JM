@@ -16,7 +16,7 @@
 #define _BLOCK_H_
 
 #include <stdio.h>
-#include <global.h>
+#include "global.h"
 
 /*  max number of double quant coefficients used for RD constrained quantization. 
     Set to 3 in the TML test model  */ 
@@ -34,7 +34,6 @@
 
 int snr_arr[16][MTLC_POW];  
 int level_arr[16][MTLC_POW+1];
-int tmp_mv[2][72][92];
 
 const int JQQ1=1048576; /* = J20 */
 const int JQQ2= 524288;
@@ -188,8 +187,6 @@ const byte COEFF_BIT_COST[3][16][16]=
   },
 };
 
-
-int sign(int a,int b);
 
 
 #endif

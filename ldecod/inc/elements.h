@@ -55,8 +55,10 @@
 #define SE_CHR_DC_INTER		13
 #define SE_LUM_AC_INTER		14
 #define SE_CHR_AC_INTER		15
-#define SE_EOS				16	/*!< End of Slice => use same partition as SE_PTYPE */
-#define SE_MAX_ELEMENTS		17  /*!< number of maximum syntax elements */
+#define SE_BFRAME			16
+#define SE_EOS				17	
+#define SE_MAX_ELEMENTS		18  
+
 
 #define NO_EC				0	/*!< no error concealment necessary */
 #define	EC_REQ				1	/*!< error concealment required */
@@ -82,6 +84,7 @@ static char SEtypes[][20] =
 	"SE_CHR_DC_INTER",
 	"SE_LUM_AC_INTER",
 	"SE_CHR_AC_INTER",
+	"SE_BFRAME",
 	"SE_EOS" 
 };
 
@@ -109,14 +112,15 @@ static char SEtypes[][20] =
  *			Furthermore partitions must follow syntax dependencies as
  *			outlined in document Q15-J-23.
  */
+
+
 static int assignSE2partition[][SE_MAX_ELEMENTS] = 
 {
-	// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16		// elementnumber (no not uncomment)
-	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },		/*!< all elements in one partition no data partitioning */
-	{  0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 0 },		/*!< H.223 partition mode */
-	{  0, 0, 1, 1, 1, 2, 3, 4, 5, 4, 6, 3, 4, 5, 4, 6, 7 }		/*!< internet partition mode */
+	// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17		// elementnumber (no not uncomment)
+	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },		/*!< all elements in one partition no data partitioning */
+	{  0, 0, 1, 1, 1, 2, 3, 4, 5, 4, 6, 3, 4, 5, 4, 6, 0, 7 },		/*!< internet partition mode */
+	{  0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0 }		/*!< H.223 partition mode */
 };
-
 
 static int ec_flag[SE_MAX_ELEMENTS];		/* array to set errorconcealment */
 int PartitionMode;	

@@ -51,7 +51,7 @@ int decode_slice(
 	if(mb_nr == 0)
 	{
 #if TRACE
-		//printf ("DecodeSlice, found mb_nr == 0, start decoding picture header\n");
+		printf ("DecodeSlice, found mb_nr == 0, start decoding picture header\n");
 #endif
 
 		get_symbol("Image Type",&len, &info, SE_PTYPE);

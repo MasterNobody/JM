@@ -67,7 +67,7 @@
 #include "elements.h"
 
 #define TML			"5"
-#define VERSION		"5.9"
+#define VERSION		"5.92"
 #define LOGFILE		"log.dec"
 #define DATADECFILE	"data.dec"
 #define TRACEFILE	"trace.dec"
@@ -175,6 +175,14 @@ int main(
 		nal_symbols_available = bits_tml_symbols_available;
 		break;
 	case 1:
+		nal_init = slice_tml_init;
+		nal_finit = slice_tml_init;
+		nal_get_symbol = slice_tml_get_symbol;
+		nal_startcode_follows = slice_tml_startcode_follows;
+		nal_find_startcode = slice_tml_find_startcode;
+		nal_symbols_available = slice_tml_symbols_available;
+		break;
+	case 2:
 		nal_init = part_tml_init;
 		nal_finit = part_tml_init;
 		nal_get_symbol = part_tml_get_symbol;

@@ -13,7 +13,7 @@
 #define		SINGLE_SCAN 0
 #define		DOUBLE_SCAN 1
 
-#define		SEB					100   // used at put_symbol(....., SEB);
+//#define		SEB					100   // used at put_symbol(....., SEB);
 
 extern int ONE_FOURTH_TAP[3][2];
 extern const byte NCBP[48][2];

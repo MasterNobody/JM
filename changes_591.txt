@@ -1,5 +1,0 @@
-Changes from 5.9 to 5.91
-
-Bug fix in Image.c to allow Looping of source sequences.
-
-Contact: Stephan Wenger   stewe@cs.tu-berlin.de   12.03.2001

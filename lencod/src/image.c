@@ -9,6 +9,10 @@
 // Jani Lainema                    <jani.lainema@nokia.com>
 // Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
 // Byeong-Moon Jeon                <jeonbm@lge.com>
+// Yoon-Seong Soh                  <yunsung@lge.com>
+// Thomas Stockhammer              <stockhammer@ei.tum.de>
+// Detlev Marpe                    <marpe@hhi.de>
+// Guido Heising                   <heising@hhi.de> 
 // *************************************************************************************
 // *************************************************************************************
 #include "contributors.h"
@@ -19,31 +23,25 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <string.h>
-#include <assert.h>
+#include <memory.h>
 
 #include "global.h"
 #include "elements.h"
 #include "image.h"
 
 
-static int ReadSourcePicture (FILE *in, struct img_par *img, int frame);
-
 /************************************************************************
 *
-*  Name :       image()
+*  Name :       encode_one_frame()
 *
-*  Description: Encode one image
+*  Description: Encodes one frame
 *
 ************************************************************************/
-void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct snr_par *snr)
+int encode_one_frame(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct snr_par *snr)
 {
-	int multpred;
-	int len,info;
-	int i,j;	
-
-	/* B pictures */
-	int B_interval, Bframe_to_code;
-	int k;
+	Boolean end_of_frame = FALSE;
+	const int total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
+	SyntaxElement imgTypeSymbol;
 
 	time_t ltime1;   // for time measurement 
 	time_t ltime2;
@@ -68,153 +66,51 @@ void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct
 #endif
 	time( &ltime1 );        // start time s  
   
-	img->current_mb_nr=0;
-	img->current_slice_nr=0;
-	stat->bit_slice = 0;
-
-	if (img->number == 0)           /* first frame */
-	{
-		img->type = INTRA_IMG;        /* set image type for first image to intra */
-		img->qp = inp->qp0;           /* set quant. parameter for first frame */
-	}
-	else                            /* inter frame */
-	{
-		img->type = INTER_IMG;
-
-		img->qp = inp->qpN;
-
-		if (inp->no_multpred <= 1)
-			multpred=FALSE;
-		else
-			multpred=TRUE;               /* multiple reference frames in motion search */
-	}
 	
-	img->tr=img->number*(inp->jumpd+1);
-	if(img->number!=0 && inp->successive_Bframe != 0) 
-		nextP_tr=img->tr;
+	/* Initialize frame with all stat and img variables */
+	init_frame(img, inp, stat);
 
-	img->mb_y_intra=img->mb_y_upd;   /*  img->mb_y_intra indicates which GOB to intra code for this frame */
+	/* Initialize loopfilter */
+	init_loop_filter(img);
 
-	if (inp->intra_upd > 0)          /* if error robustness, find next GOB to update */
-	{
-		img->mb_y_upd=(img->number/inp->intra_upd) % (img->width/MB_BLOCK_SIZE);
-	}
-
-	for (i=0;i<90;i++)
-	{
-		for (j=0;j<74;j++)
-		{
-			loopb[i+1][j+1]=0;
-		}
-	}
-	for (i=0;i<46;i++)
-	{
-		for (j=0;j<38;j++)
-		{
-			loopc[i+1][j+1]=0;
-		}
-	}
-
-	/* Bits for picture header and picture type */
- 	len = nal_put_startcode(img->number*(inp->jumpd+1) % 256,
-	                        img->current_mb_nr, img->qp, inp->img_format,
-	                        img->current_slice_nr, SE_HEADER);
-
-	stat->bit_ctr += len;                             /* keep bit usage */
-	stat->bit_slice += len;
-	stat->bit_use_head_mode[img->type] += len;
-
-	if (img->type == INTRA_IMG)
-	{
-		len=3;
-		info=1;
-	}
-	else if((img->type == INTER_IMG) && (multpred == FALSE)) /* inter single reference frame */
-	{
-		len=1;
-		info=0;
-	}
-	else if((img->type == INTER_IMG) && (multpred == TRUE)) /* inter multipple reference frames */
-	{
-		len=3;
-		info=0;
-	}
-	sprintf(tracestring, "Image type = %3d ", img->type);
-	put_symbol(tracestring,len,info, img->current_slice_nr, SE_PTYPE);  /* write picture type to stream */
-
-	stat->bit_ctr += len;
-	stat->bit_slice += len;
-	stat->bit_use_head_mode[img->type] += len;
-
+	/* Select picture type: write coding to symbol */
+	select_picture_type(img, inp, &imgTypeSymbol);
+	
 	/* Read one new frame */
+	read_one_new_frame(img, inp);
 
-/* Old Telenor code, buggy, prevents source sequence looping */
-/* also there was a missunderstanding of fseek() semantics: */
-/* fseek() can seek beyond the EOF, and fgetc() returns then -1 */
-/* hence the pink pictures after the end of the sequence */
-/* fixed and optimized: Stephan Wenger, 11.03.2001 */
+	if (img->type == B_IMG)		
+		Bframe_ctr++;
 
-	frame_no = img->number*(inp->jumpd+1);
-
-/*	
-	rewind (p_in);
-	status = fseek (p_in, frame_no*img->height*img->width*3/2, 0);
-	if (status != 0) {
-		printf(" Error in seeking frame no: %d\n", frame_no);
-		exit (-1);
-	}    
-	for (j=0; j < img->height; j++) 
-		for (i=0; i < img->width; i++) 
-			imgY_org[j][i]=fgetc(p_in);         
-	for (uv=0; uv < 2; uv++) 
-		for (j=0; j < img->height_cr ; j++) 
-			for (i=0; i < img->width_cr; i++) 
-				imgUV_org[uv][j][i]=fgetc(p_in);  
-*/
-	
-	if (ReadSourcePicture (p_in, img, frame_no)) {
-		printf ("Error while reading picture %d\n", frame_no);
-		exit (-1);
-	}
-
-   
-	/* Intra and P pictures : Loops for coding of all macro blocks in a frame */
-	for (img->mb_y=0; img->mb_y < img->height/MB_BLOCK_SIZE; ++img->mb_y)
+	while (end_of_frame == FALSE)	/* loop over slices */
 	{
-		img->block_y = img->mb_y * BLOCK_SIZE;  /* vertical luma block posision */
-		img->pix_y   = img->mb_y * MB_BLOCK_SIZE; /* vertical luma macroblock posision */
-		img->pix_c_y = img->mb_y * MB_BLOCK_SIZE/2;  /* vertical chroma macroblock posision */
+		/* Encode the current slice */
+		encode_one_slice(img,inp,stat,&imgTypeSymbol);
 
-		if (inp->intra_upd > 0 && img->mb_y <= img->mb_y_intra)
-			img->height_err=(img->mb_y_intra*16)+15;     /* for extra intra MB */
-		else
-			img->height_err=img->height-1;
-
-		if (img->type == INTER_IMG)
-		{
-			++stat->quant0;
-			stat->quant1 += img->qp;      /* to find average quant for inter frames */
-		}
-
-		for (img->mb_x=0; img->mb_x < img->width/MB_BLOCK_SIZE; ++img->mb_x)
-		{
-			img->block_x = img->mb_x * BLOCK_SIZE;        /* luma block           */
-			img->pix_x   = img->mb_x * MB_BLOCK_SIZE;     /* luma pixel           */
-			img->block_c_x = img->mb_x * BLOCK_SIZE/2;    /* chroma block         */
-			img->pix_c_x   = img->mb_x * MB_BLOCK_SIZE/2; /* chroma pixel         */
-
-#if TRACE
-			fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
-#endif
-			macroblock(img,inp,stat);                     /* code one macroblock  */
-			img->current_mb_nr++;
-		}
+		/* Proceed to next slice */
+		img->current_slice_nr++;
+		stat->bit_slice = 0;
+		if (img->current_mb_nr == total_number_mb) /* end of frame reached? */
+			end_of_frame = TRUE;
 	}
-	
- 	loopfilter(img);          // reconstructed imgY, imgUV -> loop-filtered imgY, imgUV
-	if(img->number == 0) 
-		oneforthpix(img);				// loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
-	else oneforthpix_1(img);  // loop-filtered imgY, imgUV -> mref_P, mcef_P
+
+ 	loopfilter(img); // reconstructed imgY, imgUV -> loop-filtered imgY, imgUV
+
+	// in future only one call of oneforthpix() for all frame tyoes will be necessary, because
+	// mref buffer will be increased by one frame to store also the next P-frame. Then mref_P
+	// will not be used any more
+	if (img->type != B_IMG) /*all I- and P-frames*/
+	{
+		if (inp->successive_Bframe == 0 || img->number == 0)
+			oneforthpix(img,inp);  // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
+		else
+			oneforthpix_2(img);    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+    	                           // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+	}
+	else 
+		if (img->b_frame_to_code == inp->successive_Bframe) 
+			copy2mref(img);		       // last successive B-frame: mref_P[][][], mcef_P[][][][] (loop-filtered imgY, imgUV)-> mref[][][], mcef[][][][]	
+
 	find_snr(snr,img);     
     
 	time(&ltime2);       // end time sec 
@@ -226,130 +122,417 @@ void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct
 	tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
 	tot_time=tot_time + tmp_time;
 
-	// write reconstructed image (IPPP)
-	if(inp->write_dec && inp->successive_Bframe==0)
-	{
-		for (i=0; i < img->height; i++) 
-			for (j=0; j < img->width; j++) 
-				fputc(min(imgY[i][j],255),p_dec);
-      
-		for (k=0; k < 2; ++k) 
-			for (i=0; i < img->height/2; i++) 
-				for (j=0; j < img->width/2; j++) 
-					fputc(min(imgUV[k][i][j],255),p_dec);
-	}
-
-	// write reconstructed image (IBPBP) : only intra written 
-	else if (inp->write_dec && img->number==0 && inp->successive_Bframe!=0)
-	{
-		for (i=0; i < img->height; i++) 
-			for (j=0; j < img->width; j++) 
-				fputc(min(imgY[i][j],255),p_dec);
-      
-		for (k=0; k < 2; ++k) 
-			for (i=0; i < img->height/2; i++) 
-				for (j=0; j < img->width/2; j++) 
-					fputc(min(imgUV[k][i][j],255),p_dec);
-	}
-
-	// next P picture. This is saved with recon B picture after B picture coding
-	if (inp->write_dec && img->number!=0 && inp->successive_Bframe!=0)           
-	{
-		for (i=0; i < img->height; i++) 
-			for (j=0; j < img->width; j++) 
-				nextP_imgY[i][j]=imgY[i][j];      
-		for (k=0; k < 2; ++k) 
-			for (i=0; i < img->height/2; i++) 
-				for (j=0; j < img->width/2; j++) 
-					nextP_imgUV[k][i][j]=imgUV[k][i][j];         
-	}
-	  
-	if(img->number !=0) 
-		stat->bit_ctr_P += stat->bit_ctr-stat->bit_ctr_n;  
-
+	/* Write reconstructed images */
+	write_reconstructed_image(img, inp);
+	  		
 	if(img->number == 0)
-		printf("%2d(I) %8d %4d %7.4f %7.4f %7.4f  %5d \n",
+	{
+		printf("%3d(I) %8d %4d %7.4f %7.4f %7.4f  %5d \n",
 				frame_no, stat->bit_ctr-stat->bit_ctr_n, 
 				img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time); 
-	else 
-		printf("%2d(P) %8d %4d %7.4f %7.4f %7.4f  %5d \n",
-			frame_no, stat->bit_ctr-stat->bit_ctr_n, 
-			img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time); 
-
-	if (img->number == 0) 
-	{
 		stat->bitr0=stat->bitr;           
 		stat->bit_ctr_0=stat->bit_ctr;   
 		stat->bit_ctr=0;                  
 	}
-	stat->bit_ctr_n=stat->bit_ctr; 	
-	if(img->number == 0) return; 	
-
-	/****************************************************
-	 *                                                  *
-	 *                   B pictures                     *
-	 *                                                  *
-	 ****************************************************/
-	if(inp->successive_Bframe != 0) { 		
-		if(inp->successive_Bframe > inp->jumpd) {
-			printf("Warning !! Number of B-frames %d can not exceed the number of frames skipped\n",
-					inp->successive_Bframe);
-			exit(-1);
+	else
+	{
+		if (img->type != B_IMG)
+		{
+			stat->bit_ctr_P += stat->bit_ctr-stat->bit_ctr_n;  
+			printf("%3d(P) %8d %4d %7.4f %7.4f %7.4f  %5d \n",
+				frame_no, stat->bit_ctr-stat->bit_ctr_n, 
+				img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time); 
 		}
-		for(Bframe_to_code=1; Bframe_to_code<=inp->successive_Bframe; Bframe_to_code++) {				
+		else
+		{
+			stat->bit_ctr_B += stat->bit_ctr-stat->bit_ctr_n;  		
+			printf("%3d(B) %8d %4d %7.4f %7.4f %7.4f  %5d \n",
+				frame_no, stat->bit_ctr-stat->bit_ctr_n, img->qp, 
+				snr->snr_y, snr->snr_u, snr->snr_v, tmp_time); 	
+		}
+	}
+	stat->bit_ctr_n=stat->bit_ctr; 	
+	
 
-#ifdef WIN32
-			_ftime(&tstruct1);    // start time ms 
-#else 
-			ftime(&tstruct1);
-#endif
-			time(&ltime1);        // start time s  		
+	if(img->number == 0) 
+		return 0; 	
+	else
+		return 1;
+}
 
-            //g.b. init post filter like loop filter
-            for (i=0;i<90;i++)
-	        {
-		        for (j=0;j<74;j++)
-		        {
-			        loopb[i+1][j+1]=0;
-		        }
-	        }
-	        for (i=0;i<46;i++)
-	        {
-		        for (j=0;j<38;j++)
-		        {
-			        loopc[i+1][j+1]=0;
-		        }
-	        }
 
-			Bframe_ctr++;
-			initialize_Bframe(&B_interval, inp->successive_Bframe, Bframe_to_code, img, inp, stat);
-			frame_no = (img->number-1)*(inp->jumpd+1)+B_interval*Bframe_to_code;
-			ReadImage(frame_no, img);
-			code_Bframe(img, inp, stat);
-            //g.b. post filter like loop filter
-            loopfilter(img);          // reconstructed imgY, imgUV -> loop-filtered imgY, imgUV
-			writeimage(Bframe_to_code, inp->successive_Bframe, img, inp); 
-			find_snr(snr,img);
-						
-			stat->bit_ctr_B += stat->bit_ctr-stat->bit_ctr_n;  			
-			time(&ltime2);          // end time sec 
-#ifdef WIN32
-			_ftime(&tstruct2);      // end time ms  
-#else 
-			ftime(&tstruct2);       // end time ms  
-#endif
-			tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
-			tot_time=tot_time + tmp_time;
+/************************************************************************
+*
+*  Name :       encode_one_slice()
+*
+*  Description: Encodes one slice
+*
+************************************************************************/
+void encode_one_slice(struct img_par *img,struct inp_par *inp,struct stat_par *stat, SyntaxElement *imgTypeSym)
+{
+	Boolean end_of_slice = FALSE;
+	Boolean recode_macroblock;
+	int len;
+
+	/* Initializes the parameters of the current slice */
+	init_slice(img,inp);
+
+	/* Write slice or picture header */
+	len = start_slice(img, inp, imgTypeSym);
+
+	/* Update statistics */
+	if (img->current_mb_nr > 0)	
+	{
+ 		img->mb_data[img->current_mb_nr].bitcounter[BITS_HEADER_MB] = len;
+	}
+	else															/* first slice includes picture header */
+	{
+		if (inp->symbol_mode == UVLC)
+		{
+			stat->bit_ctr += len;
+			stat->bit_slice += len;
+		}
+		stat->bit_use_head_mode[img->type] += len;
+	}
+
+	while (end_of_slice == FALSE)	/* loop over macroblocks */
+	{
+
+		/* recode_macroblock is used in slice mode two and three where */
+		/* backing of one macroblock in the bitstream is possible      */
+		recode_macroblock = FALSE;
+
+		/* Initializes the current macroblock */
+		start_macroblock(img,inp,stat);
+
+		/* Encode one macroblock */
+		encode_one_macroblock(img,inp,stat);
+
+		/* Pass the generated syntax elements to the NAL */
+		write_one_macroblock(img,inp,stat);
+
+		/* Terminate processing of the current macroblock */
+		terminate_macroblock(img, inp, stat, &end_of_slice, &recode_macroblock);
+
+		if (recode_macroblock == FALSE)					/* The final processing of the macroblock has been done */
+			proceed2nextMacroblock(img,inp,stat); /* Go to next macroblock */
 			
-			printf("%2d(B) %8d %4d %7.4f %7.4f %7.4f  %5d \n",
-					frame_no, stat->bit_ctr-stat->bit_ctr_n, img->qp, 
-					snr->snr_y, snr->snr_u, snr->snr_v, tmp_time); 
-			
-			stat->bit_ctr_n=stat->bit_ctr;  			
-		}	  
-	} 
+	}
 
-	oneforthpix_2(img);      // mref_P, mcef_p -> mref[][][], mcef[][][][]
+	terminate_slice(img,inp,stat);
+}
+
+
+/************************************************************************
+*
+*  Name :       init_frame()
+*
+*  Description: Initializes the parameters for a new frame
+*               
+************************************************************************/
+void init_frame(struct img_par *img, struct inp_par *inp, struct stat_par *stat)
+{
+	int i,j,k;
+	int prevP_no, nextP_no;
+
+	img->current_mb_nr=0;
+	img->current_slice_nr=0;
+	stat->bit_slice = 0;
+
+	img->mb_y = img->mb_x = 0;
+	img->block_y = img->pix_y = img->pix_c_y = 0; 	/* define vertical positions */
+	img->block_x = img->pix_x = img->block_c_x = img->pix_c_x = 0; /* define horizontal positions */
+
+	if (inp->intra_upd > 0 && img->mb_y <= img->mb_y_intra)
+		img->height_err=(img->mb_y_intra*16)+15;     /* for extra intra MB */
+	else
+		img->height_err=img->height-1;
+
+	if(img->type != B_IMG)
+	{
+		if (img->type == INTRA_IMG)            
+			img->qp = inp->qp0;					/* set quant. parameter for I-frame */
+		else															
+			img->qp = inp->qpN;					/* set quant. parameter for P-frame */
+
+		img->tr=img->number*(inp->jumpd+1);
+	
+		if(img->number!=0 && inp->successive_Bframe != 0) 	/* B pictures to encode */
+			nextP_tr=img->tr;
+
+		img->mb_y_intra=img->mb_y_upd;   /*  img->mb_y_intra indicates which GOB to intra code for this frame */
+
+		if (inp->intra_upd > 0)          /* if error robustness, find next GOB to update */
+		{
+			img->mb_y_upd=(img->number/inp->intra_upd) % (img->width/MB_BLOCK_SIZE);
+		}
+	}
+	else
+	{
+		img->p_interval = inp->jumpd+1;
+		prevP_no = (img->number-1)*img->p_interval;
+		nextP_no = img->number*img->p_interval;
+
+
+		img->b_interval = (int)((float)(inp->jumpd+1)/(inp->successive_Bframe+1.0)+0.5);
+
+		img->qp = inp->qpB;
+     
+		img->tr= prevP_no+img->b_interval*img->b_frame_to_code; // from prev_P
+		if(img->tr >= nextP_no) 	
+			img->tr=nextP_no-1;
+
+		// initialize arrays
+		for(k=0; k<2; k++)
+			for(i=0; i<img->height/BLOCK_SIZE; i++)
+				for(j=0; j<img->width/BLOCK_SIZE+4; j++) 
+				{
+					tmp_fwMV[k][i][j]=0;
+					tmp_bwMV[k][i][j]=0;
+					dfMV[k][i][j]=0;
+					dbMV[k][i][j]=0;
+				}		
+		for(i=0; i<img->height/BLOCK_SIZE; i++)
+			for(j=0; j<img->width/BLOCK_SIZE; j++) 
+			{
+				fw_refFrArr[i][j]=bw_refFrArr[i][j]=-1;
+			}		
+			
+	}
+}
+
+/************************************************************************
+*
+*  Name :       init_slice()
+*
+*  Description: Initializes the parameters for a new slice
+*               
+************************************************************************/
+void init_slice(struct img_par *img, struct inp_par *inp)
+{
+
+	int i;
+	Slice *curr_slice = img->currentSlice;
+	DataPartition *dataPart;
+	Bitstream *currStream;
+
+	curr_slice->picture_id = img->tr%256;
+	curr_slice->slice_nr = img->current_slice_nr;
+	curr_slice->qp = img->qp;
+	curr_slice->format = inp->img_format;
+	curr_slice->start_mb_nr = img->current_mb_nr;
+	curr_slice->dp_mode = inp->partition_mode;
+	curr_slice->slice_too_big = dummy_slice_too_big;
+
+	for (i=0; i<curr_slice->max_part_nr; i++)
+	{
+		dataPart = &(curr_slice->partArr[i]);
+
+		/* in priciple it is possible to assign to each partition */
+		/* a different entropy coding method */ 
+		if (inp->symbol_mode == UVLC)
+			dataPart->writeSyntaxElement = writeSyntaxElement_UVLC; 
+		else
+			dataPart->writeSyntaxElement = writeSyntaxElement_CABAC;
+		currStream = dataPart->bitstream;
+		currStream->bits_to_go	= currStream->stored_bits_to_go;
+		currStream->byte_pos		= currStream->stored_byte_pos;
+		currStream->byte_buf		= currStream->stored_byte_buf;
+
+	}
+}
+	
+/************************************************************************
+*
+*  Name :       select_picture_type()
+*
+*  Description: Selects picture type and codes it to symbol
+*               
+************************************************************************/
+void select_picture_type(struct img_par *img, struct inp_par *inp, SyntaxElement *symbol)
+{
+	int multpred;
+
+	if (inp->no_multpred <= 1)
+		multpred=FALSE;
+	else
+		multpred=TRUE;               /* multiple reference frames in motion search */
+
+	if (img->type == INTRA_IMG)
+	{
+		symbol->len=3;
+		symbol->inf=1;
+		symbol->value1 = 2;
+	}
+	else if((img->type == INTER_IMG) && (multpred == FALSE)) /* inter single reference frame */
+	{
+		symbol->len=1;
+		symbol->inf=0;
+		symbol->value1 = 0;
+	}
+	else if((img->type == INTER_IMG) && (multpred == TRUE)) /* inter multiple reference frames */
+	{
+		symbol->len=3;
+		symbol->inf=0;
+		symbol->value1 = 1;
+	}
+	else if((img->type == B_IMG) && (multpred == FALSE))	
+	{
+		symbol->len=5; 
+		symbol->inf=0;
+		symbol->value1 = 3;
+	}
+	else if((img->type == B_IMG) && (multpred == TRUE))
+	{
+		symbol->len=5;
+		symbol->inf=1;
+		symbol->value1 = 4;
+	}
+	else
+	{		
+		error("Picture Type not supported!");
+	}
+
+#if TRACE
+	sprintf(symbol->tracestring, "Image type = %3d ", img->type);
+#endif
+	symbol->type = SE_PTYPE;
+}
+
+/************************************************************************
+*
+*  Name :       init_loop_filter()
+*
+*  Description: initializes loop filter
+*               
+************************************************************************/
+void init_loop_filter(struct img_par *img)
+{
+	int i, j;
+
+	for (i=0;i<img->width/4+2;i++)
+		for (j=0;j<img->height/4+2;j++)
+			loopb[i+1][j+1]=0;
+
+	for (i=0;i<img->width_cr/4+2;i++)
+		for (j=0;j<img->height_cr/4+2;j++)
+			loopc[i+1][j+1]=0;
+}
+
+
+/************************************************************************
+*
+*  Name :       read_one_new frame()
+*
+*  Description: Reads new frame from file and sets frame_no
+*               
+************************************************************************/
+void read_one_new_frame(struct img_par *img, struct inp_par *inp)
+{
+	int i, j, uv;
+	int status; //frame_no;
+	int frame_size = img->height*img->width*3/2;
+
+	if(img->type == B_IMG)
+		frame_no = (img->number-1)*(inp->jumpd+1)+img->b_interval*img->b_frame_to_code;
+	else
+		frame_no = img->number*(inp->jumpd+1);
+
+	rewind (p_in);
+	status = fseek (p_in, frame_no * frame_size, 0);
+	
+	if (status != 0) 
+	{
+		sprintf(errortext, "Error in seeking frame no: %d\n", frame_no);
+		error(errortext);
+	}    
+
+	for (j=0; j < img->height; j++) 
+		for (i=0; i < img->width; i++) 
+			imgY_org[j][i]=fgetc(p_in);         
+	for (uv=0; uv < 2; uv++) 
+		for (j=0; j < img->height_cr ; j++) 
+			for (i=0; i < img->width_cr; i++) 
+				imgUV_org[uv][j][i]=fgetc(p_in);  
+}
+
+/************************************************************************
+*
+*  Name :       write_reconstructed_image()
+*
+*  Description: Writes reconstructed image(s) to file
+*               This can be done more elegant!
+*               
+************************************************************************/
+void write_reconstructed_image(struct img_par *img, struct inp_par *inp)
+{
+	int i, j, k;
+
+	if(img->type != B_IMG)
+	{
+		// write reconstructed image (IPPP)
+		if(inp->write_dec && inp->successive_Bframe==0)
+		{
+			for (i=0; i < img->height; i++) 
+				for (j=0; j < img->width; j++) 
+					fputc(min(imgY[i][j],255),p_dec);
+      
+			for (k=0; k < 2; ++k) 
+				for (i=0; i < img->height/2; i++) 
+					for (j=0; j < img->width/2; j++) 
+						fputc(min(imgUV[k][i][j],255),p_dec);
+		}
+
+		// write reconstructed image (IBPBP) : only intra written 
+		else if (inp->write_dec && img->number==0 && inp->successive_Bframe!=0)
+		{
+			for (i=0; i < img->height; i++) 
+				for (j=0; j < img->width; j++) 
+					fputc(min(imgY[i][j],255),p_dec);
+      
+			for (k=0; k < 2; ++k) 
+				for (i=0; i < img->height/2; i++) 
+					for (j=0; j < img->width/2; j++) 
+						fputc(min(imgUV[k][i][j],255),p_dec);
+		}
+
+		// next P picture. This is saved with recon B picture after B picture coding
+		if (inp->write_dec && img->number!=0 && inp->successive_Bframe!=0)           
+		{
+			for (i=0; i < img->height; i++) 
+				for (j=0; j < img->width; j++) 
+					nextP_imgY[i][j]=imgY[i][j];      
+			for (k=0; k < 2; ++k) 
+				for (i=0; i < img->height/2; i++) 
+					for (j=0; j < img->width/2; j++) 
+						nextP_imgUV[k][i][j]=imgUV[k][i][j];         
+		}
+	}
+	else
+	{
+		/* save B frame */
+		for (i=0; i < img->height; i++) 
+			for (j=0; j < img->width; j++) 
+				fputc(min(imgY[i][j],255),p_dec);      
+		for (k=0; k < 2; ++k) 
+			for (i=0; i < img->height/2; i++) 
+				for (j=0; j < img->width/2; j++) 
+					fputc(min(imgUV[k][i][j],255),p_dec);
+		
+		/* If this is last B frame also store P frame */
+		if(img->b_frame_to_code == inp->successive_Bframe)           
+		{
+			/* save P picture */
+			for (i=0; i < img->height; i++) 
+				for (j=0; j < img->width; j++) 
+					fputc(min(nextP_imgY[i][j],255),p_dec);      
+			for (k=0; k < 2; ++k) 
+				for (i=0; i < img->height/2; i++) 
+					for (j=0; j < img->width/2; j++) 
+						fputc(min(nextP_imgUV[k][i][j],255),p_dec);	
+		}
+	}
+
 }
 
 /************************************************************************
@@ -364,47 +547,48 @@ void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct
 *	            Slightly changed to avoid mismatches with the direct 
 *				interpolation filter in the decoder
 *
+*
 ************************************************************************/
-void oneforthpix(struct img_par *img)
+void oneforthpix(struct img_par *img, struct inp_par *inp)
 {
-  // temporary solution:
-  // int imgY_tmp[576][704];
+  // int img4Y_tmp[576][704];
   int is;
   int i,j,i2,j2,j4;
   int ie2,je2;
   int uv;
- 
-  img->frame_cycle=img->number % MAX_MULT_PRED;
-  
+  	
+  img->frame_cycle=img->number % inp->no_multpred;  /*GH inp->no_multpred used insteadof MAX_MULT_PRED
+		                                              frame buffer size = inp->no_multpred+1*/
+	 
   for (j=0; j < img->height; j++)
-    {
-      for (i=0; i < img->width; i++)
 	{
-	  i2=i*2;
-	  is=(ONE_FOURTH_TAP[0][0]*(imgY[j][i         ]+imgY[j][min(img->width-1,i+1)])+
-	      ONE_FOURTH_TAP[1][0]*(imgY[j][max(0,i-1)]+imgY[j][min(img->width-1,i+2)])+
-	      ONE_FOURTH_TAP[2][0]*(imgY[j][max(0,i-2)]+imgY[j][min(img->width-1,i+3)]));
-	  imgY_tmp[2*j][i2  ]=imgY[j][i]*1024;    /* 1/1 pix pos */
-	  imgY_tmp[2*j][i2+1]=is*32;              /* 1/2 pix pos */
-	}
-    }
+		for (i=0; i < img->width; i++)
+		{
+			i2=i*2;
+			is=(ONE_FOURTH_TAP[0][0]*(imgY[j][i         ]+imgY[j][min(img->width-1,i+1)])+
+				ONE_FOURTH_TAP[1][0]*(imgY[j][max(0,i-1)]+imgY[j][min(img->width-1,i+2)])+
+				ONE_FOURTH_TAP[2][0]*(imgY[j][max(0,i-2)]+imgY[j][min(img->width-1,i+3)]));
+			img4Y_tmp[2*j][i2  ]=imgY[j][i]*1024;    /* 1/1 pix pos */
+			img4Y_tmp[2*j][i2+1]=is*32;              /* 1/2 pix pos */
+		}
+  }
   
   for (i=0; i < img->width*2; i++)
-    {
-      for (j=0; j < img->height; j++)
 	{
-	  j2=j*2;
-	  j4=j*4;
-	  /* change for TML4, use 6 TAP vertical filter */
-	  is=(ONE_FOURTH_TAP[0][0]*(imgY_tmp[j2         ][i]+imgY_tmp[min(2*img->height-2,j2+2)][i])+
-	      ONE_FOURTH_TAP[1][0]*(imgY_tmp[max(0,j2-2)][i]+imgY_tmp[min(2*img->height-2,j2+4)][i])+
-	      ONE_FOURTH_TAP[2][0]*(imgY_tmp[max(0,j2-4)][i]+imgY_tmp[min(2*img->height-2,j2+6)][i]))/32;
-	  
-	  imgY_tmp[j2+1][i]=is;                  /* 1/2 pix */
-	  mref[img->frame_cycle][j4  ][i*2]=max(0,min(255,(int)((imgY_tmp[j2][i]+512)/1024)));     /* 1/2 pix */
-	  mref[img->frame_cycle][j4+2][i*2]=max(0,min(255,(int)((is+512)/1024))); /* 1/2 pix */
+		for (j=0; j < img->height; j++)
+		{
+			j2=j*2;
+			j4=j*4;
+			/* change for TML4, use 6 TAP vertical filter */
+			is=(ONE_FOURTH_TAP[0][0]*(img4Y_tmp[j2         ][i]+img4Y_tmp[min(2*img->height-2,j2+2)][i])+
+				ONE_FOURTH_TAP[1][0]*(img4Y_tmp[max(0,j2-2)][i]+img4Y_tmp[min(2*img->height-2,j2+4)][i])+
+				ONE_FOURTH_TAP[2][0]*(img4Y_tmp[max(0,j2-4)][i]+img4Y_tmp[min(2*img->height-2,j2+6)][i]))/32;
+			
+			img4Y_tmp[j2+1][i]=is;                  /* 1/2 pix */
+			mref[img->frame_cycle][j4  ][i*2]=max(0,min(255,(int)((img4Y_tmp[j2][i]+512)/1024)));     /* 1/2 pix */
+			mref[img->frame_cycle][j4+2][i*2]=max(0,min(255,(int)((is+512)/1024))); /* 1/2 pix */
+		}
 	}
-    }
   
   /* 1/4 pix */
   /* luma */
@@ -413,46 +597,125 @@ void oneforthpix(struct img_par *img)
   
   for (j=0;j<je2+4;j+=2)
     for (i=0;i<ie2+3;i+=2)
-      mref[img->frame_cycle][j][i+1]=max(0,min(255,(int)(imgY_tmp[j/2][i/2]+imgY_tmp[j/2][min(ie2/2+1,i/2+1)]+1024)/2048));
-  
-  for (i=0;i<ie2+4;i++)
-    {
-      for (j=0;j<je2+3;j+=2)
-	{
-	  if( i%2 == 0 )
-	    mref[img->frame_cycle][j+1][i]=max(0,min(255,(int)(imgY_tmp[j/2][i/2]+imgY_tmp[min(je2/2+1,j/2+1)][i/2]+1024)/2048));
-	  else
-	    mref[img->frame_cycle][j+1][i]=max(0,min(255,(int)(
-							       imgY_tmp[j/2               ][i/2               ] +
-							       imgY_tmp[min(je2/2+1,j/2+1)][i/2               ] +
-							       imgY_tmp[j/2               ][min(ie2/2+1,i/2+1)] +
-							       imgY_tmp[min(je2/2+1,j/2+1)][min(ie2/2+1,i/2+1)] + 2048)/4096));
-	  
-	  /* "funny posision" */
-	  if( ((i&3) == 3)&&(((j+1)&3) == 3))
-	    {
-	      mref[img->frame_cycle][j+1][i] = (mref[img->frame_cycle][j-2         ][i-3         ] +
+      mref[img->frame_cycle][j][i+1]=max(0,min(255,(int)(img4Y_tmp[j/2][i/2]+img4Y_tmp[j/2][min(ie2/2+1,i/2+1)]+1024)/2048));
+		
+		for (i=0;i<ie2+4;i++)
+		{
+			for (j=0;j<je2+3;j+=2)
+			{
+				if( i%2 == 0 )
+					mref[img->frame_cycle][j+1][i]=max(0,min(255,(int)(img4Y_tmp[j/2][i/2]+img4Y_tmp[min(je2/2+1,j/2+1)][i/2]+1024)/2048));
+				else
+					mref[img->frame_cycle][j+1][i]=max(0,min(255,(int)(
+					img4Y_tmp[j/2               ][i/2               ] +
+					img4Y_tmp[min(je2/2+1,j/2+1)][i/2               ] +
+					img4Y_tmp[j/2               ][min(ie2/2+1,i/2+1)] +
+					img4Y_tmp[min(je2/2+1,j/2+1)][min(ie2/2+1,i/2+1)] + 2048)/4096));
+				
+				/* "funny posision" */
+				if( ((i&3) == 3)&&(((j+1)&3) == 3))
+				{
+					mref[img->frame_cycle][j+1][i] = (mref[img->frame_cycle][j-2         ][i-3         ] +
 						mref[img->frame_cycle][min(je2,j+2)][i-3         ] +
 						mref[img->frame_cycle][j-2         ][min(ie2,i+1)] +
 						mref[img->frame_cycle][min(je2,j+2)][min(ie2,i+1)] + 2 )/4;
-	    }
-	}
-    }
-  
-  /*  Chroma: */
-  
-  for (uv=0; uv < 2; uv++)
-    {
-      for (i=0; i < img->width_cr; i++)
-	{
-	  for (j=0; j < img->height_cr; j++)
-	    {
-	      mcef[img->frame_cycle][uv][j][i]=imgUV[uv][j][i];/* just copy 1/1 pix, interpolate "online" */
-	    }
-	}
-    }
+				}
+			}
+		}
+		
+		/*  Chroma: */ 
+		for (uv=0; uv < 2; uv++)
+			for (j=0; j < img->height_cr; j++)
+				memcpy(mcef[img->frame_cycle][uv][j],imgUV[uv][j],img->width_cr); /* just copy 1/1 pix, interpolate "online" */
+			
 }
 
+/************************************************************************
+*  Name :   one_forthpix_2()
+*
+*  Description: 
+*      Upsample 4 times, store them in mref_P, mcef_P for next P picture
+*      and move them to mref, mcef
+*
+************************************************************************/
+
+void oneforthpix_2(struct img_par *img)
+{
+  // int img4Y_tmp[576][704];
+  int is;
+  int i,j,i2,j2,j4;
+  int ie2,je2;
+  int uv;
+  	
+  for (j=0; j < img->height; j++)
+	{
+		for (i=0; i < img->width; i++)
+		{
+			i2=i*2;
+			is=(ONE_FOURTH_TAP[0][0]*(imgY[j][i         ]+imgY[j][min(img->width-1,i+1)])+
+				ONE_FOURTH_TAP[1][0]*(imgY[j][max(0,i-1)]+imgY[j][min(img->width-1,i+2)])+
+				ONE_FOURTH_TAP[2][0]*(imgY[j][max(0,i-2)]+imgY[j][min(img->width-1,i+3)]));
+			img4Y_tmp[2*j][i2  ]=imgY[j][i]*1024;    /* 1/1 pix pos */
+			img4Y_tmp[2*j][i2+1]=is*32;              /* 1/2 pix pos */
+		}
+  }
+  
+  for (i=0; i < img->width*2; i++)
+	{
+		for (j=0; j < img->height; j++)
+		{
+			j2=j*2;
+			j4=j*4;
+			/* change for TML4, use 6 TAP vertical filter */
+			is=(ONE_FOURTH_TAP[0][0]*(img4Y_tmp[j2         ][i]+img4Y_tmp[min(2*img->height-2,j2+2)][i])+
+				ONE_FOURTH_TAP[1][0]*(img4Y_tmp[max(0,j2-2)][i]+img4Y_tmp[min(2*img->height-2,j2+4)][i])+
+				ONE_FOURTH_TAP[2][0]*(img4Y_tmp[max(0,j2-4)][i]+img4Y_tmp[min(2*img->height-2,j2+6)][i]))/32;
+			
+			img4Y_tmp[j2+1][i]=is;                  /* 1/2 pix */
+			mref_P[j4  ][i*2]=max(0,min(255,(int)((img4Y_tmp[j2][i]+512)/1024)));     /* 1/2 pix */
+			mref_P[j4+2][i*2]=max(0,min(255,(int)((is+512)/1024))); /* 1/2 pix */
+		}
+	}
+  
+  /* 1/4 pix */
+  /* luma */
+  ie2=(img->width-1)*4;
+  je2=(img->height-1)*4;
+  
+  for (j=0;j<je2+4;j+=2)
+    for (i=0;i<ie2+3;i+=2)
+      mref_P[j][i+1]=max(0,min(255,(int)(img4Y_tmp[j/2][i/2]+img4Y_tmp[j/2][min(ie2/2+1,i/2+1)]+1024)/2048));
+		
+		for (i=0;i<ie2+4;i++)
+		{
+			for (j=0;j<je2+3;j+=2)
+			{
+				if( i%2 == 0 )
+					mref_P[j+1][i]=max(0,min(255,(int)(img4Y_tmp[j/2][i/2]+img4Y_tmp[min(je2/2+1,j/2+1)][i/2]+1024)/2048));
+				else
+					mref_P[j+1][i]=max(0,min(255,(int)(
+					img4Y_tmp[j/2               ][i/2               ] +
+					img4Y_tmp[min(je2/2+1,j/2+1)][i/2               ] +
+					img4Y_tmp[j/2               ][min(ie2/2+1,i/2+1)] +
+					img4Y_tmp[min(je2/2+1,j/2+1)][min(ie2/2+1,i/2+1)] + 2048)/4096));
+				
+				/* "funny posision" */
+				if( ((i&3) == 3)&&(((j+1)&3) == 3))
+				{
+					mref_P[j+1][i] = (mref_P[j-2         ][i-3         ] +
+						mref_P[min(je2,j+2)][i-3         ] +
+						mref_P[j-2         ][min(ie2,i+1)] +
+						mref_P[min(je2,j+2)][min(ie2,i+1)] + 2 )/4;
+				}
+			}
+		}
+		
+		/*  Chroma: */ 
+		for (uv=0; uv < 2; uv++)
+			for (j=0; j < img->height_cr; j++)
+				memcpy(mcef_P[uv][j],imgUV[uv][j],img->width_cr); /* just copy 1/1 pix, interpolate "online" */
+			
+}
 
 /************************************************************************
 *
@@ -521,6 +784,7 @@ void find_snr(struct snr_par *snr,struct img_par *img)
 	}
 }
 
+
 /************************************************************************
 *
 *  Name :       loopfilter()
@@ -540,8 +804,9 @@ extern const int QP2QUANT[32];
 void loopfilter(struct img_par *img)
 {
   static int MAP[32];
-  byte imgY_tmp[288][352];                      /* temp luma image */
-  byte imgUV_tmp[2][144][176];                  /* temp chroma image */
+  /*GH: see dynamic mem allocation in image.c                            */
+  /*byte imgY_tmp[288][352]; */                     /* temp luma image   */
+  /*byte imgUV_tmp[2][144][176]; */                 /* temp chroma image */
 
   int x,y,y4,x4,k,uv,str1,str2;
 
@@ -918,71 +1183,14 @@ int loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma)
   return 0;
 }
 
-	
-static int ReadSourcePicture (FILE *in, struct img_par *img, int frame) {
-
-	static int FileSizeInPictures = -1;
-	static unsigned char *ybuf, *uvbuf, *p;
-
-	int ysize, uvsize, n, i, j, uv;
-	long FileSizeInBytes; 
-
-	// Determine the File size, but only once
-	if (FileSizeInPictures < 0)	{	// first time
-		
-		if (0 != fseek (in, 0, SEEK_END)) {
-			printf ("Problems in determining original sequence file size (fseek), exit\n");
-			return -3;
-		}
-		FileSizeInBytes = ftell (in);
-		n = FileSizeInBytes / img->height;
-		n /= img->width;
-		n *= 2;
-		FileSizeInPictures = n / 3;
-		if (FileSizeInPictures < 1)
-			return -2;
-	}
-
-	ysize = img->height * img->width;
-	uvsize = img->height * img->width / 2;
-
-	if (NULL == (ybuf = malloc (ysize))) {
-		printf ("Cannot malloc %d bytes for ybuf, exit\n", ysize);
-		exit (-10);
-	}
-	if (NULL == (uvbuf = malloc (uvsize))) {
-		printf ("Cannot malloc %d bytes for uvbuf, exit\n", uvsize);
-		exit (-10);
-	}
-
-	frame %= FileSizeInPictures;	// allow sequence looping
-
-	fseek (in, frame * (ysize + uvsize), SEEK_SET);
-	if (1 != fread (ybuf, ysize, 1, in)) {
-		printf ("Problems reading input sequence Y, frame %d, FileSizeInPictures %d\n", frame, FileSizeInPictures);
-		getchar();
-		return -1;
-	}
-	if (1 != fread (uvbuf, uvsize, 1, in)) {
-		printf ("Problems reading input sequence Y, frame %d, FileSizeInPictures %d\n", frame, FileSizeInPictures);
-		getchar();
-		return -1;
-	}
-		
-	// Now copy the data in whatever weird format is used in imgY_org and imgUV_org
-
-	p = ybuf;
-	for (j=0; j < img->height; j++) 
-		for (i=0; i < img->width; i++) 
-			imgY_org[j][i]=*p++;
-	p = uvbuf;
-	for (uv=0; uv < 2; uv++) 
-		for (j=0; j < img->height_cr ; j++) 
-			for (i=0; i < img->width_cr; i++) 
-				imgUV_org[uv][j][i]=*p++;  
-
-
-	free (ybuf);
-	free (uvbuf);
-	return 0;
+/************************************************************************
+*
+*  Name :       dummy_slice_too_big()
+*
+*  Description: Just a placebo
+*
+************************************************************************/
+Boolean	dummy_slice_too_big(int bits_slice)
+{
+	return FALSE;
 }

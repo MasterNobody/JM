@@ -25,7 +25,8 @@ static void FreePartition (int PType);
 static int GetSlice (FILE *in);
 static void ConvertPartition (int dt);
 static int ReadSlice (FILE *p_in);
-
+static int GetSliceSlice (FILE *in);
+static int ReadSliceSlice (FILE *p_in);
 /*!
  * \brief	struct defining partition information
  */
@@ -36,6 +37,7 @@ typedef struct {
   int StartMB;					/*!< Macroblock number where slice begins */
   int QP;						/*!< quantization parameter over slice */
   int Format;					/*!< picture format 0=CIF, 1=QCIF */
+  int PictureType;              /*!< picture type 0 Intra, 1 Inter */  
   int bytecount;				/*!< length of VLC coded data stream d in bytes */
   int bitcount;					/*!< length of VLC coded data stream d in bits */
   byte d [MAXSIZEPARTITION];	/*!< VLC coded data stream */

@@ -26,7 +26,7 @@
 #define FALSE           0
 #define TRUE            1
 
-#define TRACE           0                       /* 0:Trace off 1:Trace on*/
+#define TRACE           1                       /* 0:Trace off 1:Trace on*/
 
 typedef unsigned char   byte;                   /*  8 bit unsigned */
 
@@ -100,8 +100,14 @@ typedef unsigned char   byte;                   /*  8 bit unsigned */
 #define IMG_WIDTH_CR    88                      /* chroma */
 #define IMG_HEIGHT_CR   72
 
-#define QCIF            0                       /* image format */
-#define CIF             1
+/* image formats*/
+#define SUB_QCIF        0       /* GH added picture formats*/
+#define QCIF            1
+#define CIF             2
+#define CIF_4           3       /* GH added picture formats*/
+#define CIF_16          4       /* GH added picture formats*/
+#define CUSTOM          5       /* GH added picture formats*/
+
 
 #define EOS_MASK        0x01                    /* mask for end of sequence (bit 1)         */
 #define ICIF_MASK       0x02                    /* mask for image format (bit 2)            */
@@ -292,6 +298,14 @@ void bits_tml_get_symbol(int *len, int *info, int type);
 int  bits_tml_startcode_follows();
 int  bits_tml_find_startcode(FILE *p_in, int *tr, int *qp, int *mb_nr, int *format);
 int  bits_tml_symbols_available (int type);
+
+/* Slice functions Partition syntax */
+void slice_tml_init();
+void slice_tml_finit();
+void slice_tml_get_symbol(int *len, int *info, int type);
+int  slice_tml_startcode_follows();
+int  slice_tml_find_startcode(FILE *p_in, int *tr, int *qp, int *mb_nr, int *format);
+int  slice_tml_symbols_available (int type);
 
 /* NAL functions Partition syntax */
 void part_tml_init();

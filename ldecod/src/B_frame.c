@@ -276,7 +276,8 @@ void initialize_Bframe( )
 void decode_Bframe(struct img_par *img, int mb_nr, int stop_mb)
 {
 	int mb_width;
-	
+	int i, j; 
+
 	mb_width = img->width/16;
 	img->mb_x = mb_nr%mb_width;
 	img->mb_y = mb_nr/mb_width;
@@ -308,10 +309,31 @@ void decode_Bframe(struct img_par *img, int mb_nr, int stop_mb)
 		img->mb_x = 0;
 	}
 	
+
+   // memory free
+	for(i=0; i<92; i++)
+	  for(j=0; j<72; j++)
+		{
+			free(dfMV[i][j]);
+			free(dbMV[i][j]);
+		}
+		
+	for(i=0; i<92; i++)
+	{
+		free(dfMV[i]);
+		free(dbMV[i]);
+	}
 	free(dfMV);
 	free(dbMV);
+
+	for(i=0; i<72; i++)
+	{
+		free(fw_refFrArr[i]);
+		free(bw_refFrArr[i]);
+	}
 	free(fw_refFrArr);
 	free(bw_refFrArr);
+
 }
 
 /*!
@@ -369,7 +391,7 @@ int mb_Bframe(struct img_par *img)
 
 	ResetSlicePredictions(img);
 
-	get_symbol("MB mode",&len,&info,SEB);
+	get_symbol("MB mode",&len,&info,SE_BFRAME);
 	img->mb_mode = (int)pow(2,(len/2))+info-1;   // Note -1 !! (len, info)=(3,1) => 2 (code_number=2)
 		
 	if (img->mb_mode>40) 
@@ -479,7 +501,7 @@ int mb_Bframe(struct img_par *img)
 	{
 		for(i=0;i<MB_BLOCK_SIZE/2;i++)
 		{
-			get_symbol("Intra mode", &len,&info,SEB);
+			get_symbol("Intra mode", &len,&info,SE_BFRAME);
 			dbl_ipred_word = (int) pow(2,(len/2))+info-1;  // Note -1, (len, info)=(3,1) => 2
 			if (dbl_ipred_word>35)
 			{
@@ -508,7 +530,7 @@ int mb_Bframe(struct img_par *img)
 	{
 		if(img->type==B_IMG_MULT)
 		{
-			get_symbol("Reference frame",&len,&info,SEB);
+			get_symbol("Reference frame",&len,&info,SE_BFRAME);
 			fw_predframe_no=(int)pow(2,len/2)+info;   // Note !! (len, info)=(3,1) => 3 (code_number=2)   
 			if (fw_predframe_no > MAX_MULT_PRED)
 			{
@@ -538,7 +560,7 @@ int mb_Bframe(struct img_par *img)
 	///////////////////////////////////////////////////////////////
 	if(img->imod==B_Bidirect)
 	{
-		get_symbol("FW blk_Size ",&len,&info,SEB);
+		get_symbol("FW blk_Size ",&len,&info,SE_BFRAME);
 		fw_blocktype=(int)pow(2,len/2)+info;     // Note !! (len, info)=(3,1) => 3 (code_number=2)    
 		if (len > 5)
 		{
@@ -546,7 +568,7 @@ int mb_Bframe(struct img_par *img)
 			fw_blocktype = 1;
 		}
 
-		get_symbol("BW blk_Size ",&len,&info,SEB);
+		get_symbol("BW blk_Size ",&len,&info,SE_BFRAME);
 		bw_blocktype=(int)pow(2,len/2)+info;     // Note !! (len, info)=(3,1) => 3 (code_number=2)    
 		if (len > 5)
 		{
@@ -666,7 +688,7 @@ int mb_Bframe(struct img_par *img)
 						break;
 					}
 
-					get_symbol("MVDFW",&len,&info, SEB); //SE_MVD);
+					get_symbol("MVDFW",&len,&info, SE_BFRAME); //SE_MVD);
 					if (len>17)
 					{
 						set_ec_flag(SE_MVD);
@@ -796,7 +818,7 @@ int mb_Bframe(struct img_par *img)
 						break;
 					}
 
-					get_symbol("MVDBW",&len,&info, SEB); //SE_MVD);
+					get_symbol("MVDBW",&len,&info, SE_BFRAME); //SE_MVD);
 					if (len>17)
 					{
 						set_ec_flag(SE_MVD);
@@ -827,8 +849,8 @@ int mb_Bframe(struct img_par *img)
 		//	se = SE_CBP_INTRA;
 		//else
 		//	se = SE_CBP_INTER;
-		se = SEB;
-		get_symbol("CBP",&len,&info, SEB); //SE_CBP_INTER);
+		se = SE_BFRAME;
+		get_symbol("CBP",&len,&info, SE_BFRAME); //SE_CBP_INTER);
 		cbp_idx = (int) pow(2,(len/2))+info-1;      // Note -1!! (len, info)=(3,1) => 2 (code_number=2)   
 		if (cbp_idx>47)                             /* illegal value, exit to find next sync word */
 		{
@@ -860,7 +882,7 @@ int mb_Bframe(struct img_par *img)
 		len = 0;                            /* just to get inside the loop */
 		for(k=0;(k<17) && (len!=1);k++)
 		{
-			get_symbol("DC luma 16x16",&len,&info, SEB); //SE_LUM_DC_INTRA);
+			get_symbol("DC luma 16x16",&len,&info, SE_BFRAME); //SE_LUM_DC_INTRA);
 
 			if(len>29)  /* illegal length, start_scan sync search */
 			{
@@ -1037,7 +1059,7 @@ int mb_Bframe(struct img_par *img)
 										se = SE_LUM_AC_INTRA;
 								}
 								*/
-								get_symbol("Luma sng",&len,&info, SEB); //se);
+								get_symbol("Luma sng",&len,&info, SE_BFRAME); //se);
 
 								if(len>29)		/* illegal length, do error concealment */
 								{
@@ -1095,7 +1117,7 @@ int mb_Bframe(struct img_par *img)
 										se = SE_LUM_DC_INTRA;
 									else
 										se = SE_LUM_AC_INTRA;
-									get_symbol("Luma dbl",&len,&info, SEB); //se);
+									get_symbol("Luma dbl",&len,&info, SE_BFRAME); //se);
 
 									if(len>29)		/* illegal length, do error concealment */
 									{
@@ -1170,7 +1192,7 @@ int mb_Bframe(struct img_par *img)
 				else
 					se = SE_CHR_DC_INTER;
 				*/
-				get_symbol("2x2 DC Chroma",&len,&info, SEB); //SE_CHR_DC_INTER);
+				get_symbol("2x2 DC Chroma",&len,&info, SE_BFRAME); //SE_CHR_DC_INTER);
 
 				if (len>29)		/* illegal length do error concealment */
 				{
@@ -1252,7 +1274,7 @@ int mb_Bframe(struct img_par *img)
 							else
 								se = SE_CHR_AC_INTRA;
 							*/
-							get_symbol("AC Chroma",&len,&info, SEB); //SE_CHR_AC_INTER);
+							get_symbol("AC Chroma",&len,&info, SE_BFRAME); //SE_CHR_AC_INTER);
 
 							if (len>29)	/* illegal length, do error concealment */
 							{

@@ -8,6 +8,7 @@
 // Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
 // Stephan Wenger                  <stewe@cs.tu-berlin.de>
 // Jani Lainema                    <jani.lainema@nokia.com>
+// Detlev Marpe                    <marpe@hhi.de>
 // *************************************************************************************
 // *************************************************************************************
 #include "contributors.h"
@@ -751,7 +752,7 @@ int motion_search(struct inp_par *inp_par,struct img_par *img,int tot_intra_sad)
 	int numc,j,ref_frame,i;
 	int vec1_x,vec1_y,vec2_x,vec2_y;
 	int pic_block_x,pic_block_y,block_x,ref_inx,block_y,pic_pix_y,pic4_pix_y,pic_pix_x,pic4_pix_x,i22,lv,hv;
-	int all_mv[4][4][5][9][2];
+	int all_mv[4][4][MAX_MULT_PRED][9][2];
 	int center_x,s_pos_x,ip0,ip1,center_y,blocktype,s_pos_y,iy0,jy0,center_h2,curr_search_range,center_v2;
 	int s_pos_x1,s_pos_y1,s_pos_x2,s_pos_y2;
 	int abort_search;
@@ -785,7 +786,8 @@ int motion_search(struct inp_par *inp_par,struct img_par *img,int tot_intra_sad)
 		}
 
 		/* find  reference image */
-		ref_inx=(img->number-ref_frame-1)%MAX_MULT_PRED;
+		ref_inx=(img->number-ref_frame-1)%inp_par->no_multpred;  /*GH inp->no_multpred used insteadof MAX_MULT_PRED
+		                                                          frame buffer size = inp->no_multpred+1*/
 
 		/*  Looping through all the chosen block sizes: */
 		blocktype=1;
@@ -1166,6 +1168,7 @@ int motion_search(struct inp_par *inp_par,struct img_par *img,int tot_intra_sad)
 	}
 	else
 	{
+		img->mb_data[img->current_mb_nr].intraOrInter = INTER_MB;
 		img->imod=INTRA_MB_INTER; /* Set inter mode */
 		for (hv=0; hv < 2; hv++)
 			for (i=0; i < 4; i++)
