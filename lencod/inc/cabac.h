@@ -119,3 +119,4 @@ void unary_mv_encode(EncodingEnvironmentPtr eep_frame,
 
 #endif 	/* CABAC_H */
 
+

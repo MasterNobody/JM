@@ -15,6 +15,7 @@
 // Guido Heising                   <heising@hhi.de> 
 // *************************************************************************************
 // *************************************************************************************
+
 #include "contributors.h"
 
 #include <string.h>
@@ -25,361 +26,116 @@
 #include <stdlib.h>
 
 #include "global.h"
-#include "elements.h"
+#include "configfile.h"
 
-#define TML 	"5"
-#define VERSION "5.996"
+#define TML 	"6"
+#define VERSION "6.50"
 
-void main(int argc,char **argv)
+InputParameters inputs, *input = &inputs;
+ImageParameters images, *img   = &images;
+StatParameters  stats,  *stat  = &stats;
+SNRParameters   snrs,   *snr   = &snrs;
+
+
+#ifdef _ADAPT_LAST_GROUP_
+int initial_Bframes = 0;
+#endif
+
+
+int main(int argc,char **argv)
 {
-	struct inp_par    *inp;         /* input parameters from input configuration file   */
-	struct stat_par   *stat;        /* statistics                                       */
-	struct snr_par    *snr;         /* SNR values                                       */
-	struct img_par    *img;         /* image parameters                                 */
+	p_dec = p_stat = p_log = p_datpart = p_trace = NULL;
 
-	/* allocate memory */
-	inp =  (struct inp_par *) calloc(1, sizeof(struct inp_par));
-	stat = (struct stat_par *)calloc(1, sizeof(struct stat_par));
-	snr =  (struct snr_par *) calloc(1, sizeof(struct snr_par));
-	img =  (struct img_par *) calloc(1, sizeof(struct img_par));	
-
-	/* Read Configuration File */
-	if (argc != 2)
-	{
-		printf("Usage: %s <config.dat> \n",argv[0]);
-		printf("\t<config.dat> defines encoder parameters\n");
-		exit(-1);
-	}
-
-	/* Initializes Configuration Parameters with configuration file */
-	init_conf(inp, argv[1]);
+	Configure (argc, argv);
 
 	/* Initialize Image Parameters */
-	init_img(inp, img);
+	init_img();
 
 	/* Allocate Slice data struct */
-	malloc_slice(inp,img);
+	malloc_slice();
+
+#ifdef _RD_OPT_
+	/* create and init structure for rd-opt. mode decision */
+	init_rdopt ();
+#endif
+#ifdef _FAST_FULL_ME_
+	/* create arrays for fast full motion estimation */
+	InitializeFastFullIntegerSearch	(input->search_range);
+#endif
 
 	/* Initialize Statistic Parameters */
-	init_stat(inp, stat);
+	init_stat();
 
 	/* allocate memory for frame buffers*/
-	get_mem4global_buffers(inp, img); 
+	get_mem4global_buffers(); 
 
 	/* Just some information which goes to the standard output */
-	information_init(inp, argv[1]);
+	information_init(argv[1]);
 
 	/* Write sequence header; open bitstream files */
-	start_sequence(inp);
+	start_sequence();
 
 	/* B pictures */
 	Bframe_ctr=0;
 	tot_time=0;                 // time for total encoding session 
 
-	for (img->number=0; img->number < inp->no_frames; img->number++)
+#ifdef _ADAPT_LAST_GROUP_
+	if (input->last_frame > 0)
+	  input->no_frames = 1 + (input->last_frame + input->jumpd) / (input->jumpd + 1);
+	initial_Bframes = input->successive_Bframe;
+#endif
+
+	for (img->number=0; img->number < input->no_frames; img->number++)
 	{
 		if (img->number == 0)           
 			img->type = INTRA_IMG;				/* set image type for first image to I-frame */
 		else                          
 			img->type = INTER_IMG;				/* P-frame */
 
-		encode_one_frame(img, inp, stat, snr); /* encode one I- or P-frame */ 
+#ifdef _ADAPT_LAST_GROUP_
+		if (input->successive_Bframe && input->last_frame && img->number+1 == input->no_frames)
+		  {
+		    int bi = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.499999);
+		    input->successive_Bframe = (input->last_frame-(img->number-1)*(input->jumpd+1))/bi-1;
+		  }
+#endif
+
+		encode_one_frame(); /* encode one I- or P-frame */ 
 		
-		if ((inp->successive_Bframe != 0) && (img->number > 0)) /* B-frame(s) to encode */
+		if ((input->successive_Bframe != 0) && (img->number > 0)) /* B-frame(s) to encode */
 		{
 			img->type = B_IMG;						/* set image type to B-frame */
-			for(img->b_frame_to_code=1; img->b_frame_to_code<=inp->successive_Bframe; img->b_frame_to_code++) 
-				encode_one_frame(img, inp, stat, snr);	 /* encode one B-frame */ 					
+			for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++) 
+				encode_one_frame();	 /* encode one B-frame */ 					
 		}
 	}
 
 	/* terminate sequence */
-	terminate_sequence(img,inp);
+	terminate_sequence();
 
-	/* report everything */
-	report(inp, img, stat, snr);
-	
-	free_slice(inp,img);
-
-	/* free allocated memory for frame buffers*/
-	free_mem4global_buffers(inp, img); 
- 
-	free(snr);
-	free(stat);
-	free(img);
-	free(inp);
-}
-
-/************************************************************************
-*
-*  Name :       init_conf(struct inp_par *inp, char *config_filename)
-*
-*  Description: Read input from configuration file
-*
-*  Input      : Name of configuration filename
-*
-*  Output     : none
-*
-************************************************************************/
-
-void init_conf(struct inp_par *inp, char *config_filename)
-{
-	FILE *fd;
-	int bck_tmp, NAL_mode;
-	int i,j;
-
-	for (i=0;i<8;i++)
-		for (j=0;j<2;j++)
-			inp->blc_size[i][j]=0;      /* init block size array */
-
-	if((fd=fopen(config_filename,"r")) == NULL)         /* read the decoder configuration file */
-	{
-		printf("Error: Control file %s not found\n",config_filename);
-		exit(0);
-	}
-
-
-	/* read input parameters */
-	fscanf(fd,"%ld,",&inp->no_frames);              /* number of frames to be encoded */
-	fscanf(fd,"%*[^\n]");                           /* discard everything to the beginning of ewnt line */
-
-	fscanf(fd,"%ld,",&inp->qp0);                    /* QP of first frame (max 31) */
-	fscanf(fd,"%*[^\n]");
-
-	if (inp->qp0 > 31 && inp->qp0 <= 0)
-	{
-		printf("Error input parameter quant_0,check configuration file\n");
-		exit (0);
-	}
-
-	fscanf(fd,"%ld,",&inp->qpN);                    /* QP of remaining frames (max 31) */
-	fscanf(fd,"%*[^\n]");
-	if (inp->qpN > 31 && inp->qpN <= 0)
-	{
-		printf("Error input parameter quant_n,check configuration file\n");
-		exit (0);
-	}
-
-	fscanf(fd,"%ld,",&inp->jumpd);                      /* number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...) */
-	fscanf(fd,"%*[^\n]");
-
-	fscanf(fd,"%ld,",&inp->hadamard);                   /* 0: 'normal' SAD in 1/3 pixel search.  1: use 4x4 Hadamard transform and 'Sum of absolute transform differens' in 1/3 pixel search */
-	fscanf(fd,"%*[^\n]");
-
-	fscanf(fd,"%ld,",&inp->search_range);
-	
-	/* search range-integer pel search and 16x16 blocks.  The search window is generally around the predicted vector.
-	Max vector is 2xsearch_range.  For 8x8 and 4x4 block sizes the search range is 1/2 of that for 16x16 blocks. */
-	
-	fscanf(fd,"%*[^\n]");
-	if (inp->search_range > 16)
-	{
-		printf("Error in input parameter search_range, check configuration file\n");
-		exit (0);
-	}
-
-	fscanf(fd,"%ld,",&inp->no_multpred);                /* 1: prediction from the last frame only. 2: prediction from the last or second last frame etc.  Maximum 5 frames */
-	fscanf(fd,"%*[^\n]");
-	if(inp->no_multpred > MAX_MULT_PRED)
-	{
-		printf("Error : input parameter 'no_multpred' exceeds limit (1...5), check configuration file \n");
-		exit(0);
-	}
-
-	fscanf(fd,"%ld,",&inp->img_format);                  /* GH: 0=SUB_QCIF, 1=QCIF; 2=CIF, 3=CIF_4. 4=CIF_16, 5=CUSTOM */
-  fscanf(fd,"%*[^\n]");
-  if (inp->img_format != SUB_QCIF && inp->img_format != QCIF && inp->img_format != CIF && inp->img_format != CIF_4 && inp->img_format != CIF_16 && inp->img_format != CUSTOM)
-	{
-		printf("Unsupported image format=%d,use:\nSub-QCIF=0, QCIF=1, CIF=2, 4CIF=3, 16CIF=4 or CUSTOM=5\n",inp->img_format);
-		exit(0);
-	}
-	
-	fscanf(fd,"%ld,",&inp->img_width);                   /* GH: if CUSTOM picture format, width and height will be used, else ignored*/
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&inp->img_height);                  /* GH: size must be a multiple of 16 pels */
-	fscanf(fd,"%*[^\n]");
-	if (inp->img_format == CUSTOM && (((inp->img_height % 16) != 0) || ((inp->img_width % 16) != 0)))
-	{
-		printf("Unsupported CUSTOM image format x=%d,y=%d, must be a multiple of 16\n",inp->img_width,inp->img_height);
-		exit(0);
-	}
-	
-	fscanf(fd,"%ld,",&inp->yuv_format);                  /* GH: YUV format (0=4:0:0, 1=4:2:0, 2=4:2:2, 3=4:4:4,currently only 4:2:0 is supported)*/
-	fscanf(fd,"%*[^\n]");
-	if (inp->yuv_format != 1)
-	{
-		printf("Unsupported YUV format=%d, must be 1 (YUV=4:2:0)\n",inp->yuv_format);
-		exit(0);
-	}
-	
-	fscanf(fd,"%ld,",&inp->color_depth);                 /* GH: YUV color depth per component in bit/pel (currently only 8 bit/pel is supported)*/
-	fscanf(fd,"%*[^\n]");
-	if (inp->color_depth != 8)
-	{
-		printf("Unsupported color depth %d bit/pel, currently only 8 bit/pel is available\n",inp->color_depth);
-		exit(0);
-	}
-
-	fscanf(fd,"%ld,",&inp->intra_upd);                  /* For error robustness.
-	                                                        0: no special action.
-	                                                        1: One GOB/frame is intra coded as regular 'update'.
-	                                                        2: One GOB every 2 frames is intra coded etc.
-	                                                        In connection with this intra update,restrictions is put on
-															motion vectors to prevent errors to propagate from the past */
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&inp->write_dec);     /*  0: Do not write decoded image to file, 1: Write decoded image to file */
-	
-	/* read block sizes for motion search */
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[1][0]=16;
-		inp->blc_size[1][1]=16;
-	}
-	fscanf(fd,"%ld,",&bck_tmp);
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[2][0]=16;
-		inp->blc_size[2][1]= 8;
-	}
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[3][0]= 8;
-		inp->blc_size[3][1]=16;
-	}
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[4][0]= 8;
-		inp->blc_size[4][1]= 8;
-	}
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[5][0]= 8;
-		inp->blc_size[5][1]= 4;
-	}
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[6][0]= 4;
-		inp->blc_size[6][1]= 8;
-	}
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&bck_tmp);
-	if (bck_tmp)
-	{
-		inp->blc_size[7][0]= 4;
-		inp->blc_size[7][1]= 4;
-	}
-	fscanf(fd,"%*[^\n]");
-
-	fscanf(fd,"%s",inp->infile);   /* YUV 4:2:0 input format */
-	fscanf(fd,"%*[^\n]");
-
-	fscanf(fd,"%s",inp->outfile);  /* H.26L compressed output bitsream */
-	fscanf(fd,"%*[^\n]");
-
-	if ((p_in=fopen(inp->infile,"rb"))==0)  
-	{
-		printf("Input file %s does not exist \n",inp->infile);
-		exit(0);
-	}
-	if ((p_dec=fopen("test.dec", "wb"))==0)    /* decodet picture,for debugging */
-	{
-		printf("Error open file test.dec \n");
-		exit(0);
-	}
-#if TRACE
-	if ((p_trace=fopen("trace_enc.txt","w"))==0)
-	{
-		printf("Error open file trace_enc.txt\n");
-		exit(0);
-	}
+#ifdef _FAST_FULL_ME_
+	/* free arrays for fast full motion estimation */
+	ClearFastFullIntegerSearch ();
+#endif
+#ifdef _RD_OPT_
+	/* free structure for rd-opt. mode decision */
+	clear_rdopt ();
 #endif
 
-
-	fscanf(fd,"%d",&(NAL_mode));                        /* NAL mode */
-	fscanf(fd,"%*[^\n]");
+	/* report everything */
+	report();
 	
-	switch(NAL_mode)
-	{
-	case 0:
-		inp->of_mode = PAR_OF_26L;
-		/* Note: Data Partitioning in 26L File Format not yet supported */
-		inp->partition_mode = PAR_DP_1;
-		break;
-	case 1:
-		inp->of_mode = PAR_OF_SLICE;
-		inp->partition_mode = PAR_DP_1;
-		break;
-	case 2:
-		inp->of_mode = PAR_OF_SLICE;
-		inp->partition_mode = PAR_DP_2;
-		break;
-	case 3:
-		inp->of_mode = PAR_OF_SLICE;
-		inp->partition_mode = PAR_DP_4;
-		break;
-	case 4:
-		inp->of_mode = PAR_OF_NAL;
-		inp->partition_mode = PAR_DP_1;
-		break;
-	case 5:
-		inp->of_mode = PAR_OF_NAL;
-		inp->partition_mode = PAR_DP_2;
-		break;
-	case 6:
-		inp->of_mode = PAR_OF_NAL;
-		inp->partition_mode = PAR_DP_4;
-		break;
-	default:
-		printf("NAL mode %i is not supported\n", NAL_mode);
-		exit(1);
-	}
+	free_slice();
 
+	/* free allocated memory for frame buffers*/
+	free_mem4global_buffers(); 
 
-	fscanf(fd,"%d",&(inp->slice_mode));
-	fscanf(fd,"%*[^\n]");
+	/* free image mem */
+	free_img ();
 
-	fscanf(fd,"%d",&(inp->slice_argument));
-	fscanf(fd,"%*[^\n]");
-
-
-	/* B pictures */
-	fscanf(fd,"%ld,",&inp->successive_Bframe);    /* 0: B frame is not added */
-	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&inp->qpB);                    /* QP of B frames (max 31) */
-	fscanf(fd,"%*[^\n]");
-	if (inp->qpB > 31 && inp->qpB <= 0)             
-	{
-		printf("Error input parameter quant_B,check configuration file\n");
-		exit (0);
-	}
-	if(inp->successive_Bframe > inp->jumpd) 
-	{
-		sprintf(errortext, "Warning !! Number of B-frames %d can not exceed the number of frames skipped\n",
-				inp->successive_Bframe);
-		error(errortext);
-	}
-
-	/* Symbol mode */
-	fscanf(fd,"%ld,",&inp->symbol_mode);                       /* 0: UVLC 1: CABAC */
-	fscanf(fd,"%*[^\n]");
-	if (inp->symbol_mode != UVLC && inp->symbol_mode != CABAC)
-	{
-		sprintf(errortext, "Unsupported symbol mode=%d, use UVLC=0 or CABAC=1\n",inp->symbol_mode);
-		error(errortext);
-	}
+	return 0; 
 }
+
 
 /************************************************************************
 *
@@ -392,55 +148,28 @@ void init_conf(struct inp_par *inp, char *config_filename)
 *  Output     : Image Parameters struct img_par *img
 *
 ************************************************************************/
-void init_img(struct inp_par *inp, struct img_par *img)
+void init_img()
 {
     int i,j;
 
-    img->no_multpred=inp->no_multpred;
+    img->no_multpred=input->no_multpred;
+#ifdef _ADDITIONAL_REFERENCE_FRAME_
+    img->buf_cycle = max (input->no_multpred, input->add_ref_frame+1);
+#else
+    img->buf_cycle = input->no_multpred;
+#endif
     img->framerate=INIT_FRAME_RATE;   /* The basic frame rate (of the original sequence) */
 
-    if (inp->img_format == SUB_QCIF)
-    {
-      img->width    = 128;
-      img->height   = 96;
-      img->width_cr = 64;
-      img->height_cr= 48;
-    }
-    else if (inp->img_format == QCIF)
-    {
-      img->width    = 176;
-      img->height   = 144;
-      img->width_cr = 88;
-      img->height_cr= 72;
-    }
-    else if (inp->img_format == CIF)
-    {
-      img->width    = 352;
-      img->height   = 288;
-      img->width_cr = 176;
-      img->height_cr= 144;
-    }
-    else if (inp->img_format == CIF_4)
-    {
-      img->width    = 704;
-      img->height   = 576;
-      img->width_cr = 352;
-      img->height_cr= 288;
-    }
-    else if (inp->img_format == CIF_16)
-    {
-      img->width    = 1408;
-      img->height   = 1152;
-      img->width_cr = 704;
-      img->height_cr= 576;
-    }
-    else /*CUSTOM*/
-    {
-      img->width    = inp->img_width;
-      img->height   = inp->img_height;
-      img->width_cr = inp->img_width/2;
-      img->height_cr= inp->img_height/2;
-    }   
+    get_mem_mv (&(img->mv));
+    get_mem_mv (&(img->p_fwMV));
+    get_mem_mv (&(img->p_bwMV));
+    get_mem_mv (&(img->all_mv));
+    get_mem_mv (&(img->all_bmv));
+
+	img->width    = input->img_width;
+	img->height   = input->img_height;
+	img->width_cr = input->img_width/2;
+	img->height_cr= input->img_height/2;
  
 		if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL) 
 			no_mem_exit(1);
@@ -469,6 +198,17 @@ void init_img(struct inp_par *inp, struct img_par *img)
 
 }
 
+
+void free_img ()
+{
+  free_mem_mv (img->mv);
+  free_mem_mv (img->p_fwMV);
+  free_mem_mv (img->p_bwMV);
+  free_mem_mv (img->all_mv);
+  free_mem_mv (img->all_bmv);
+}
+
+
 /************************************************************************
 *
 *  Name :       void malloc_slice()
@@ -479,43 +219,37 @@ void init_img(struct inp_par *inp, struct img_par *img)
 *  Input      : Input Parameters struct inp_par *inp,  struct img_par *img
 *
 ************************************************************************/
-void malloc_slice(struct inp_par *inp, struct img_par *img)
+void malloc_slice()
 {
 	int i;
 	DataPartition *dataPart;
 	Slice *currSlice;
 	const int buffer_size = (img->width * img->height * 3)/2; /* DM 070301: The only assumption here is that we */
-																														/* do not consider the case of data expansion. */
-																														/* So this is a strictly conservative estimation	*/
-																														/* of the size of the bitstream buffer for one frame */																												/* ~DM */
+															  /* do not consider the case of data expansion. */
+															  /* So this is a strictly conservative estimation	*/
+															  /* of the size of the bitstream buffer for one frame */																												/* ~DM */
 
-	switch(inp->of_mode) /* init depending on NAL mode */
+	switch(input->of_mode) /* init depending on NAL mode */
 	{
 		case PAR_OF_26L:
 			/* Current File Format */
 			img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
 			if ( (currSlice = img->currentSlice) == NULL)
 			{
-				fprintf(stderr, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
+				fprintf(stderr, "Memory allocation for Slice datastruct in NAL-mode %d failed", input->of_mode);
 				exit(1);
 			}
-			if (inp->symbol_mode == CABAC)
+			if (input->symbol_mode == CABAC)
 			{
 				/* create all context models */
 				currSlice->mot_ctx = create_contexts_MotionInfo();
 				currSlice->tex_ctx = create_contexts_TextureInfo();
 			}
 
-			switch(inp->partition_mode)
+			switch(input->partition_mode)
 			{
 			case PAR_DP_1:
 				currSlice->max_part_nr = 1;
-				break;
-			case PAR_DP_2:
-				error("Data Partitioning Mode 2 in 26L-Format not yet supported");
-				break;
-			case PAR_DP_4:
-				error("Data Partitioning Mode 4 in 26L-Format not yet supported");
 				break;
 			default:
 				error("Data Partitioning Mode not supported!");
@@ -524,128 +258,25 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
 
 
 
-			currSlice->partArr = (DataPartition *) calloc(1, sizeof(DataPartition));
+			currSlice->partArr = (DataPartition *) calloc(currSlice->max_part_nr, sizeof(DataPartition));
 			if (currSlice->partArr == NULL)
 			{
-				fprintf(stderr, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
+				fprintf(stderr, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", input->of_mode);
 				exit(1);
 			}			
-			dataPart = currSlice->partArr;	
-			dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-			if (dataPart->bitstream == NULL)
-			{
-				fprintf(stderr, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
-				exit(1);
-			}
-			dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-			if (dataPart->bitstream->streamBuffer == NULL)
-			{
-				fprintf(stderr, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
-				exit(1);
-			}
-			/* Initialize storage of bitstream parameters */
-			dataPart->bitstream->stored_bits_to_go = 8;
-			dataPart->bitstream->stored_byte_pos = 0;
-			dataPart->bitstream->stored_byte_buf = 0;
-			return;
-		case PAR_OF_SLICE:
-			/* NAL File Format */
-			img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-			if ( (currSlice = img->currentSlice) == NULL)
-			{
-				fprintf(stderr, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
-				exit(1);
-			}
-
-			switch(inp->partition_mode)
-			{
-			case PAR_DP_1:
-				currSlice->max_part_nr = 1;
-				break;
-			case PAR_DP_2:
-				currSlice->max_part_nr = 8;
-				break;
-			case PAR_DP_4:
-				currSlice->max_part_nr = 4;
-				break;
-			default:
-				error("Data Partitioning Mode not supported!");
-				break;
-			}
-
-			currSlice->partArr = (DataPartition *) calloc(currSlice->max_part_nr, sizeof(DataPartition));
-			if (currSlice->partArr == NULL)
-			{
-				fprintf(stderr, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
-				exit(1);
-			}
-
 			for (i=0; i<currSlice->max_part_nr; i++) /* loop over all data partitions */
 			{				
 				dataPart = &(currSlice->partArr[i]);
 				dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
 				if (dataPart->bitstream == NULL)
 				{
-					fprintf(stderr, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
+					fprintf(stderr, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
 					exit(1);
 				}
 				dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
 				if (dataPart->bitstream->streamBuffer == NULL)
 				{
-					fprintf(stderr, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
-					exit(1);
-				}
-				/* Initialize storage of bitstream parameters */
-				dataPart->bitstream->stored_bits_to_go = 8;
-				dataPart->bitstream->stored_byte_pos = 0;
-				dataPart->bitstream->stored_byte_buf = 0;
-			}
-			return;
-		case PAR_OF_NAL:
-			/* NAL File Format */
-			img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-			if ( (currSlice = img->currentSlice) == NULL)
-			{
-				fprintf(stderr, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
-				exit(1);
-			}
-
-			switch(inp->partition_mode)
-			{
-			case PAR_DP_1:
-				currSlice->max_part_nr = 1;
-				break;
-			case PAR_DP_2:
-				currSlice->max_part_nr = 8;
-				break;
-			case PAR_DP_4:
-				currSlice->max_part_nr = 4;
-				break;
-			default:
-				error("Data Partitioning Mode not supported!");
-				break;
-			}
-
-			currSlice->partArr = (DataPartition *) calloc(currSlice->max_part_nr, sizeof(DataPartition));
-			if (currSlice->partArr == NULL)
-			{
-				fprintf(stderr, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
-				exit(1);
-			}
-
-			for (i=0; i<currSlice->max_part_nr; i++) /* loop over all data partitions */
-			{				
-				dataPart = &(currSlice->partArr[i]);
-				dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-				if (dataPart->bitstream == NULL)
-				{
-					fprintf(stderr, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
-					exit(1);
-				}
-				dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-				if (dataPart->bitstream->streamBuffer == NULL)
-				{
-					fprintf(stderr, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
+					fprintf(stderr, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
 					exit(1);
 				}
 				/* Initialize storage of bitstream parameters */
@@ -655,11 +286,13 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
 			}
 			return;
 		default: 
-			fprintf(stderr, "Output File Mode %d not supported", inp->of_mode);
+			fprintf(stderr, "Output File Mode %d not supported", input->of_mode);
 			exit(1);
 	}				
 	
 }
+
+
 
 /************************************************************************
 *
@@ -671,34 +304,17 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
 *  Input      : Input Parameters struct inp_par *inp,  struct img_par *img
 *
 ************************************************************************/
-void free_slice(struct inp_par *inp, struct img_par *img)
+void free_slice()
 {
 	int i;
 	DataPartition *dataPart;
 	Slice *currSlice = img->currentSlice;
 
-	switch(inp->of_mode) /* init depending on NAL mode */
+	switch(input->of_mode) /* init depending on NAL mode */
 	{
 		case PAR_OF_26L:
 			/* Current File Format */
-			dataPart = currSlice->partArr;	/* only one active data partition */
-			if (dataPart->bitstream->streamBuffer != NULL)
-				free(dataPart->bitstream->streamBuffer);
-			if (dataPart->bitstream != NULL)
-				free(dataPart->bitstream);
-			if (currSlice->partArr != NULL)
-				free(currSlice->partArr);
-			if (inp->symbol_mode == CABAC)
-			{
-				/* delete all context models */
-				delete_contexts_MotionInfo(currSlice->mot_ctx);
-				delete_contexts_TextureInfo(currSlice->tex_ctx);
-			}
-			if (currSlice != NULL)
-				free(img->currentSlice);
-			break;
-		case PAR_OF_SLICE:
-			/* NAL File Format */
+			/* Remenber that we have two partitions for CABAC */
 			for (i=0; i<currSlice->max_part_nr; i++) /* loop over all data partitions */
 			{	
 				dataPart = &(currSlice->partArr[i]);	
@@ -709,11 +325,17 @@ void free_slice(struct inp_par *inp, struct img_par *img)
 			}
 			if (currSlice->partArr != NULL)
 				free(currSlice->partArr);
+			if (input->symbol_mode == CABAC)
+			{
+				/* delete all context models */
+				delete_contexts_MotionInfo(currSlice->mot_ctx);
+				delete_contexts_TextureInfo(currSlice->tex_ctx);
+			}
 			if (currSlice != NULL)
 				free(img->currentSlice);
 			break;
 		default: 
-			fprintf(stderr, "Output File Mode %d not supported", inp->of_mode);
+			fprintf(stderr, "Output File Mode %d not supported", input->of_mode);
 			exit(1);
 	}				
 	
@@ -731,7 +353,7 @@ void free_slice(struct inp_par *inp, struct img_par *img)
 *  Output     : Statistic Parameters struct stat_par *stat
 *
 ************************************************************************/
-void init_stat(struct inp_par *inp, struct stat_par *stat)
+void init_stat()
 {
 	int i;
 	stat->mode_use_Bframe = (int *)malloc(sizeof(int)*41);
@@ -754,16 +376,24 @@ void init_stat(struct inp_par *inp, struct stat_par *stat)
 *  Output     : None
 *
 ************************************************************************/
-void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, struct snr_par *snr)
+void report()
 {
 	int bit_use[2][2] ;
 	int i,j;
 	char name[20];
-	int bit_use_Bframe;
-	char timebuf[128];
+	int bit_use_Bframe=0;
+	int total_bits;
+	float frame_rate;
 
+#ifndef WIN32
+	time_t now;
+	struct tm *l_time;
+	char string[1000];
+#else
+	char timebuf[128];
+#endif
 	bit_use[0][0]=1;
-	bit_use[1][0]=max(1,inp->no_frames-1);
+	bit_use[1][0]=max(1,input->no_frames-1);
 
 	/*  Accumulate bit usage for inter and intra frames */
 	bit_use[0][1]=bit_use[1][1]=0;
@@ -780,7 +410,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	}
 
 	/* B pictures */
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) {
+	if(Bframe_ctr!=0) {
 		bit_use_Bframe=0;
 		for(i=0; i<41; i++)
 			bit_use_Bframe += stat->bit_use_mode_Bframe[i]; // fw_predframe_no, blk_size
@@ -789,69 +419,89 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 		bit_use_Bframe += stat->bit_use_coeffY[2];
 		bit_use_Bframe += stat->bit_use_coeffC[2];
 
-		stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P)*(float)(img->framerate/(inp->jumpd+1))/inp->no_frames;	
-		stat->bitrate_B=(stat->bit_ctr_B)*(float)(img->framerate/(inp->jumpd+1))*inp->successive_Bframe/Bframe_ctr;			
+		stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P)*(float)(img->framerate/(input->jumpd+1))/input->no_frames;	
+#ifdef _ADAPT_LAST_GROUP_
+		stat->bitrate_B=(stat->bit_ctr_B)*(float)(img->framerate/(input->jumpd+1))*initial_Bframes/Bframe_ctr;
+#else
+		stat->bitrate_B=(stat->bit_ctr_B)*(float)(img->framerate/(input->jumpd+1))*input->successive_Bframe/Bframe_ctr;
+#endif
 	}
 	else {
-		if (inp->no_frames > 1) 
+		if (input->no_frames > 1) 
 		{
-			stat->bitrate=(bit_use[0][1]+bit_use[1][1])*(float)img->framerate/(inp->no_frames*(inp->jumpd+1));
+			stat->bitrate=(bit_use[0][1]+bit_use[1][1])*(float)img->framerate/(input->no_frames*(input->jumpd+1));
 		}
 	}
 
 	fprintf(stdout,"--------------------------------------------------------------------------\n");
-	fprintf(stdout,   " Freq. for encoded bitstream       : %1.0f\n",(float)img->framerate/(float)(inp->jumpd+1));
-	if(inp->hadamard)
+	fprintf(stdout,   " Freq. for encoded bitstream       : %1.0f\n",(float)img->framerate/(float)(input->jumpd+1));
+	if(input->hadamard)
 		fprintf(stdout," Hadamard transform                : Used\n");
 	else
 		fprintf(stdout," Hadamard transform                : Not used\n");
  
-  if(inp->img_format==0)
-		fprintf(stdout," Image format                      : SUB_QCIF\n");  /*GH: other frame sizes added*/
-	else if(inp->img_format==1)
-		fprintf(stdout," Image format                      : QCIF\n");
-	else if(inp->img_format==2)
-		fprintf(stdout," Image format                      : CIF\n");
-	else if(inp->img_format==3)
-		fprintf(stdout," Image format                      : 4CIF\n");
-	else if(inp->img_format==4)
-		fprintf(stdout," Image format                      : 16CIF\n");
-	else if(inp->img_format==5)
-		fprintf(stdout," Image format                      : %dx%d\n",inp->img_width,inp->img_height);
+	fprintf(stdout," Image format                      : %dx%d\n",input->img_width,input->img_height);
 
-	if(inp->intra_upd)
+	if(input->intra_upd)
 		fprintf(stdout," Error robustness                  : On\n");
-	else if(inp->img_format==1)
+	else 
 		fprintf(stdout," Error robustness                  : Off\n");
-	fprintf(stdout,   " Search range                      : %d\n",inp->search_range);
-	fprintf(stdout,   " No of ref. frames used in P pred  : %d\n",inp->no_multpred);
-	if(inp->successive_Bframe != 0)
-		fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",inp->no_multpred);
+	fprintf(stdout,    " Search range                      : %d\n",input->search_range);
+
+	if(input->mv_res)
+		fprintf(stdout," MV resolution                     : 1/8-pel\n");
+	else
+		fprintf(stdout," MV resolution                     : 1/4-pel\n");
+
+#ifdef _ADDITIONAL_REFERENCE_FRAME_
+	if (input->add_ref_frame >= input->no_multpred)
+	{
+	    fprintf(stdout,   " No of ref. frames used in P pred  : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+	    if(input->successive_Bframe != 0)
+	      fprintf(stdout,   " No of ref. frames used in B pred  : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+	}
+	else
+#endif
+	{
+		fprintf(stdout,   " No of ref. frames used in P pred  : %d\n",input->no_multpred);
+		if(input->successive_Bframe != 0)
+			fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",input->no_multpred);
+	}
 	fprintf(stdout,   " Total encoding time for the seq.  : %.3f sec \n",tot_time*0.001); 
 
 	/* B pictures */
 	fprintf(stdout, " Sequence type                     :" );
-	if(inp->successive_Bframe==1) 	fprintf(stdout, " IBPBP (QP: I %d, P %d, B %d) \n", 
-		inp->qp0, inp->qpN, inp->qpB);
-	else if(inp->successive_Bframe==2) fprintf(stdout, " IBBPBBP (QP: I %d, P %d, B %d) \n", 
-		inp->qp0, inp->qpN, inp->qpB);	
-	else if(inp->successive_Bframe==0)	fprintf(stdout, " IPPP (QP: I %d, P %d) \n", 	inp->qp0, inp->qpN);
+	if(input->successive_Bframe==1) 	fprintf(stdout, " IBPBP (QP: I %d, P %d, B %d) \n", 
+		input->qp0, input->qpN, input->qpB);
+	else if(input->successive_Bframe==2) fprintf(stdout, " IBBPBBP (QP: I %d, P %d, B %d) \n", 
+		input->qp0, input->qpN, input->qpB);	
+	else if(input->successive_Bframe==0)	fprintf(stdout, " IPPP (QP: I %d, P %d) \n", 	input->qp0, input->qpN);
 
 	/* DM: report on entropy coding  method */
-	if (inp->symbol_mode == UVLC)
+	if (input->symbol_mode == UVLC)
 		fprintf(stdout," Entropy coding method             : UVLC\n");
 	else
 		fprintf(stdout," Entropy coding method             : CABAC\n");
-	switch(inp->partition_mode)
+
+#ifdef _FULL_SEARCH_RANGE_
+	if (input->full_search == 2)
+	  fprintf(stdout," Search range restrictions         : none\n");
+	else if (input->full_search == 1)
+	  fprintf(stdout," Search range restrictions         : older reference frames\n");
+	else
+	  fprintf(stdout," Search range restrictions         : smaller blocks and older reference frames\n");
+#endif
+#ifdef _RD_OPT_
+	if (input->rdopt)
+	  fprintf(stdout," RD-optimized mode decision        : used\n");
+	else
+	  fprintf(stdout," RD-optimized mode decision        : not used\n");
+#endif
+
+	switch(input->partition_mode)
 		{
 		case PAR_DP_1:
 			fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
-			break;
-		case PAR_DP_2:
-			fprintf(stdout," Data Partitioning Mode            : 2 partitions \n");
-			break;
-		case PAR_DP_4:
-			fprintf(stdout," Data Partitioning Mode            : 4 partitions \n");
 			break;
 		default:
 			fprintf(stdout," Data Partitioning Mode            : not supported\n");
@@ -859,16 +509,10 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 		}
 
 
-		switch(inp->of_mode)
+		switch(input->of_mode)
 		{
 		case PAR_OF_26L:
 			fprintf(stdout," Output File Format                : H.26L File Format \n");
-			break;
-		case PAR_OF_SLICE:
-			fprintf(stdout," Output File Format                : Slice \n");
-			break;
-		case PAR_OF_NAL:
-			fprintf(stdout," Output File Format                : NAL \n");
 			break;
 		default:
 			fprintf(stdout," Output File Format                : not supported\n");
@@ -883,19 +527,29 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	fprintf(stdout," SNR U(dB)                         : %5.2f\n",snr->snr_ua);
 	fprintf(stdout," SNR V(dB)                         : %5.2f\n",snr->snr_va);
   
-	if(inp->successive_Bframe != 0) {
-		fprintf(stdout, " Bit rate of Base Layer (kb/s)     : %5.2f\n", stat->bitrate_P/1000);
-		fprintf(stdout, " Bit rate of Enhanced Layer (kb/s) : %5.2f\n", stat->bitrate_B/1000);
-		fprintf(stdout, " Total Bit rate (kb/s)             : %5.2f\n", stat->bitrate_P/1000+stat->bitrate_B/1000);
+	if(Bframe_ctr!=0) {
+
+		fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d) \n",
+						total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B); 
+
+		frame_rate = (float)img->framerate / ( (float) (input->jumpd - input->successive_Bframe + 1) );
+		stat->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + Bframe_ctr));
+
+		fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
+
 	}
 	else {
-		if (inp->symbol_mode == UVLC)
+		if (input->symbol_mode == UVLC)
 			fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n", 
-				bit_use[0][1]+bit_use[1][1], bit_use[0][1], bit_use[1][1]);
+				total_bits=bit_use[0][1]+bit_use[1][1], bit_use[0][1], bit_use[1][1]);
 		else
 			fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n",
-			stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P); 
-		fprintf(stdout, " Bit rate (kb/s)                   : %5.2f\n", stat->bitrate/1000);
+			total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P); 
+
+		frame_rate = (float)img->framerate / ( (float) (input->jumpd + 1) );
+		stat->bitrate= ((float) total_bits * frame_rate)/((float) input->no_frames );
+
+		fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
 	}	
 	
 	fprintf(stdout,"--------------------------------------------------------------------------\n");
@@ -904,55 +558,76 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	/* status file */
 	if ((p_stat=fopen("stat.dat","wb"))==0)
 	{
-		printf("Error open file %s  \n", p_stat);
+		printf("Error open file %s  \n", "stat.dat");
 		exit(0);
 	}
 	fprintf(p_stat," -------------------------------------------------------------- \n");
 	fprintf(p_stat,"  This file contains statistics for the last encoded sequence   \n");
 	fprintf(p_stat," -------------------------------------------------------------- \n");
-	fprintf(p_stat,   " Sequence                     : %s\n",inp->infile);
-	fprintf(p_stat,   " No.of coded pictures         : %d\n",inp->no_frames);
-	fprintf(p_stat,   " Freq. for encoded bitstream  : %3.0f\n",(float)img->framerate/(float)(inp->jumpd+1));
+	fprintf(p_stat,   " Sequence                     : %s\n",input->infile);
+	fprintf(p_stat,   " No.of coded pictures         : %d\n",input->no_frames+Bframe_ctr);
+	fprintf(p_stat,   " Freq. for encoded bitstream  : %3.0f\n",frame_rate);
 	
 	/* B pictures*/
-	if(inp->successive_Bframe != 0) {
+	if(input->successive_Bframe != 0) {
 		fprintf(p_stat,   " BaseLayer Bitrate(kb/s)      : %6.2f\n", stat->bitrate_P/1000);
 		fprintf(p_stat,   " EnhancedLyaer Bitrate(kb/s)  : %6.2f\n", stat->bitrate_B/1000);
 	}
 	else 
-		fprintf(p_stat,   " Bitate(kb/s)                 : %6.2f\n", stat->bitrate/1000);
+		fprintf(p_stat,   " Bitrate(kb/s)                : %6.2f\n", stat->bitrate/1000);
   
-	if(inp->hadamard)
+	if(input->hadamard)
 		fprintf(p_stat," Hadamard transform           : Used\n");
 	else
 		fprintf(p_stat," Hadamard transform           : Not used\n");
 
-  if(inp->img_format==0)
-		fprintf(p_stat," Image format                 : SUB_QCIF\n");   /*GH: other frame sizes added*/
-	else if(inp->img_format==1)
-		fprintf(p_stat," Image format                 : QCIF\n");
-	else if(inp->img_format==2)
-		fprintf(p_stat," Image format                 : CIF\n");
-	else if(inp->img_format==3)
-		fprintf(p_stat," Image format                 : 4CIF\n");
-	else if(inp->img_format==4)
-		fprintf(p_stat," Image format                 : 16CIF\n");
-	else if(inp->img_format==5)
-		fprintf(p_stat," Image format                 : %dx%d\n",inp->img_width,inp->img_height);
+	fprintf(p_stat," Image format                 : %dx%d\n",input->img_width,input->img_height);
 	
-	if(inp->intra_upd)
+	if(input->intra_upd)
 		fprintf(p_stat," Error robustness             : On\n");
-	else if(inp->img_format==1)
+	else 
 		fprintf(p_stat," Error robustness             : Off\n");
 
-	fprintf(p_stat,   " Search range                 : %d\n",inp->search_range);
-	fprintf(p_stat,   " No of frame used in P pred   : %d\n",inp->no_multpred);
-	if(inp->successive_Bframe != 0)
-		fprintf(p_stat,   " No of frame used in B pred   : %d\n",inp->no_multpred);
-	if (inp->symbol_mode == UVLC)
+	fprintf(p_stat,    " Search range                 : %d\n",input->search_range);
+
+	if(input->mv_res)
+		fprintf(p_stat," MV resolution                : 1/8-pel\n");
+	else
+		fprintf(p_stat," MV resolution                : 1/4-pel\n");
+
+#ifdef _ADDITIONAL_REFERENCE_FRAME_
+	if (input->add_ref_frame >= input->no_multpred)
+	  {
+	    fprintf(p_stat,   " No of frame used in P pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+	    if(input->successive_Bframe != 0)
+	      fprintf(p_stat,   " No of frame used in B pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+	  }
+	else
+#endif
+	{
+		fprintf(p_stat,   " No of frame used in P pred   : %d\n",input->no_multpred);
+		if(input->successive_Bframe != 0)
+			fprintf(p_stat,   " No of frame used in B pred   : %d\n",input->no_multpred);
+	}
+	if (input->symbol_mode == UVLC)
 		fprintf(p_stat,   " Entropy coding method        : UVLC\n");
 	else
 		fprintf(p_stat,   " Entropy coding method        : CABAC\n");
+
+#ifdef _FULL_SEARCH_RANGE_
+	if (input->full_search == 2)
+	  fprintf(p_stat," Search range restrictions    : none\n");
+	else if (input->full_search == 1)
+	  fprintf(p_stat," Search range restrictions    : older reference frames\n");
+	else
+	  fprintf(p_stat," Search range restrictions    : smaller blocks and older reference frames\n");
+#endif
+#ifdef _RD_OPT_
+	if (input->rdopt)
+	  fprintf(p_stat," RD-optimized mode decision   : used\n");
+	else
+	  fprintf(p_stat," RD-optimized mode decision   : not used\n");
+#endif
 
 	fprintf(p_stat," -------------------|---------------|---------------|\n");
 	fprintf(p_stat,"     Item           |     Intra     |   All frames  |\n");
@@ -966,7 +641,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 
 	/* QUANT. */
 	fprintf(p_stat," Average quant      |");
-	fprintf(p_stat," %5d         |",absm(inp->qp0));
+	fprintf(p_stat," %5d         |",absm(input->qp0));
 	fprintf(p_stat," %5.2f         |\n",(float)stat->quant1/max(1.0,(float)stat->quant0));
 	
 	/* MODE */
@@ -990,12 +665,12 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	fprintf(p_stat,"\n Mode 5  (8x4)   \t| %5d         | %5.0f         |",stat->mode_use_inter[5],(float)stat->bit_use_mode_inter[5]/(float)bit_use[1][0]);
 	fprintf(p_stat,"\n Mode 6  (4x8)   \t| %5d         | %5.0f         |",stat->mode_use_inter[6],(float)stat->bit_use_mode_inter[6]/(float)bit_use[1][0]);
 	fprintf(p_stat,"\n Mode 7  (4x4)   \t| %5d         | %5.0f         |",stat->mode_use_inter[7],(float)stat->bit_use_mode_inter[7]/(float)bit_use[1][0]);
-	fprintf(p_stat,"\n Mode 8 intra old\t| %5d         | --------------|",stat->mode_use_inter[8],(float)stat->bit_use_mode_inter[8]/(float)bit_use[1][0]);
+	fprintf(p_stat,"\n Mode 8 intra old\t| %5d         | --------------|",stat->mode_use_inter[8]);
 	for (i=9;i<33;i++)
 		fprintf(p_stat,"\n Mode %d intr.new \t| %5d         |",i,stat->mode_use_inter[i]);
 
 	/* B pictures */
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) {
+	if(input->successive_Bframe!=0 && Bframe_ctr!=0) {
 		fprintf(p_stat,"\n\n -------------------|---------------|\n");
 		fprintf(p_stat,"   B frame          |   Mode used   |\n");
 		fprintf(p_stat," -------------------|---------------|");
@@ -1014,7 +689,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	fprintf(p_stat," Header+modeinfo    |");
 	fprintf(p_stat," %7d       |",stat->bit_use_head_mode[0]);
 	fprintf(p_stat," %7d       |",stat->bit_use_head_mode[1]/bit_use[1][0]);
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+	if(input->successive_Bframe!=0 && Bframe_ctr!=0) 
 		fprintf(p_stat," %7d       |",stat->bit_use_head_mode[2]/Bframe_ctr);
 	else fprintf(p_stat," %7d       |", 0);
 	fprintf(p_stat,"\n");
@@ -1024,19 +699,19 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	{
 		fprintf(p_stat," %7.2f       |", (float)stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
 	}
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+	if(input->successive_Bframe!=0 && Bframe_ctr!=0) 
 		fprintf(p_stat," %7.2f       |", (float)stat->tmp_bit_use_cbp[2]/Bframe_ctr);
 	else fprintf(p_stat," %7.2f       |", 0.);
 	fprintf(p_stat,"\n");
 
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+	if(input->successive_Bframe!=0 && Bframe_ctr!=0) 
 		fprintf(p_stat," Coeffs. Y          | %7.2f      | %7.2f       | %7.2f       |\n",
 			(float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], (float)stat->bit_use_coeffY[2]/Bframe_ctr);
 	else 
 		fprintf(p_stat," Coeffs. Y          | %7.2f      | %7.2f       | %7.2f       |\n",
 			(float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], 0.);
   
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+	if(input->successive_Bframe!=0 && Bframe_ctr!=0) 
 		fprintf(p_stat," Coeffs. C          | %7.2f       | %7.2f       | %7.2f       |\n",
 			(float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], (float)stat->bit_use_coeffC[2]/Bframe_ctr);   
 	else 
@@ -1050,7 +725,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	{
 		fprintf(p_stat," %7d       |",bit_use[i][1]/bit_use[i][0]);
 	}
-	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+	if(input->successive_Bframe!=0 && Bframe_ctr!=0) 
 		fprintf(p_stat," %7d       |", bit_use_Bframe/Bframe_ctr);
 	else fprintf(p_stat," %7d       |", 0);
 
@@ -1062,7 +737,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	{
 		if ((p_log=fopen("log.dat","a"))==0)            /* append new statistic at the end */
 		{
-			printf("Error open file %s  \n",p_log);
+			printf("Error open file %s  \n","log.dat");
 			exit(0);
 		}
 		else                                            /* Create header for new log file */
@@ -1087,7 +762,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	now = time ((time_t *) NULL);	/* Get the system time and put it into 'now' as 'calender time' */
 	time (&now);
 	l_time = localtime (&now);
-	strftime (string, sizeof string, "%d-%b-%y", l_time);
+	strftime (string, sizeof string, "%d-%b-%Y", l_time);
 	fprintf(p_log,"| %1.5s |",string );
 
 	strftime (string, sizeof string, "%H:%M:%S", l_time);
@@ -1095,40 +770,29 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 #endif
 
 	for (i=0;i<20;i++)
-		name[i]=inp->infile[i+max(0,strlen(inp->infile)-20)]; /* write last part of path, max 20 chars */
+		name[i]=input->infile[i+max(0,strlen(input->infile)-20)]; /* write last part of path, max 20 chars */
 	fprintf(p_log,"%20.20s|",name);
 
-	fprintf(p_log,"%3d |",inp->no_frames);
-	fprintf(p_log,"  %2d  |",inp->qp0);
-	fprintf(p_log,"  %2d  |",inp->qpN);
+	fprintf(p_log,"%3d |",input->no_frames);
+	fprintf(p_log,"  %2d  |",input->qp0);
+	fprintf(p_log,"  %2d  |",input->qpN);
 
 	
-	if(inp->img_format==0)            /*GH: other frame sizes added*/
-		fprintf(p_log,"S_QCIF|");
-	else if(inp->img_format==1)
-		fprintf(p_log," QCIF |");
-	else if(inp->img_format==2)
-		fprintf(p_log,"  CIF |");
-	else if(inp->img_format==3)
-		fprintf(p_log," 4CIF |");
-	else if(inp->img_format==4)
-		fprintf(p_log," 16CIF|");
-	else if(inp->img_format==5)
-		fprintf(p_log,"%dx%d|",inp->img_width,inp->img_height);
+	fprintf(p_log,"%dx%d|",input->img_width,input->img_height);
 
 
-	if (inp->hadamard==1)
+	if (input->hadamard==1)
 		fprintf(p_log,"   ON   |");
 	else
 		fprintf(p_log,"   OFF  |");
 
-	fprintf(p_log,"   %2d   |",inp->search_range );
+	fprintf(p_log,"   %2d   |",input->search_range );
 
-	fprintf(p_log," %2d  |",inp->no_multpred);
+	fprintf(p_log," %2d  |",input->no_multpred);
 
-	fprintf(p_log," %2d  |",img->framerate/(inp->jumpd+1));
+	fprintf(p_log," %2d  |",img->framerate/(input->jumpd+1));
 
-	if (inp->intra_upd==1)
+	if (input->intra_upd==1)
 		fprintf(p_log,"   ON    |");
 	else
 		fprintf(p_log,"   OFF   |");
@@ -1139,7 +803,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	fprintf(p_log,"%5.3f|",snr->snr_ya);
 	fprintf(p_log,"%5.3f|",snr->snr_ua);
 	fprintf(p_log,"%5.3f|",snr->snr_va);
-	if(inp->successive_Bframe != 0)
+	if(input->successive_Bframe != 0)
 	{
 		fprintf(p_log,"%7.0f|",stat->bitrate_P);
 		fprintf(p_log,"%7.0f|\n",stat->bitrate_B);
@@ -1154,12 +818,12 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 
 	p_log=fopen("data.txt","a");
 
-	if(inp->successive_Bframe != 0) // B picture used
+	if(input->successive_Bframe != 0) // B picture used
 	{
 		fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
 			    "%2.2f %2.2f %2.2f %5d "
 				"%2.2f %2.2f %2.2f %5d %5d %.3f\n",
-				inp->no_frames, inp->qp0, inp->qpN,
+				input->no_frames, input->qp0, input->qpN,
 				snr->snr_y1,
 				snr->snr_u1,
 				snr->snr_v1,
@@ -1171,16 +835,16 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 				snr->snr_ya,
 				snr->snr_ua,
 				snr->snr_va,
-				(stat->bit_ctr_0+stat->bit_ctr)/inp->no_frames,
+				(stat->bit_ctr_0+stat->bit_ctr)/input->no_frames,
 				stat->bit_ctr_B/Bframe_ctr,
-				(double)0.001*tot_time/(inp->no_frames+Bframe_ctr));
+				(double)0.001*tot_time/(input->no_frames+Bframe_ctr));
 	}
 	else 
 	{
 		fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
 			    "%2.2f %2.2f %2.2f %5d "
 				"%2.2f %2.2f %2.2f %5d %5d %.3f\n",
-				inp->no_frames, inp->qp0, inp->qpN,
+				input->no_frames, input->qp0, input->qpN,
 				snr->snr_y1,
 				snr->snr_u1,
 				snr->snr_v1,
@@ -1192,9 +856,9 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 				snr->snr_ya,
 				snr->snr_ua,
 				snr->snr_va,
-				(stat->bit_ctr_0+stat->bit_ctr)/inp->no_frames,
+				(stat->bit_ctr_0+stat->bit_ctr)/input->no_frames,
 				0,
-				(double)0.001*tot_time/inp->no_frames);
+				(double)0.001*tot_time/input->no_frames);
 	}
 
 	fclose(p_log);
@@ -1202,7 +866,7 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 	/* B pictures */
 	free(stat->mode_use_Bframe);
 	free(stat->bit_use_mode_Bframe);
-
+// getchar();
 }
 
 /************************************************************************
@@ -1216,37 +880,12 @@ void report(struct inp_par *inp, struct img_par *img, struct stat_par *stat, str
 *  Output     : none
 *
 ************************************************************************/
-void init(struct img_par *img)
+void init()
 {
-	int i,j,k,l,i2,l2,ii,ind;
+	int k, i, ii, ind, j, i2;
 
-	k=1;
-	for (l=1; l < 41; l++)
-	{
-		l2=l+l;
-
-		for (i=-l+1; i < l; i++)
-		{
-			for (j=-l; j < l+1; j += l2)
-			{
-				/* img->spiral_search contains the vector positions organized to perform a spiral search */
-				img->spiral_search[0][k]= i;
-				img->spiral_search[1][k]= j;
-				k++;
-			}
-		}
-
-		for (j=-l; j <= l; j++)
-		{
-			for (i=-l;i <= l; i += l2)
-			{
-				img->spiral_search[0][k]= i;
-				img->spiral_search[1][k]= j;
-				k++;
-			}
-		}
-	}
-
+	InitMotionVectorSearchModule();
+	
 	/*  img->lpfilter is the table used for loop and post filter. */
 
 	for (k=0; k < 6; k++)
@@ -1301,14 +940,12 @@ void init(struct img_par *img)
 *  Output     : none
 *
 ************************************************************************/
-void information_init(struct inp_par *inp, char *config_filename)
+void information_init(char *config_filename)
 {
 	printf("--------------------------------------------------------------------------\n");
-	printf(" Encoder config file               : %s \n", config_filename);
-	printf("--------------------------------------------------------------------------\n");
-	printf(" Input YUV file                    : %s \n",inp->infile);
-	printf(" Output H.26L bitstream            : %s \n",inp->outfile);
-	if (inp->write_dec)
+	printf(" Input YUV file                    : %s \n",input->infile);
+	printf(" Output H.26L bitstream            : %s \n",input->outfile);
+	if (p_dec != NULL)
 		printf(" Output YUV file(debug)            : test.dec \n");
 	printf(" Output log file                   : log.dat \n");
 	printf(" Output statistics file            : stat.dat \n");
@@ -1332,9 +969,14 @@ void information_init(struct inp_par *inp, char *config_filename)
 *  Output     : Number of allocated bytes
 *
 ************************************************************************/
-int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
+int get_mem4global_buffers()
 {
 	int j,memory_size=0;
+#ifdef _ADAPT_LAST_GROUP_
+	extern int *last_P_no;
+
+	if ((last_P_no = (int*)malloc(img->buf_cycle*sizeof(int))) == NULL) no_mem_exit(1);
+#endif
 	
 	/* allocate memory for encoding frame buffers: imgY, imgUV*/ 
 	/* byte imgY[288][352];       */
@@ -1366,15 +1008,16 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 	/* rows and cols for croma component mcef[ref][croma][4x][4y] are switched */
 	/* compared to luma mref[ref][4y][4x] for whatever reason */
 	/* number of reference frames increased by one for next P-frame*/
-	memory_size += get_mem3D(&mref, inp->no_multpred+1, img->height*4, img->width*4);
-	
-	if((mcef = (byte****)calloc(inp->no_multpred+1,sizeof(byte***))) == NULL) no_mem_exit(1);
-	for(j=0;j<inp->no_multpred+1;j++)
+	memory_size += get_mem3D(&mref, img->buf_cycle+1, img->height*4, img->width*4);	
+	if((mcef = (byte****)calloc(img->buf_cycle+1,sizeof(byte***))) == NULL) no_mem_exit(1);
+	for(j=0;j<img->buf_cycle+1;j++)
 	{
 		memory_size += get_mem3D(&(mcef[j]), 2, img->width_cr*2, img->height_cr*2);
 	}
 	
-	
+	InitRefbuf (Refbuf11, Refbuf11_P);
+
+
 	/* allocate memory for B-frame coding (last upsampled P-frame): mref_P, mcref_P*/ 
 	/* is currently also used in oneforthpix_1() and _2() for coding without B-frames*/ 
 	/*byte mref[1152][1408];  */   /* 1/4 pix luma  */
@@ -1382,7 +1025,7 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 	memory_size += get_mem2D(&mref_P, img->height*4, img->width*4);
 	memory_size += get_mem3D(&mcef_P, 2, img->width_cr*2, img->height_cr*2);
 	
-	if(inp->successive_Bframe!=0)
+	if(input->successive_Bframe!=0)
 	{
     /* allocate memory for temp B-frame motion vector buffer: tmp_fwMV, tmp_bwMV, dfMV, dbMV*/ 
     /* int ...MV[2][72][92];  ([2][72][88] should be enough) */
@@ -1404,6 +1047,9 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 	/* allocate memory for temp quarter pel luma frame buffer: img4Y_tmp*/ 
 	/* int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h) */
 	memory_size += get_mem2Dint(&img4Y_tmp, img->height*2, img->width*2);
+	
+	/* allocate memory for temp 1/8-pel luma frame buffer: img8Y_tmp*/ 
+	memory_size += get_mem2D(&img8Y_tmp, 4*img->width, img->height);
 	
 	/* allocate memory for tmp loop filter frame buffers: imgY_tmp, imgUV_tmp*/ 
 	/* byte imgY_tmp[288][352];   */
@@ -1436,7 +1082,7 @@ int get_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 *  Output     : none
 *
 ************************************************************************/
-void free_mem4global_buffers(struct inp_par *inp, struct img_par *img) 
+void free_mem4global_buffers() 
 {
 	int i,j;
 	
@@ -1506,7 +1152,7 @@ void free_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 	
 	/* free multiple ref frame buffers*/
 	/* number of reference frames increased by one for next P-frame*/
-	for(j=0;j<inp->no_multpred+1;j++)
+	for(j=0;j<=img->buf_cycle;j++)
 	{
 		for(i=0;i<img->height*4;i++)
 		{
@@ -1525,7 +1171,6 @@ void free_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 	} 
 	free(mref);
 	free(mcef);
-	
 	for(i=0;i<img->height*4;i++)
 	{
 		free(mref_P[i]);
@@ -1541,7 +1186,7 @@ void free_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 	free(mcef_P[1]);
 	free(mcef_P);
 	
-	if(inp->successive_Bframe!=0)
+	if(input->successive_Bframe!=0)
 	{
     /* free last P-frame buffers for B-frame coding*/
     for(j=0;i<2;j++)
@@ -1590,6 +1235,14 @@ void free_mem4global_buffers(struct inp_par *inp, struct img_par *img)
 		free(img4Y_tmp[i]);
 	}
 	free(img4Y_tmp);
+	
+	
+	/* free temp 1/8 pel frame buffer*/
+	for(i=0;i<4*img->width;i++)
+	{
+		free(img8Y_tmp[i]);
+	}
+	free(img8Y_tmp);
 	
 	
 	/* free temp loop filter frame buffer*/
@@ -1662,6 +1315,51 @@ int get_mem2D(byte ***array2D, int rows, int columns)
     if(((*array2D)[i] = (byte*)calloc(columns,sizeof(byte))) == NULL) no_mem_exit(1);
   }
   return rows*columns;
+}
+
+
+
+int get_mem_mv (int****** mv)
+{
+  int i, j, k, l;
+
+  if ((*mv = (int*****)calloc(4,sizeof(int****))) == NULL) no_mem_exit (1);
+  for (i=0; i<4; i++)
+    {
+      if (((*mv)[i] = (int****)calloc(4,sizeof(int***))) == NULL) no_mem_exit (1);
+      for (j=0; j<4; j++)
+	{
+	  if (((*mv)[i][j] = (int***)calloc(img->buf_cycle,sizeof(int**))) == NULL) no_mem_exit (1);
+	  for (k=0; k<img->buf_cycle; k++)
+	    {
+	      if (((*mv)[i][j][k] = (int**)calloc(9,sizeof(int*))) == NULL) no_mem_exit (1);
+	      for (l=0; l<9; l++)
+		if (((*mv)[i][j][k][l] = (int*)calloc(2,sizeof(int))) == NULL) no_mem_exit (1);
+	    }
+	}
+    }
+  return 4*4*img->buf_cycle*9*2*sizeof(int);
+}
+
+void free_mem_mv (int***** mv)
+{
+  int i, j, k, l;
+
+  for (i=0; i<4; i++)
+    {
+      for (j=0; j<4; j++)
+	{
+	  for (k=0; k<img->buf_cycle; k++)
+	    {
+	      for (l=0; l<9; l++)
+		free (mv[i][j][k][l]);
+	      free (mv[i][j][k]);
+	    }
+	  free (mv[i][j]);
+	}
+      free (mv[i]);
+    }
+  free (mv);
 }
 
 /************************************************************************
@@ -1759,3 +1457,4 @@ void no_mem_exit(int code)
    printf("Could not allocate frame buffer memory!\n");
    exit (code);
 }
+

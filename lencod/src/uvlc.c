@@ -6,6 +6,7 @@
 //
 // Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
 // Detlev Marpe                    <marpe@hhi.de>
+// Stephan Wenger				   <stewe@cs.tu-berlin.de>
 // *************************************************************************************
 // *************************************************************************************
 #include "contributors.h"
@@ -13,10 +14,12 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h> 
+#include <assert.h>
+
 #include "global.h"
 #include "elements.h"
-
 
 /************************************************************************
 *
@@ -361,7 +364,6 @@ int symbol2uvlc(SyntaxElement *sym)
 }
 
 
-
 /************************************************************************
 *
 *  Routine      writeSyntaxElement_UVLC
@@ -369,17 +371,22 @@ int symbol2uvlc(SyntaxElement *sym)
 *  Description: generates UVLC code and passes the codeword to the buffer
 *
 ************************************************************************/
-int	writeSyntaxElement_UVLC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart)
+int	writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
 {
 
 	se->mapping(se->value1,se->value2,&(se->len),&(se->inf));
 
 	symbol2uvlc(se);
 
-	writeUVLC2buffer(se,img,inp, this_dataPart->bitstream);
+	writeUVLC2buffer(se, this_dataPart->bitstream);
+
+#if TRACE
+		trace2out (se);
+#endif
 		
 	return (se->len);
 }
+
 
 /************************************************************************
 *
@@ -388,7 +395,7 @@ int	writeSyntaxElement_UVLC(SyntaxElement *se, struct img_par *img, struct inp_p
 *  Description: writes UVLC code to the appropriate buffer
 *
 ************************************************************************/
-void	writeUVLC2buffer(SyntaxElement *se, struct img_par *img, struct inp_par *inp, Bitstream *currStream)
+void	writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
 {
 
 	int i;
@@ -411,6 +418,8 @@ void	writeUVLC2buffer(SyntaxElement *se, struct img_par *img, struct inp_par *in
 	}
 }
 
+
+
 /************************************************************************
 *
 *  Routine      writeEOS2buffer
@@ -418,10 +427,11 @@ void	writeUVLC2buffer(SyntaxElement *se, struct img_par *img, struct inp_par *in
 *  Description: generates UVLC code for EOS and writes it to the appropriate buffer
 *
 ************************************************************************/
-void	writeEOS2buffer(struct img_par *img, struct inp_par *inp)
+void	writeEOS2buffer()
 {
-	int dP_nr = assignSE2partition[inp->partition_mode][SE_EOS];
+	int dP_nr = assignSE2partition[input->partition_mode][SE_EOS];
 	Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
+
 	SyntaxElement sym;
 
 	sym.len = LEN_STARTCODE;
@@ -433,7 +443,7 @@ void	writeEOS2buffer(struct img_par *img, struct inp_par *inp)
 
 	symbol2uvlc(&sym);
 
-	writeUVLC2buffer(&sym,img,inp,currStream);
+	writeUVLC2buffer(&sym, currStream);
 
 #if TRACE
 	trace2out(&sym);
@@ -443,83 +453,9 @@ void	writeEOS2buffer(struct img_par *img, struct inp_par *inp)
 }
 
 
-/************************************************************************
-*
-*  Routine      writeStartcode2buffer
-*
-*  Description: writes the startcode to the appropriate buffer
-*
-************************************************************************/
-int	writeStartcode2buffer(struct img_par *img, struct inp_par *inp, SyntaxElement *imgTypeSym)
-{
-	int dP_nr = assignSE2partition[inp->partition_mode][SE_HEADER];
-	Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
-	SyntaxElement sym, f_sym;
-	int len;
-	int old_format = (inp->img_format == QCIF) ? 0 : 1; /* NOTE: current header allows only for QCIF and CIF format */
-	
-	sym.type = SE_HEADER;
 
-	if(img->current_mb_nr == 0)
-	{
-		/* Picture startcode */
-		len = sym.len = LEN_STARTCODE;
-		sym.inf = ((img->tr%256)<<7)+(img->qp << 2)+(old_format << 1);
-#if TRACE
-		strcpy(sym.tracestring, "\nHeaderinfo");
-#endif
 
-		symbol2uvlc(&sym);
 
-		writeUVLC2buffer(&sym,img,inp,currStream);
-
-#if TRACE
-		trace2out(&sym);
-#endif
-
-		/* Picture Type */
-		symbol2uvlc(imgTypeSym);
-
-		writeUVLC2buffer(imgTypeSym,img,inp,currStream);
-
-#if TRACE
-		trace2out(imgTypeSym);
-#endif
-
-		len+=imgTypeSym->len;
-	}
-	else
-	{
-
-		/* Slice startcode */
-		len = sym.len = 33;
-		sym.inf = ((img->current_mb_nr) << 7)+((img->qp) << 2);
-#if TRACE
-		strcpy(sym.tracestring, "Slice Header");
-#endif
-
-		symbol2uvlc(&sym);
-
-		/* DM: work around for producing a 33-bit codeword for slice header */
-		f_sym.bitpattern = 0;
-		f_sym.len = 1;
-		f_sym.inf = 0;
-		f_sym.type = sym.type;
-
-		writeUVLC2buffer(&f_sym,img,inp,currStream);
-		sym.len=32;
-		writeUVLC2buffer(&sym,img,inp,currStream);
-		sym.len=33;
-		/* ~DM */
-
-#if TRACE
-		trace2out(&sym);
-#endif
-
-	}	
-
-	return len;
-}
 
 /************************************************************************
 *
@@ -535,32 +471,35 @@ trace2out(SyntaxElement *sym)
 	static int bitcounter = 0;
 	int i, chars;
 
-	putc('@', p_trace);
-	chars = fprintf(p_trace, "%i", bitcounter);
-	while(chars++ < 6)
-		putc(' ',p_trace);
+	if (p_trace != NULL) {
+		putc('@', p_trace);
+		chars = fprintf(p_trace, "%i", bitcounter);
+		while(chars++ < 6)
+			putc(' ',p_trace);
 
-	chars += fprintf(p_trace, "%s", sym->tracestring);
-	while(chars++ < 50)
-		putc(' ',p_trace);
+		chars += fprintf(p_trace, "%s", sym->tracestring);
+		while(chars++ < 50)
+			putc(' ',p_trace);
 
 	/* Align bitpattern */
-	if(sym->len<15)
-	{
-		for(i=0 ; i<15-sym->len ; i++)
-			fputc(' ', p_trace);
+		if(sym->len<15)
+		{
+			for(i=0 ; i<15-sym->len ; i++)
+				fputc(' ', p_trace);
+		}
+		/* Print bitpattern */
+		bitcounter += sym->len;
+		for(i=1 ; i<=sym->len ; i++)
+		{
+			if((sym->bitpattern >> (sym->len-i)) & 0x1)
+				fputc('1', p_trace);
+			else
+				fputc('0', p_trace);
+		}
+		fprintf(p_trace, "\n");
 	}
-	/* Print bitpattern */
-	bitcounter += sym->len;
-	for(i=1 ; i<=sym->len ; i++)
-	{
-		if((sym->bitpattern >> (sym->len-i)) & 0x1)
-			fputc('1', p_trace);
-		else
-			fputc('0', p_trace);
-	}
-	fprintf(p_trace, "\n");
 }
 #endif
+
 
 

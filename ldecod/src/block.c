@@ -28,8 +28,8 @@ int intrapred(
 	int img_block_x,		/*!< ?? */
 	int img_block_y)		/*!< ?? */
 {
-	int js0,js1,js2,i,j;
-	int img_y,img_x;
+	int js0=0,js1,js2,i,j;
+	int img_y=0,img_x=0;
 	int ia[7];
 
 	byte predmode = img->ipredmode[img_block_x+1][img_block_y+1];
@@ -39,6 +39,9 @@ int intrapred(
 
 	img_x=img_block_x*4;
 	img_y=img_block_y*4;
+
+	for (i=0; i<7; i++)
+		ia[i]=0;
 
 	switch (predmode)
 	{
@@ -135,7 +138,7 @@ int intrapred_luma_2(
 	 struct img_par *img,	/*!< image parameters */
 	 int predmode)			/*!< prediction mode */
 {
-	int s0,s1,s2;
+	int s0=0,s1,s2;
 
 	int i,j;
 
@@ -144,8 +147,8 @@ int intrapred_luma_2(
 
 	int mb_nr = img->current_mb_nr;
 	int mb_width = img->width/16;
-	int mb_available_up = (img->mb_y == 0) ? 0 : (slice_numbers[mb_nr] == slice_numbers[mb_nr-mb_width]);
-	int mb_available_left = (img->mb_x == 0) ? 0 : (slice_numbers[mb_nr] == slice_numbers[mb_nr-1]);
+	int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
+	int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
 
 	s1=s2=0;
 
@@ -330,6 +333,7 @@ void itrans_2(
 		}
 	}
 }
+
 
 
 

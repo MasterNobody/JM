@@ -9,17 +9,26 @@
 // Stephan Wenger                  <stewe@cs.tu-berlin.de>
 // Jani Lainema                    <jani.lainema@nokia.com>
 // Detlev Marpe                    <marpe@hhi.de>
+// Thomas Wedi                     <wedi@tnt.uni-hannover.de>
 // *************************************************************************************
 // *************************************************************************************
+
+
+
 #include "contributors.h"
 
 
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "global.h"
 #include "block.h"
+#include "refbuf.h"
+
+
+
 
 /************************************************************************
 *
@@ -36,9 +45,9 @@
 *  Output     : none
 *                    
 ************************************************************************/
-void intrapred_luma(struct img_par *img,int img_x,int img_y)
+void intrapred_luma(int img_x,int img_y)
 {
-	int i,j,s0,s1,s2,ia[7][3],s[4][2];
+	int i,j,s0=0,s1,s2,ia[7][3],s[4][2];
 
 	int block_available_up = (img->ipredmode[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
 	int block_available_left = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
@@ -163,9 +172,9 @@ void intrapred_luma(struct img_par *img,int img_x,int img_y)
 *  Output     : none
 *                    
 ************************************************************************/
-void intrapred_luma_2(struct img_par *img)
+void intrapred_luma_2()
 {
-	int s0,s1,s2;
+	int s0=0,s1,s2;
 	int i,j;
 	int s[16][2];
 
@@ -241,132 +250,6 @@ void intrapred_luma_2(struct img_par *img)
 
 /************************************************************************
 *
-*  Routine    : find_sad2()
-*
-*  Description: Find best 16x16 based intra mode
-*
-*
-*  Input      : Image parameters, pointer to best 16x16 intra mode
-*
-*  Output     : best 16x16 based SAD
-*                    
-************************************************************************/
-int find_sad2(struct img_par *img,int *intra_mode)
-{
-	int current_intra_sad_2,best_intra_sad2;
-	int M1[16][16],M0[4][4][4][4],M3[4],M4[4][4];
-
-	int i,j,k;
-	int ii,jj;
-
-	best_intra_sad2=MAX_VALUE;
-
-	for (k=0;k<4;k++)
-	{
-		int mb_nr = img->current_mb_nr;
-		int mb_width = img->width/16;
-		int mb_available_up = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-		int mb_available_left = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
-
-		/*check if there are neighbours to predict from  */
-		if ((k==0 && !mb_available_up) || (k==1 && !mb_available_left) || (k==3 && (!mb_available_left || !mb_available_up)))
-		{
-			; /* edge, do nothing */
-		}
-		else
-		{
-			for (j=0;j<16;j++)
-			{
-				for (i=0;i<16;i++)
-				{
-					M1[i][j]=imgY_org[img->pix_y+j][img->pix_x+i]-img->mprr_2[k][j][i];
-					M0[i%4][i/4][j%4][j/4]=M1[i][j];
-				}
-			}
-			current_intra_sad_2=0;              /* no SAD start handicap here */
-			for (jj=0;jj<4;jj++)
-			{
-				for (ii=0;ii<4;ii++)
-				{
-					for (j=0;j<4;j++)
-					{
-						M3[0]=M0[0][ii][j][jj]+M0[3][ii][j][jj];
-						M3[1]=M0[1][ii][j][jj]+M0[2][ii][j][jj];
-						M3[2]=M0[1][ii][j][jj]-M0[2][ii][j][jj];
-						M3[3]=M0[0][ii][j][jj]-M0[3][ii][j][jj];
-
-						M0[0][ii][j][jj]=M3[0]+M3[1];
-						M0[2][ii][j][jj]=M3[0]-M3[1];
-						M0[1][ii][j][jj]=M3[2]+M3[3];
-						M0[3][ii][j][jj]=M3[3]-M3[2];
-					}
-
-					for (i=0;i<4;i++)
-					{
-						M3[0]=M0[i][ii][0][jj]+M0[i][ii][3][jj];
-						M3[1]=M0[i][ii][1][jj]+M0[i][ii][2][jj];
-						M3[2]=M0[i][ii][1][jj]-M0[i][ii][2][jj];
-						M3[3]=M0[i][ii][0][jj]-M0[i][ii][3][jj];
-
-						M0[i][ii][0][jj]=M3[0]+M3[1];
-						M0[i][ii][2][jj]=M3[0]-M3[1];
-						M0[i][ii][1][jj]=M3[2]+M3[3];
-						M0[i][ii][3][jj]=M3[3]-M3[2];
-						for (j=0;j<4;j++)
-							if ((i+j)!=0)
-								current_intra_sad_2 += abs(M0[i][ii][j][jj]);
-					}
-				}
-			}
-
-			for (j=0;j<4;j++)
-				for (i=0;i<4;i++)
-					M4[i][j]=M0[0][i][0][j]/4;
-
-			/* Hadamard of DC koeff */
-			for (j=0;j<4;j++)
-			{
-				M3[0]=M4[0][j]+M4[3][j];
-				M3[1]=M4[1][j]+M4[2][j];
-				M3[2]=M4[1][j]-M4[2][j];
-				M3[3]=M4[0][j]-M4[3][j];
-
-				M4[0][j]=M3[0]+M3[1];
-				M4[2][j]=M3[0]-M3[1];
-				M4[1][j]=M3[2]+M3[3];
-				M4[3][j]=M3[3]-M3[2];
-			}
-
-			for (i=0;i<4;i++)
-			{
-				M3[0]=M4[i][0]+M4[i][3];
-				M3[1]=M4[i][1]+M4[i][2];
-				M3[2]=M4[i][1]-M4[i][2];
-				M3[3]=M4[i][0]-M4[i][3];
-
-				M4[i][0]=M3[0]+M3[1];
-				M4[i][2]=M3[0]-M3[1];
-				M4[i][1]=M3[2]+M3[3];
-				M4[i][3]=M3[3]-M3[2];
-
-				for (j=0;j<4;j++)
-					current_intra_sad_2 += abs(M4[i][j]);
-			}
-			if(current_intra_sad_2 < best_intra_sad2)
-			{
-				best_intra_sad2=current_intra_sad_2;
-				*intra_mode = k; /* update best intra mode */
-
-			}
-		}
-	}
-	best_intra_sad2 = best_intra_sad2/2;
-
-	return best_intra_sad2;
-
-}
-/************************************************************************
-*
 *  Routine:     dct_luma2()
 *
 *  Description: For new intra pred routines
@@ -374,12 +257,17 @@ int find_sad2(struct img_par *img,int *intra_mode)
 *               
 *  Input:       Image par, 16x16 based intra mode 
 *
-*  Output:      
+*  Output:      none
 *                    
 ************************************************************************/
-void dct_luma2(struct img_par *img,int new_intra_mode)
+void dct_luma2(int new_intra_mode)
 {
+#ifndef NO_RDQUANT
 	int jq0;
+#endif
+#ifdef NO_RDQUANT
+	int qp_const;
+#endif
 	int i,j;
 	int ii,jj;
 	int i1,j1;
@@ -388,11 +276,17 @@ void dct_luma2(struct img_par *img,int new_intra_mode)
 	int M4[4][4];
 	int M5[4],M6[4];
 	int M0[4][4][4][4];
+#ifndef NO_RDQUANT
 	int coeff[16];
-
+#endif
 	int quant_set,run,scan_pos,coeff_ctr,level;
 
+#ifndef NO_RDQUANT
 	jq0=JQQ3;
+#endif
+#ifdef NO_RDQUANT
+	qp_const = JQQ3;
+#endif
 
 	for (j=0;j<16;j++)
 	{
@@ -473,18 +367,20 @@ void dct_luma2(struct img_par *img,int new_intra_mode)
 		M4[i][3]= M5[3]*7 -M5[2]*17;
 	}
 
-	/* quant , we use RD quant here as well*/
+	/* quant */
 
 	quant_set=img->qp;
 	run=-1;
 	scan_pos=0;
+#ifndef NO_RDQUANT
+
 	for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
 	{
 		i=SNGL_SCAN[coeff_ctr][0];
 		j=SNGL_SCAN[coeff_ctr][1];
 		coeff[coeff_ctr]=M4[i][j];
 	}
-	rd_quant(img,QUANT_LUMA_SNG,coeff);
+	rd_quant(QUANT_LUMA_SNG,coeff);
 
 	for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
 	{
@@ -502,6 +398,26 @@ void dct_luma2(struct img_par *img,int new_intra_mode)
 			++scan_pos;
 			run=-1;
 		}
+#endif
+#ifdef NO_RDQUANT
+
+	for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
+	{
+		i=SNGL_SCAN[coeff_ctr][0];
+		j=SNGL_SCAN[coeff_ctr][1];
+
+		run++;
+
+		level= (abs(M4[i][j]) * JQ[quant_set][0]+qp_const)/JQQ1;
+
+		if (level != 0)
+		{
+			img->cof[0][0][scan_pos][0][1]=sign(level,M4[i][j]);
+			img->cof[0][0][scan_pos][1][1]=run;
+			++scan_pos;
+			run=-1;
+		}
+#endif
 		M4[i][j]=sign(level,M4[i][j]);
 	}
 	img->cof[0][0][scan_pos][0][1]=0;
@@ -559,13 +475,14 @@ void dct_luma2(struct img_par *img,int new_intra_mode)
 		{
 			run=-1;
 			scan_pos=0;
+#ifndef NO_RDQUANT
 			for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) /* set in AC coeff */
 			{
 				i=SNGL_SCAN[coeff_ctr][0];
 				j=SNGL_SCAN[coeff_ctr][1];
 				coeff[coeff_ctr-1]=M0[i][ii][j][jj];
 			}
-			rd_quant(img,QUANT_LUMA_AC,coeff);
+			rd_quant(QUANT_LUMA_AC,coeff);
 
 			for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) /* set in AC coeff */
 			{
@@ -586,6 +503,29 @@ void dct_luma2(struct img_par *img,int new_intra_mode)
 				M0[i][ii][j][jj]=sign(level*JQ[quant_set][1],M0[i][ii][j][jj]);
 			}
 			img->cof[ii][jj][scan_pos][0][0]=0;
+#endif
+#ifdef NO_RDQUANT
+			for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) /* set in AC coeff */
+			{
+				i=SNGL_SCAN[coeff_ctr][0];
+				j=SNGL_SCAN[coeff_ctr][1];
+				run++;
+
+				level= ( abs( M0[i][ii][j][jj]) * JQ[quant_set][0]+qp_const)/JQQ1;
+
+				if (level != 0)
+				{
+					img->kac=1;
+					img->cof[ii][jj][scan_pos][0][0]=sign(level,M0[i][ii][j][jj]);
+					img->cof[ii][jj][scan_pos][1][0]=run;
+					++scan_pos;
+					run=-1;
+				}
+				M0[i][ii][j][jj]=sign(level*JQ[quant_set][1],M0[i][ii][j][jj]);
+			}
+			img->cof[ii][jj][scan_pos][0][0]=0;
+#endif
+
 
 			/* IDCT horizontal */
 
@@ -664,7 +604,7 @@ void dct_luma2(struct img_par *img,int new_intra_mode)
 *                    
 ************************************************************************/
 
-void intrapred_chroma(struct img_par *img,int img_c_x,int img_c_y,int uv)
+void intrapred_chroma(int img_c_x,int img_c_y,int uv)
 {
 	int s[2][2],s0,s1,s2,s3;
 	int i,j;
@@ -731,523 +671,8 @@ void intrapred_chroma(struct img_par *img,int img_c_x,int img_c_y,int uv)
 	}
 }
 
-/************************************************************************
-*
-*  Routine:     motion_search()
-*
-*  Description: In this routine motion search (integer pel+1/3 pel) and mode selection 
-*               is performed. Since we treat all 4x4 blocks before coding/decoding the 
-*               prediction may not be based on decoded pixels (except for some of the blocks). 
-*               This will result in too good prediction.  To compensate for this the SAD for 
-*               intra(tot_intra_sad) is given a 'handicap' depending on QP.
-*
-*  Input:       Best intra SAD value.
-*
-*  Output:      Reference image.  
-*
-************************************************************************/
-int motion_search(struct inp_par *inp_par,struct img_par *img,int tot_intra_sad)
-{
-	int predframe_no;
-	int numc,j,ref_frame,i;
-	int vec1_x,vec1_y,vec2_x,vec2_y;
-	int pic_block_x,pic_block_y,block_x,ref_inx,block_y,pic_pix_y,pic4_pix_y,pic_pix_x,pic4_pix_x,i22,lv,hv;
-	int all_mv[4][4][MAX_MULT_PRED][9][2];
-	int center_x,s_pos_x,ip0,ip1,center_y,blocktype,s_pos_y,iy0,jy0,center_h2,curr_search_range,center_v2;
-	int s_pos_x1,s_pos_y1,s_pos_x2,s_pos_y2;
-	int abort_search;
-	int mb_y,mb_x;
-	int min_inter_sad,tot_inter_sad,best_inter_sad,current_inter_sad;
-	int mo[16][16];
-	int blockshape_x,blockshape_y;
-	int tmp0,tmp1;
-	int mb_nr = img->current_mb_nr;
-	int mb_width = img->width/16;
-	int mb_available_up      = (img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width]);
-	int mb_available_left    = (img->mb_x == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-1]);
-	int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width-1]);
-	int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (img->slice_numbers[mb_nr] == img->slice_numbers[mb_nr-mb_width+1]);
-	int block_available_up, block_available_left, block_available_upright, block_available_upleft;
-	int mv_a, mv_b, mv_c, mv_d, pred_vec;
-	int mvPredType, rFrameL, rFrameU, rFrameUR;
 
-	min_inter_sad=MAX_VALUE; /* start value for inter SAD search */
 
-	/*  Loop through all reference frames under consideration */
-	for (ref_frame=0; ref_frame < min(img->number,inp_par->no_multpred); ref_frame++)
-	{
-
-		for (j = 0;j < 4;j++)
-		{
-			for (i = 0;i < 4;i++)
-			{
-				refFrArr[img->block_y+j][img->block_x+i] = ref_frame;
-			}
-		}
-
-		/* find  reference image */
-		ref_inx=(img->number-ref_frame-1)%inp_par->no_multpred;  /*GH inp->no_multpred used insteadof MAX_MULT_PRED
-		                                                          frame buffer size = inp->no_multpred+1*/
-
-		/*  Looping through all the chosen block sizes: */
-		blocktype=1;
-		while (inp_par->blc_size[blocktype][0]==0 && blocktype<=7) /* skip blocksizes not chosen */
-			blocktype++;
-
-		for (;blocktype <= 7;)
-		{
-			blockshape_x=inp_par->blc_size[blocktype][0];/* inp_par->blc_size has information of the 7 blocksizes */
-			blockshape_y=inp_par->blc_size[blocktype][1];/* array iz stores offset inside one MB */
-
-			/*  curr_search_range is the actual search range used depending on block size and reference frame.
-			It may be reduced by 1/2 or 1/4 for smaller blocks and prediction from older frames due to compexity
-			*/
-			curr_search_range=inp_par->search_range/((min(ref_frame,1)+1) * min(2,blocktype));
-
-			tot_inter_sad=QP2QUANT[img->qp] * min(ref_frame,1) * 2; /* start 'handicap ' */
-
-			/*  Loop through the whole MB with all block sizes  */
-			for (mb_y=0; mb_y < MB_BLOCK_SIZE; mb_y += blockshape_y)
-			{
-				block_available_up = mb_available_up || (mb_y > 0);
-
-				block_y=mb_y/BLOCK_SIZE;
-				pic_block_y=img->block_y+block_y;
-				pic_pix_y=img->pix_y+mb_y;
-				pic4_pix_y=pic_pix_y*4;
-
-				for (mb_x=0; mb_x < MB_BLOCK_SIZE; mb_x += blockshape_x)
-				{
-					block_x=mb_x/BLOCK_SIZE;
-					pic_block_x=img->block_x+block_x;
-					pic_pix_x=img->pix_x+mb_x;
-					pic4_pix_x=pic_pix_x*4;
-
-					/* D B C */
-					/* A X   */
-
-					/* 1 A, B, D are set to 0 if unavailable       */
-					/* 2 If C is not available it is replaced by D */
-
-					block_available_left = mb_available_left || (mb_x > 0);
-
-					if (mb_y > 0)
-						block_available_upright = mb_x+blockshape_x != MB_BLOCK_SIZE ? 1 : 0;
-					else if (mb_x+blockshape_x != MB_BLOCK_SIZE)
-						block_available_upright = block_available_up;
-					else
-						block_available_upright = mb_available_upright;
-
-					if (mb_x > 0)
-						block_available_upleft = mb_y > 0 ? 1 : block_available_up;
-					else if (mb_y > 0)
-						block_available_upleft = block_available_left;
-					else
-						block_available_upleft = mb_available_upleft;
-
-					mvPredType = MVPRED_MEDIAN;
-
-					rFrameL    = block_available_left    ? refFrArr[pic_block_y][pic_block_x-1]   : -1;
-					rFrameU    = block_available_up      ? refFrArr[pic_block_y-1][pic_block_x]   : -1;
-					rFrameUR   = block_available_upright ? refFrArr[pic_block_y-1][pic_block_x+blockshape_x/4] :
-					             block_available_upleft  ? refFrArr[pic_block_y-1][pic_block_x-1] : -1;
-
-					/* Prediction if only one of the neighbors uses the reference frame
-					 * we are checking
-					 */
-
-					if(rFrameL == ref_frame && rFrameU != ref_frame && rFrameUR != ref_frame)
-						mvPredType = MVPRED_L;
-					else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)
-						mvPredType = MVPRED_U;
-					else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)
-						mvPredType = MVPRED_UR;
-
-					/* Directional predictions */
-
-					else if(blockshape_x == 8 && blockshape_y == 16)
-					{
-						if(mb_x == 0)
-						{
-							if(rFrameL == ref_frame)
-								mvPredType = MVPRED_L;
-						}
-						else
-						{
-							if(rFrameUR == ref_frame)
-								mvPredType = MVPRED_UR;
-						}
-					}
-					else if(blockshape_x == 16 && blockshape_y == 8)
-					{
-						if(mb_y == 0)
-						{
-							if(rFrameU == ref_frame)
-								mvPredType = MVPRED_U;
-						}
-						else
-						{
-							if(rFrameL == ref_frame)
-								mvPredType = MVPRED_L;
-						}
-					}
-					else if(blockshape_x == 8 && blockshape_y == 4 && mb_x == 8)
-						mvPredType = MVPRED_L;
-					else if(blockshape_x == 4 && blockshape_y == 8 && mb_y == 8)
-						mvPredType = MVPRED_U;
-
-					for (hv=0; hv < 2; hv++)
-					{
-
-						mv_a = block_available_left    ? tmp_mv[hv][pic_block_y][pic_block_x-1+4]   : 0;
-						mv_b = block_available_up      ? tmp_mv[hv][pic_block_y-1][pic_block_x+4]   : 0;
-						mv_d = block_available_upleft  ? tmp_mv[hv][pic_block_y-1][pic_block_x-1+4] : 0;
-						mv_c = block_available_upright ? tmp_mv[hv][pic_block_y-1][pic_block_x+blockshape_x/4+4] : mv_d;
-
-						switch (mvPredType)
-						{
-
-						case MVPRED_MEDIAN:
-
-							if(!(block_available_upleft || block_available_up || block_available_upright))
-								pred_vec = mv_a;
-							else
-								pred_vec = mv_a+mv_b+mv_c-min(mv_a,min(mv_b,mv_c))-max(mv_a,max(mv_b,mv_c));
-
-							break;
-
-						case MVPRED_L:
-							pred_vec = mv_a;
-							break;
-						case MVPRED_U:
-							pred_vec = mv_b;
-							break;
-						case MVPRED_UR:
-							pred_vec = mv_c;
-							break;
-						default:
-							break;
-						}
-
-						img->mv[block_x][block_y][ref_frame][blocktype][hv] = pred_vec;
-					}
-
-					ip0=img->mv[block_x][block_y][ref_frame][blocktype][0];
-					ip1=img->mv[block_x][block_y][ref_frame][blocktype][1];
-
-					/*  Integer pel search.  center_x,center_y is the 'search center'*/
-
-					center_x=ip0/4;
-					center_y=ip1/4;
-
-					/*  Limitation of center_x,center_y so that the search wlevel ow contains the (0,0) vector*/
-					center_x=max(-(inp_par->search_range),min(inp_par->search_range,center_x));
-					center_y=max(-(inp_par->search_range),min(inp_par->search_range,center_y));
-
-					/*  Search center corrected to prevent vectors outside the frame, this is not permitted in this model. */
-
-					center_x=max(min(center_x,img->width-1-pic_pix_x-(blockshape_x-1)-curr_search_range),curr_search_range-pic_pix_x);
-					center_y=max(min(center_y,img->height_err-pic_pix_y-(blockshape_y-1)-curr_search_range),curr_search_range-pic_pix_y);
-
-					/*  mo() is the the original block to be used in the search process */
-
-					for (i=0; i < blockshape_x; i++)
-						for (j=0; j < blockshape_y; j++)
-							mo[i][j]=imgY_org[pic_pix_y+j][pic_pix_x+i];
-
-					best_inter_sad=MAX_VALUE;
-
-					numc=(curr_search_range*2+1)*(curr_search_range*2+1);
-
-					for (lv=0; lv < numc; lv++)
-					{
-						s_pos_x=(center_x+img->spiral_search[0][lv])*4;
-						s_pos_y=(center_y+img->spiral_search[1][lv])*4;
-
-						iy0=pic4_pix_x+s_pos_x;
-						jy0=pic4_pix_y+s_pos_y;
-
-						/*
-						The initial setting of current_inter_sad reflects the number of bits used to signal the vector.  
-						It also depends on the QP. (See documented approach of RD constrained motion search) 
-						*/
-						tmp0=s_pos_x-ip0;
-						tmp1=s_pos_y-ip1;
-						current_inter_sad=(QP2QUANT[img->qp]*(img->mv_bituse[absm(tmp0)]+img->mv_bituse[absm(tmp1)]));
-
-						if (s_pos_x == 0 && s_pos_y == 0 && blocktype == 1) /* no motion, 16x16 blocktype */
-						{
-							current_inter_sad -= QP2QUANT[img->qp] * 16;
-						}
-						abort_search=FALSE;
-						for (j=0; j < blockshape_y && !abort_search; j++)
-						{
-							vec2_y=jy0+j*4;
-
-							for (i=0; i < blockshape_x ; i++)
-							{
-								tmp0=mo[i][j]-mref[ref_inx][vec2_y][iy0+i*4];
-
-								current_inter_sad += absm(tmp0);
-							}
-							if (current_inter_sad >= best_inter_sad)
-							{
-								abort_search=TRUE;
-							}
-						}
-						if(!abort_search)
-						{
-							center_h2=s_pos_x;
-							center_v2=s_pos_y;
-							best_inter_sad=current_inter_sad;
-						}
-					}
-
-					/*
-					center_h2, center_v2 is the search center to be used for 1/2 pixel search.  
-					It is adjusted to prevent vectors pointing outside the frame.
-					*/
-
-					center_h2=max(2-pic4_pix_x,min(center_h2,(img->width-1-pic_pix_x-(blockshape_x-1))*4-2));
-					center_v2=max(2-pic4_pix_y,min(center_v2,(img->height_err-pic_pix_y-(blockshape_y-1))*4-2));
-
-
-					/*  1/2 pixel search.  In this version the search is over 9 vector positions. */
-
-					best_inter_sad=MAX_VALUE;
-					for (lv=0; lv < 9; lv++)
-					{
-						s_pos_x=center_h2+img->spiral_search[0][lv]*2;
-						s_pos_y=center_v2+img->spiral_search[1][lv]*2;
-						iy0=pic4_pix_x+s_pos_x;
-						jy0=pic4_pix_y+s_pos_y;
-						tmp0=s_pos_x-ip0;
-						tmp1=s_pos_y-ip1;
-						current_inter_sad=(QP2QUANT[img->qp]*(img->mv_bituse[absm(tmp0)]+img->mv_bituse[absm(tmp1)]));
-
-						if (s_pos_x == 0 && s_pos_y == 0 && blocktype == 1) /* no motion, blocktype 16x16 */
-						{
-							current_inter_sad -= QP2QUANT[img->qp] * 16;
-						}
-						for (vec1_x=0; vec1_x < blockshape_x; vec1_x += 4)
-						{
-							for (vec1_y=0; vec1_y < blockshape_y; vec1_y += 4)
-							{
-								for (i=0; i < BLOCK_SIZE; i++)
-								{
-									vec2_x=i+vec1_x;
-									i22=iy0+vec2_x*4;
-									for (j=0; j < BLOCK_SIZE; j++)
-									{
-										vec2_y=j+vec1_y;
-										img->m7[i][j]=mo[vec2_x][vec2_y]-mref[ref_inx][jy0+vec2_y*4][i22];
-									}
-								}
-								current_inter_sad += find_sad(img,inp_par->hadamard);
-							}
-						}
-						if (current_inter_sad < best_inter_sad)
-						{
-							/*  Vectors are saved in all_mv[] to be able to assign correct vectors to each block after mode selection.
-							    tmp_mv[] is a 'temporary' assignment of vectors to be used to estimate 'bit cost' in vector prediction.
-							*/
-							s_pos_x1=s_pos_x;
-							s_pos_y1=s_pos_y;
-							s_pos_x2=s_pos_x;
-							s_pos_y2=s_pos_y;
-
-							for (i=0; i < blockshape_x/BLOCK_SIZE; i++)
-							{
-								for (j=0; j < blockshape_y/BLOCK_SIZE; j++)
-								{
-									all_mv[block_x+i][block_y+j][ref_frame][blocktype][0]=s_pos_x1;
-									all_mv[block_x+i][block_y+j][ref_frame][blocktype][1]=s_pos_y1;
-
-									tmp_mv[0][pic_block_y+j][pic_block_x+i+BLOCK_SIZE]=s_pos_x1;
-									tmp_mv[1][pic_block_y+j][pic_block_x+i+BLOCK_SIZE]=s_pos_y1;
-								}
-							}
-							best_inter_sad=current_inter_sad;
-						}
-					}
-
-					/*  1/4 pixel search.   */
-
-					s_pos_x2=max(1-pic4_pix_x,min(s_pos_x2,(img->width-1-pic_pix_x-(blockshape_x-1))*4-1));
-					s_pos_y2=max(1-pic4_pix_y,min(s_pos_y2,(img->height_err-pic_pix_y-(blockshape_y-1))*4-1));
-					for (lv=1; lv < 9; lv++)
-					{
-						s_pos_x=s_pos_x2+img->spiral_search[0][lv];
-						s_pos_y=s_pos_y2+img->spiral_search[1][lv];
-
-						iy0=pic4_pix_x+s_pos_x;
-						jy0=pic4_pix_y+s_pos_y;
-						tmp0=s_pos_x-ip0;
-						tmp1=s_pos_y-ip1;
-						current_inter_sad=(QP2QUANT[img->qp]*(img->mv_bituse[absm(tmp0)]+img->mv_bituse[absm(tmp1)]));
-
-						if (s_pos_x == 0 && s_pos_y == 0 && blocktype == 1) /* no motion, blocktype 16x16 */
-						{
-							current_inter_sad -= QP2QUANT[img->qp] * 16;
-						}
-						for (vec1_x=0; vec1_x < blockshape_x; vec1_x += 4)
-						{
-							for (vec1_y=0; vec1_y < blockshape_y; vec1_y += 4)
-							{
-								for (i=0; i < BLOCK_SIZE; i++)
-								{
-									vec2_x=i+vec1_x;
-									i22=iy0+vec2_x*4;
-									for (j=0; j < BLOCK_SIZE; j++)
-									{
-										vec2_y=j+vec1_y;
-										img->m7[i][j]=mo[vec2_x][vec2_y]-mref[ref_inx][jy0+vec2_y*4][i22];
-									}
-								}
-								current_inter_sad += find_sad(img,inp_par->hadamard);
-							}
-						}
-						if (current_inter_sad < best_inter_sad)
-						{
-							/*  Vectors are saved in all_mv[] to be able to assign correct vectors to each block after mode selection.
-							    tmp_mv[] is a 'temporary' assignment of vectors to be used to estimate 'bit cost' in vector prediction.
-							  */
-
-							s_pos_x1=s_pos_x;
-							s_pos_y1=s_pos_y;
-
-							for (i=0; i < blockshape_x/BLOCK_SIZE; i++)
-							{
-								for (j=0; j < blockshape_y/BLOCK_SIZE; j++)
-								{
-									all_mv[block_x+i][block_y+j][ref_frame][blocktype][0]=s_pos_x1;
-									all_mv[block_x+i][block_y+j][ref_frame][blocktype][1]=s_pos_y1;
-									tmp_mv[0][pic_block_y+j][pic_block_x+i+BLOCK_SIZE]=s_pos_x1;
-									tmp_mv[1][pic_block_y+j][pic_block_x+i+BLOCK_SIZE]=s_pos_y1;
-								}
-							}
-							best_inter_sad=current_inter_sad;
-						}
-					}
-
-					tot_inter_sad += best_inter_sad;
-				}
-			}
-
-			/*
-			  Here we update which is the best inter mode. At the end we have the best inter mode.
-			  predframe_no:  which reference frame to use for prediction
-			  img->multframe_no:  Index in the mref[] matrix used for prediction 
-			*/
-
-			if (tot_inter_sad <= min_inter_sad)
-			{
-				img->mb_mode=blocktype;
-				img->blc_size_h=inp_par->blc_size[blocktype][0];
-				img->blc_size_v=inp_par->blc_size[blocktype][1];
-				predframe_no=ref_frame;
-				img->multframe_no=ref_inx;
-				min_inter_sad=tot_inter_sad;
-			}
-
-			while (inp_par->blc_size[++blocktype][0]==0 && blocktype<=7); /* only go through chosen blocksizes */
-		}
-	}
-
-	/*
-	tot_intra_sad is now the minimum SAD for intra.  min_inter_sad is the best (min) SAD for inter (see above).  
-	Inter/intra is determined depending on which is smallest 
-	*/
-	if (tot_intra_sad < min_inter_sad)
-	{
-		img->mb_mode=img->imod+8*img->type; /* set intra mode in inter frame */
-		for (hv=0; hv < 2; hv++)
-			for (i=0; i < 4; i++)
-				for (j=0; j < 4; j++)
-					tmp_mv[hv][img->block_y+j][img->block_x+i+4]=0;
-	}
-	else
-	{
-		img->mb_data[img->current_mb_nr].intraOrInter = INTER_MB;
-		img->imod=INTRA_MB_INTER; /* Set inter mode */
-		for (hv=0; hv < 2; hv++)
-			for (i=0; i < 4; i++)
-				for (j=0; j < 4; j++)
-					tmp_mv[hv][img->block_y+j][img->block_x+i+4]=all_mv[i][j][predframe_no][img->mb_mode][hv];
-	}
-	return predframe_no;
-}
-
-/************************************************************************
-*
-*  Routine      find_sad
-*
-*  Description: Do hadamard transform or normal SAD calculation. 
-*               If Hadamard=1 4x4 Hadamard transform is performed and SAD of transform 
-*               levels is calculated
-*
-*  Input:       hadamard=0 : normal SAD
-*               hadamard=1 : 4x4 Hadamard transform is performed and SAD of transform 
-*                            levels is calculated
-*
-*  Output:      SAD/hadamard transform value
-*
-*                    
-************************************************************************/
-int find_sad(struct img_par *img,int hadamard)
-{
-	int i,j,m1[BLOCK_SIZE][BLOCK_SIZE],best_sad,current_sad;
-
-	current_sad=0;
-	if (hadamard != 0)
-	{
-		best_sad=0;
-		for (j=0; j < BLOCK_SIZE; j++)
-		{
-			m1[0][j]=img->m7[0][j]+img->m7[3][j];
-			m1[1][j]=img->m7[1][j]+img->m7[2][j];
-			m1[2][j]=img->m7[1][j]-img->m7[2][j];
-			m1[3][j]=img->m7[0][j]-img->m7[3][j];
-
-			img->m7[0][j]=m1[0][j]+m1[1][j];
-			img->m7[2][j]=m1[0][j]-m1[1][j];
-			img->m7[1][j]=m1[2][j]+m1[3][j];
-			img->m7[3][j]=m1[3][j]-m1[2][j];
-		}
-		for (i=0; i < BLOCK_SIZE; i++)
-		{
-			m1[i][0]=img->m7[i][0]+img->m7[i][3];
-			m1[i][1]=img->m7[i][1]+img->m7[i][2];
-			m1[i][2]=img->m7[i][1]-img->m7[i][2];
-			m1[i][3]=img->m7[i][0]-img->m7[i][3];
-
-			img->m7[i][0]=m1[i][0]+m1[i][1];
-			img->m7[i][1]=m1[i][0]-m1[i][1];
-			img->m7[i][2]=m1[i][2]+m1[i][3];
-			img->m7[i][3]=m1[i][3]-m1[i][2];
-
-			for (j=0; j < BLOCK_SIZE; j++)
-				best_sad += absm(img->m7[i][j]);
-		}
-		/*
-		Calculation of normalized Hadamard transforms would require divison by 4 here.  
-		However,we flevel  that divison by 2 is better (assuming we give the same penalty for 
-		bituse for Hadamard=0 and 1) 
-		*/
-		current_sad += best_sad/2;
-	}
-	else
-	{
-		for (i=0; i < BLOCK_SIZE; i++)
-		{
-			for (j=0; j < BLOCK_SIZE; j++)
-			{
-				current_sad += absm(img->m7[i][j]);
-			}
-		}
-	}
-	return current_sad;
-}
 
 /************************************************************************
 *
@@ -1265,7 +690,7 @@ int find_sad(struct img_par *img,int hadamard)
 *
 *                    
 ************************************************************************/
-int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
+int dct_luma(int block_x,int block_y,int *coeff_cost)
 {
 	int sign(int a,int b);
 
@@ -1276,7 +701,9 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
 
 	int scan_mode;
 	int loop_rep;
+#ifndef NO_RDQUANT
 	int coeff[16];
+#endif
 
 	if (img->type == INTRA_IMG)
 		qp_const=JQQ3;    /* intra */
@@ -1318,7 +745,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
 		img->m7[i][3]=m5[3]*7-m5[2]*17;
 	}
 
-	/* Do prescan to decide one or two Q-levels for RD constrained quantization*/
+	/* Quant */
 
 	quant_set=img->qp;
 	nonzero=FALSE;
@@ -1336,6 +763,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
 		idx=0;
 	}
 
+#ifndef NO_RDQUANT
 	for(scan_loop_ctr=0;scan_loop_ctr<loop_rep;scan_loop_ctr++) /* 2 times if double scan, 1 normal scan */
 	{
 		for (coeff_ctr=0;coeff_ctr < 16/loop_rep;coeff_ctr++)     /* 8 times if double scan, 16 normal scan */
@@ -1353,9 +781,9 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
 			coeff[coeff_ctr]=img->m7[i][j];
 		}
 		if (scan_mode==DOUBLE_SCAN)
-			rd_quant(img,QUANT_LUMA_DBL,coeff);
+			rd_quant(QUANT_LUMA_DBL,coeff);
 		else
-			rd_quant(img,QUANT_LUMA_SNG,coeff);
+			rd_quant(QUANT_LUMA_SNG,coeff);
 
 
 		run=-1;
@@ -1393,6 +821,52 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
 		}
 		img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=0;  /* end of block */
 	}
+#endif
+
+#ifdef NO_RDQUANT
+	for(scan_loop_ctr=0;scan_loop_ctr<loop_rep;scan_loop_ctr++) /* 2 times if double scan, 1 normal scan */
+	{
+	run=-1;
+	scan_pos=scan_loop_ctr*9;
+
+		for (coeff_ctr=0;coeff_ctr < 16/loop_rep;coeff_ctr++)     /* 8 times if double scan, 16 normal scan */
+		{
+			if (scan_mode==DOUBLE_SCAN)
+			{
+				i=DBL_SCAN[coeff_ctr][0][scan_loop_ctr];
+				j=DBL_SCAN[coeff_ctr][1][scan_loop_ctr];
+			}
+			else
+			{
+				i=SNGL_SCAN[coeff_ctr][0];
+				j=SNGL_SCAN[coeff_ctr][1];
+			}
+
+			run++;
+			ilev=0;
+			level = (abs (img->m7[i][j]) * JQ[quant_set][0] +qp_const) / JQQ1;
+
+			if (level != 0)
+			{
+				nonzero=TRUE;
+				if (level > 1)
+					*coeff_cost += MAX_VALUE;                /* set high cost, shall not be discarded */
+				else
+					*coeff_cost += COEFF_COST[run];
+				img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=sign(level,img->m7[i][j]);
+				img->cof[pos_x][pos_y][scan_pos][1][scan_mode]=run;
+				++scan_pos;
+				run=-1;                     /* reset zero level counter */
+				ilev=level*JQ[quant_set][1];
+			}
+			img->m7[i][j]=sign(ilev,img->m7[i][j]);
+		}
+		img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=0;  /* end of block */
+	}
+#endif
+
+
+
 
 	/*     IDCT. */
 	/*     horizontal */
@@ -1464,7 +938,9 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, struct img_par *img)
 *               
 *
 ************************************************************************/
-int dct_chroma(int uv,int cr_cbp,struct img_par *img)
+#ifndef NO_RDQUANT
+
+int dct_chroma(int uv,int cr_cbp)
 {
 	int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,pos_x,pos_y,quant_set,level ,scan_pos,run;
 	int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
@@ -1529,7 +1005,7 @@ int dct_chroma(int uv,int cr_cbp,struct img_par *img)
 	for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
 		coeff[coeff_ctr]=m1[coeff_ctr];
 
-	rd_quant(img,QUANT_CHROMA_DC,coeff);
+	rd_quant(QUANT_CHROMA_DC,coeff);
 
 	for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
 	{
@@ -1549,6 +1025,7 @@ int dct_chroma(int uv,int cr_cbp,struct img_par *img)
 		}
 		m1[coeff_ctr]=sign(ilev,m1[coeff_ctr]);
 	}
+
 	img->cofu[scan_pos][0][uv]=0;
 
 	/*  Invers transform of 2x2 DC levels */
@@ -1575,7 +1052,7 @@ int dct_chroma(int uv,int cr_cbp,struct img_par *img)
 				j=SNGL_SCAN[coeff_ctr][1];
 				coeff[coeff_ctr-1]=img->m7[n1+i][n2+j];
 			}
-			rd_quant(img,QUANT_CHROMA_AC,coeff);
+			rd_quant(QUANT_CHROMA_AC,coeff);
 
 			for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)
 			{
@@ -1652,8 +1129,231 @@ int dct_chroma(int uv,int cr_cbp,struct img_par *img)
 
 	return cr_cbp;
 }
+#endif
+#ifdef NO_RDQUANT
+int dct_chroma(int uv,int cr_cbp)
+{
+	int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,pos_x,pos_y,quant_set,level ,scan_pos,run;
+	int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
+//	int coeff[16];
+  int coeff_cost;//CHROMA_CHANGE
+  int cr_cbp_tmp;//CHROMA_CHANGE
+  int nn0,nn1;//CHROMA_CHANGE
 
-void rd_quant(struct img_par *img, int scan_type,int *coeff)
+	if (img->type == INTRA_IMG)
+		qp_const=JQQ3;
+	else
+		qp_const=JQQ4;
+
+	for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+	{
+		for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+		{
+
+			/*  Horizontal transform. */
+			for (j=0; j < BLOCK_SIZE; j++)
+			{
+				mb_y=n2+j;
+				for (i=0; i < 2; i++)
+				{
+					i1=3-i;
+					m5[i]=img->m7[i+n1][mb_y]+img->m7[i1+n1][mb_y];
+					m5[i1]=img->m7[i+n1][mb_y]-img->m7[i1+n1][mb_y];
+				}
+				img->m7[n1][mb_y]=(m5[0]+m5[1])*13;
+				img->m7[n1+2][mb_y]=(m5[0]-m5[1])*13;
+				img->m7[n1+1][mb_y]=m5[3]*17+m5[2]*7;
+				img->m7[n1+3][mb_y]=m5[3]*7-m5[2]*17;
+			}
+
+			/*  Vertical transform. */
+
+			for (i=0; i < BLOCK_SIZE; i++)
+			{
+				j1=n1+i;
+				for (j=0; j < 2; j++)
+				{
+					j2=3-j;
+					m5[j]=img->m7[j1][n2+j]+img->m7[j1][n2+j2];
+					m5[j2]=img->m7[j1][n2+j]-img->m7[j1][n2+j2];
+				}
+				img->m7[j1][n2+0]=(m5[0]+m5[1])*13;
+				img->m7[j1][n2+2]=(m5[0]-m5[1])*13;
+				img->m7[j1][n2+1]=m5[3]*17+m5[2]*7;
+				img->m7[j1][n2+3]=m5[3]*7-m5[2]*17;
+			}
+		}
+	}
+
+	/*     2X2 transform of DC coeffs. */
+	m1[0]=(img->m7[0][0]+img->m7[4][0]+img->m7[0][4]+img->m7[4][4])/2;
+	m1[1]=(img->m7[0][0]-img->m7[4][0]+img->m7[0][4]-img->m7[4][4])/2;
+	m1[2]=(img->m7[0][0]+img->m7[4][0]-img->m7[0][4]-img->m7[4][4])/2;
+	m1[3]=(img->m7[0][0]-img->m7[4][0]-img->m7[0][4]+img->m7[4][4])/2;
+
+/*     Quant of chroma 2X2 coeffs.*/
+	quant_set=QP_SCALE_CR[img->qp];
+	run=-1;
+	scan_pos=0;
+
+	for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
+  {
+		run++;
+		ilev=0;
+
+		level =(abs(m1[coeff_ctr])*JQ[quant_set][0]+qp_const)/JQQ1;// CHANGE rd_quant removed
+		if (level  != 0)
+		{
+			cr_cbp=max(1,cr_cbp);
+			img->cofu[scan_pos][0][uv]=sign(level ,m1[coeff_ctr]);
+			img->cofu[scan_pos][1][uv]=run;
+			scan_pos++;
+			run=-1;
+			ilev=level*JQ[quant_set][1];
+		}
+		m1[coeff_ctr]=sign(ilev,m1[coeff_ctr]);
+	}
+	img->cofu[scan_pos][0][uv]=0;
+
+	/*  Invers transform of 2x2 DC levels */
+
+	img->m7[0][0]=(m1[0]+m1[1]+m1[2]+m1[3])/2;
+	img->m7[4][0]=(m1[0]-m1[1]+m1[2]-m1[3])/2;
+	img->m7[0][4]=(m1[0]+m1[1]-m1[2]-m1[3])/2;
+	img->m7[4][4]=(m1[0]-m1[1]-m1[2]+m1[3])/2;
+
+	/*     Quant of chroma AC-coeffs. */
+  coeff_cost=0;//CHROMA_CHANGE
+  cr_cbp_tmp=0;//CHROMA_CHANGE
+
+	for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+	{
+		for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+		{
+			pos_x=n1/BLOCK_SIZE + 2*uv;
+			pos_y=n2/BLOCK_SIZE + BLOCK_SIZE;
+			run=-1;
+			scan_pos=0;
+
+			for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)//start change rd_quant
+			{
+				i=SNGL_SCAN[coeff_ctr][0];
+				j=SNGL_SCAN[coeff_ctr][1];
+				++run;
+				ilev=0;
+
+        level=(abs(img->m7[n1+i][n2+j])*JQ[quant_set][0]+qp_const)/JQQ1;// CHANGE rd_quant removed
+				if (level  != 0)
+				{
+					if (level > 1) //CHROMA_CHANGE
+						coeff_cost += MAX_VALUE;                /* set high cost, shall not be discarded */
+					else
+						coeff_cost += COEFF_COST[run];//CHROMA_CHANGE
+
+					cr_cbp_tmp=2;//CHROMA_CHANGE
+					img->cof[pos_x][pos_y][scan_pos][0][0]=sign(level,img->m7[n1+i][n2+j]);
+					img->cof[pos_x][pos_y][scan_pos][1][0]=run;
+					++scan_pos;
+					run=-1;
+					ilev=level*JQ[quant_set][1];
+				}
+				img->m7[n1+i][n2+j]=sign(ilev,img->m7[n1+i][n2+j]); /* for use in IDCT */
+			}
+			img->cof[pos_x][pos_y][scan_pos][0][0]=0; /* EOB */
+    }//CHROMA_CHANGE
+  }//CHROMA_CHANGE
+
+  //CHROMA_CHANGE start
+  //* reset chroma coeffs
+  if(coeff_cost<7)
+  {
+    cr_cbp_tmp=0;
+	  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+    {
+		  for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+      {
+			  nn0=n1/4+2*uv;
+        nn1=4+n2/4;
+        img->cof[nn0][nn1][0][0][0]=0;//dc coeff
+        for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)//ac coeff
+        {
+          i=SNGL_SCAN[coeff_ctr][0];
+				  j=SNGL_SCAN[coeff_ctr][1];
+          img->m7[n1+i][n2+j]=0;
+          img->cof[nn0][nn1][coeff_ctr][0][0]=0;
+        }
+      }
+    }
+  }
+  if(cr_cbp_tmp==2)
+      cr_cbp=2;
+ //CHROMA_CHANGE stopp 
+  /*     IDCT. */
+
+			/*     Horizontal. */
+  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)//CHROMA_CHANGE
+	{
+		for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)//CHROMA_CHANGE
+		{
+			for (j=0; j < BLOCK_SIZE; j++)
+			{
+				for (i=0; i < BLOCK_SIZE; i++)
+				{
+					m5[i]=img->m7[n1+i][n2+j];
+				}
+				m6[0]=(m5[0]+m5[2])*13;
+				m6[1]=(m5[0]-m5[2])*13;
+				m6[2]=m5[1]*7-m5[3]*17;
+				m6[3]=m5[1]*17+m5[3]*7;
+
+				for (i=0; i < 2; i++)
+				{
+					i1=3-i;
+					img->m7[n1+i][n2+j]=m6[i]+m6[i1];
+					img->m7[n1+i1][n2+j]=m6[i]-m6[i1];
+				}
+			}
+
+			/*     Vertical. */
+			for (i=0; i < BLOCK_SIZE; i++)
+			{
+				for (j=0; j < BLOCK_SIZE; j++)
+				{
+					m5[j]=img->m7[n1+i][n2+j];
+				}
+				m6[0]=(m5[0]+m5[2])*13;
+				m6[1]=(m5[0]-m5[2])*13;
+				m6[2]=m5[1]*7-m5[3]*17;
+				m6[3]=m5[1]*17+m5[3]*7;
+
+				for (j=0; j < 2; j++)
+				{
+					j2=3-j;
+					img->m7[n1+i][n2+j]=min(255,max(0,(m6[j]+m6[j2]+img->mpr[n1+i][n2+j]*JQQ1+JQQ2)/JQQ1));
+					img->m7[n1+i][n2+j2]=min(255,max(0,(m6[j]-m6[j2]+img->mpr[n1+i][n2+j2]*JQQ1+JQQ2)/JQQ1));
+				}
+			}
+		}
+	}
+
+	/*  Decoded block moved to memory */
+	for (j=0; j < BLOCK_SIZE*2; j++)
+		for (i=0; i < BLOCK_SIZE*2; i++)
+		{
+			imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j];
+		}
+
+	return cr_cbp;
+}
+
+
+#endif
+
+
+
+
+#ifndef NO_RDQUANT
+void rd_quant(int scan_type,int *coeff)
 {
 	int idx,coeff_ctr;
 	int qp_const,intra_add;
@@ -1790,17 +1490,6 @@ void rd_quant(struct img_par *img, int scan_type,int *coeff)
 	return;
 }
 
-
-/* control the sign of a with b */
-int sign(int a,int b)
-{
-	int x;
-	x=absm(a);
-	if (b >= 0)
-		return x;
-	else
-		return -x;
-}
-
+#endif
 
 

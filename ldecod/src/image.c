@@ -13,6 +13,7 @@
  *			Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
  *			Byeong-Moon Jeon                <jeonbm@lge.com>
  *			Thomas Wedi                     <wedi@tnt.uni-hannover.de>
+ *      Gabi Blaettermann               <blaetter@hhi.de>
  */
 
 #include "contributors.h"
@@ -20,248 +21,137 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <sys/timeb.h>
+#include <string.h>
+
 
 #include "global.h"
 #include "elements.h"
 #include "image.h"
 
 
-/*!
- *	\fn		decode_slice()
- *	\brief	decode one slice
- */
-int decode_slice(
-	struct img_par *img,	/*!< pointer to image parameters */
-	struct inp_par *inp,	/*!< pointer to configuration parameters read from the config file */
-	int mb_nr,				/*!< macroblock number from where to start decoding */
-	FILE *p_out)
-{
-	int len,info;
-	int scale_factor;
-	int i,j;
-	int mb_width, stop_mb;
-	static int first_P = TRUE;
-
-	if (mb_nr < 0)
-	{
-		stop_mb = mb_nr;
-		mb_nr = 0;
-	}
-
-	if(mb_nr == 0)
-	{
-#if TRACE
-		printf ("DecodeSlice, found mb_nr == 0, start decoding picture header\n");
+#ifdef _ADAPT_LAST_GROUP_
+int *last_P_no;
 #endif
 
-		get_symbol("Image Type",&len, &info, SE_PTYPE);
-		img->type = (int) pow(2,(len/2))+info-1;        /* find image type INTRA/INTER*/
 
-		if(img->type==INTRA_IMG) // I picture
-			prevP_tr=img->tr;
-		else if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT)  // P pictures
-			nextP_tr=img->tr;
-				
-		if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT)
-		{
-			if(first_P) // first P picture
-			{
-				first_P = FALSE;
-				P_interval=nextP_tr-prevP_tr;
-			}
-			else // all other P pictures
-			{
-				write_prev_Pframe(img, p_out);	// imgY_prev, imgUV_prev -> file
-				// oneforthpix_2(img);      // mref_P, mcef_p -> mref[][][], mcef[][][][]
-				copy2mref_2(img);
-			}
-		}
-
-		if (img->type > B_IMG_MULT)
-		{
-			set_ec_flag(SE_PTYPE);
-			img->type = INTER_IMG_1;	/* concealed element */
-		}
-
-		if (img->format == QCIF)
-			scale_factor=1;                             /* QCIF */
-		else
-			scale_factor=2;                             /* CIF  */
-
-		img->width      = IMG_WIDTH     * scale_factor; /* luma   */
-		img->height     = IMG_HEIGHT    * scale_factor;
-
-		img->width_cr   = IMG_WIDTH_CR  * scale_factor; /* chroma */
-		img->height_cr  = IMG_HEIGHT_CR * scale_factor;
-
-		for(i=0;i<img->width/BLOCK_SIZE+1;i++)          /* set edge to -1, indicate nothing to predict from */
-			img->ipredmode[i+1][0]=-1;
-		for(j=0;j<img->height/BLOCK_SIZE+1;j++)
-			img->ipredmode[0][j+1]=-1;
-
-		// I or P or B pictures
-		{
-			for (i=0;i<90;i++)
-			{
-				for (j=0;j<74;j++)
-				{
-					loopb[i+1][j+1]=0;
-				}
-			}
-			for (i=0;i<46;i++)
-			{
-				for (j=0;j<38;j++)
-				{
-					loopc[i+1][j+1]=0;
-				}
-			}
-		}
-	}
-
-	mb_width = img->width/16;
-	img->mb_x = mb_nr%mb_width;
-	img->mb_y = mb_nr/mb_width;
-
-	// I or P pictures
-	if(img->type <= INTRA_IMG)
-	{
-		for (; img->mb_y < img->height/MB_BLOCK_SIZE;img->mb_y++)
-		{
-			img->block_y = img->mb_y * BLOCK_SIZE;        /* vertical luma block position         */
-			img->pix_c_y=img->mb_y *MB_BLOCK_SIZE/2;      /* vertical chroma macroblock position  */
-			img->pix_y=img->mb_y *MB_BLOCK_SIZE;          /* vertical luma macroblock position    */
-
-			for (; img->mb_x < img->width/MB_BLOCK_SIZE;img->mb_x++)
-			{
-				img->block_x=img->mb_x*BLOCK_SIZE;        /* luma block  */
-				img->pix_c_x=img->mb_x*MB_BLOCK_SIZE/2;
-				img->pix_x=img->mb_x *MB_BLOCK_SIZE;      /* horizontal luma macroblock position */
-
-				if(nal_startcode_follows() || (stop_mb++ == 0))
-					return DECODING_OK;
-
-				img->current_mb_nr = img->mb_y*img->width/MB_BLOCK_SIZE+img->mb_x;
-				slice_numbers[img->current_mb_nr] = img->current_slice_nr;
-
-#if TRACE
-				fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", img->tr, img->current_mb_nr, slice_numbers[img->current_mb_nr]);
-#endif
-				if(macroblock(img)==SEARCH_SYNC)          /* decode one frame */
-					return SEARCH_SYNC;                   /* error in bitstream, look for synk word next frame */
-			}
-			img->mb_x = 0;
-		}
-		loopfilter(img);
-		if(img->number == 0)
-		{
-			// oneforthpix(img);
-			copy2mref(img);
-		}
-		else
-		{
-			// oneforthpix_1(img);
-			copy2mref_1(img);
-		}
-	}
-	else	// B pictures
-	{
-		Bframe_ctr++;
-		initialize_Bframe();
-		decode_Bframe(img, mb_nr, stop_mb);
-        //g.b. post filter like loop filter
-        loopfilter(img);
-	}
-
-	return PICTURE_DECODED;
-}
 
 /************************************************************************
 *
-*  Name :       oneforthpix()
+*  Name :       decode_one_frame()
 *
-*  Description: Upsample 4 times and store in buffer for multiple
-*               reference frames
-*
-*  Remark:
-*      Thomas Wedi: Not used any more. The pels are directly interpolated
-*					in the compensation module.
+*  Description: decodes one I- or P-frame
 *
 ************************************************************************/
-void oneforthpix(struct img_par *img)
+
+int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr)
 {
-	int imgY_tmp[576][704];
-	int i,j,i2,j2;
-	int is,ie2,je2;
-	int uv;
+    
+    int current_header;
+    Slice *currSlice = img->currentSlice;
 
-	img->frame_cycle=img->number % MAX_MULT_PRED;
+    time_t ltime1;                  /* for time measurement */
+	time_t ltime2;
 
-	for (j=0; j < img->height; j++)
-	{
-		for (i=0; i < img->width; i++)
+#ifdef WIN32
+	struct _timeb tstruct1;
+	struct _timeb tstruct2;
+#else
+	//	struct tm *l_time;
+	struct timeb tstruct1;
+	struct timeb tstruct2;
+	//	time_t now;
+#endif
+
+    int tmp_time;                   /* time used by decoding the last frame */
+
+#ifdef WIN32
+	_ftime (&tstruct1);				/* start time ms */
+#else
+	ftime (&tstruct1);				/* start time ms */
+#endif
+	time( &ltime1 );                /* start time s  */
+
+    currSlice->next_header = 0;
+    while (currSlice->next_header != EOS && currSlice->next_header != SOP) 
+    {
+        
+        /* set the  corresponding read functions */
+        start_slice(img, inp);
+
+        /* read new slice */
+        current_header = read_new_slice(img, inp);
+		
+		if (inp->symbol_mode == CABAC)
 		{
-			i2=i*2;
-			is=(ONE_FOURTH_TAP[0][0]*(imgY[j][i         ]+imgY[j][min(img->width-1,i+1)])+
-			    ONE_FOURTH_TAP[1][0]*(imgY[j][max(0,i-1)]+imgY[j][min(img->width-1,i+2)])+
-			    ONE_FOURTH_TAP[2][0]*(imgY[j][max(0,i-2)]+imgY[j][min(img->width-1,i+3)])+16)/32;
-			imgY_tmp[j][i2  ]=imgY[j][i];             /* 1/1 pix pos */
-			imgY_tmp[j][i2+1]=max(0,min(255,is));     /* 1/2 pix pos */
-
+			init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);	
+			init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);
 		}
-	}
-	for (i=0; i < (img->width-1)*2+1; i++)
-	{
-		for (j=0; j < img->height; j++)
-		{
-			j2=j*4;
-			/* change for TML4, use 6 TAP vertical filter */
-			is=(ONE_FOURTH_TAP[0][0]*(imgY_tmp[j         ][i]+imgY_tmp[min(img->height-1,j+1)][i])+
-			    ONE_FOURTH_TAP[1][0]*(imgY_tmp[max(0,j-1)][i]+imgY_tmp[min(img->height-1,j+2)][i])+
-			    ONE_FOURTH_TAP[2][0]*(imgY_tmp[max(0,j-2)][i]+imgY_tmp[min(img->height-1,j+3)][i])+16)/32;
+		
+		if (current_header == EOS)			
+			return EOS;
+        /* init new frame */
+        if (current_header == SOP)
+            init_frame(img, inp);
 
-			mref[img->frame_cycle][j2  ][i*2]=imgY_tmp[j][i];     /* 1/2 pix */
-			mref[img->frame_cycle][j2+2][i*2]=max(0,min(255,is)); /* 1/2 pix */
-		}
-	}
+	   // printf("read new slice %d %d %d %d %d %d %d\n",img->currentSlice->start_mb_nr,img->currentSlice->qp, 
+       // img->currentSlice->format,	img->currentSlice->picture_id, current_header, img->format,
+       // img->current_slice_nr);
+        
+        /* decode main slice information */
+        if (current_header == SOP || current_header == SOS)
+            decode_one_slice(img,inp);
+        img->current_slice_nr++;
+    } 
 
-	/* 1/4 pix */
-	/* luma */
-	ie2=(img->width-1)*4;
-	je2=(img->height-1)*4;
-	for (j=0;j<je2+1;j+=2)
-		for (i=0;i<ie2;i+=2)
-			mref[img->frame_cycle][j][i+1]=(mref[img->frame_cycle][j][i]+mref[img->frame_cycle][j][min(ie2,i+2)])/2;
+    loopfilter(img);
+    if(img->number == 0)
+		copy2mref(img);
+/*	else StW
+		copy2mref_1(img);
+*/
+    if (p_ref)
+        find_snr(snr,img,p_ref,inp->postfilter);      /* if ref sequence exist */
+	
+#ifdef WIN32
+	_ftime (&tstruct2);		/* end time ms  */
+#else
+	ftime (&tstruct2);		/* end time ms  */
+#endif
+	time( &ltime2 );                                /* end time sec */			
+	tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
+	tot_time=tot_time + tmp_time;
 
+	if(img->type == INTRA_IMG) // I picture
+	    fprintf(stdout,"%3d(I) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+				frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+	else if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictures
+		fprintf(stdout,"%3d(P) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+			    frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+	else // B pictures
+		fprintf(stdout,"%3d(B) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+				frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
 
-	for (i=0;i<ie2+1;i++)
-	{
-		for (j=0;j<je2;j+=2)
-		{
-			mref[img->frame_cycle][j+1][i]=(mref[img->frame_cycle][j][i]+mref[img->frame_cycle][min(je2,j+2)][i])/2;
+	fflush(stdout);
+// getchar();
+    if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictres
+	    copy_Pframe(img, inp->postfilter);	// imgY-->imgY_prev, imgUV-->imgUV_prev
+	else // I or B pictures
+		write_frame(img,inp->postfilter,p_out);         /* write image to output YUV file */
 
-			/* "funny posision" */
-			if( ((i&3) == 3)&&(((j+1)&3) == 3))
-			{
-				mref[img->frame_cycle][j+1][i] = (mref[img->frame_cycle][j-2][i-3]+
-				                                  mref[img->frame_cycle][j+2][i-3]+
-				                                  mref[img->frame_cycle][j-2][i+1]+
-				                                  mref[img->frame_cycle][j+2][i+1]+2)/4;
-			}
-		}
-	}
+    if(img->type <= INTRA_IMG)   // I or P pictures
+	    img->number++;  
+    else
+		Bframe_ctr++;    // B pictures
 
-	/*  Chroma: */
-	for (uv=0; uv < 2; uv++)
-	{
-		for (i=0; i < img->width_cr; i++)
-		{
-			for (j=0; j < img->height_cr; j++)
-			{
-				mcef[img->frame_cycle][uv][j][i]=imgUV[uv][j][i];/* just copy 1/1 pix, interpolate "online" */
-			}
-		}
-	}
+    exit_frame(img, inp);
+	
+	img->current_mb_nr = 0;
+	return (SOP);
 }
+
+
 
 /************************************************************************
 *
@@ -275,7 +165,7 @@ void copy2mref(struct img_par *img)
 {
   int i,j,uv;
   
-  img->frame_cycle=img->number % MAX_MULT_PRED;
+  img->frame_cycle=img->number % img->buf_cycle;
   for (j=0; j < img->height; j++)
 	for (i=0; i < img->width; i++)
 	   mref[img->frame_cycle][j][i]=imgY[j][i];
@@ -303,11 +193,14 @@ void find_snr(
 	int i,j;
 	int diff_y,diff_u,diff_v;
 	int uv;
-	byte imgY_ref[288][352];
-	byte imgUV_ref[2][144][176];
 	int  status;
-	byte diff;
+#ifndef _ADAPT_LAST_GROUP_
+	byte       diff;
+#else
+	static int p_frame_no;
+#endif
 
+#ifndef _ADAPT_LAST_GROUP_
 	if(img->type<=INTRA_IMG) // I, P pictures
 		frame_no=img->number*P_interval;
 	else // B pictures
@@ -315,6 +208,19 @@ void find_snr(
 		diff=nextP_tr-img->tr;
 		frame_no=(img->number-1)*P_interval-diff;
 	}
+#else
+	if (img->type <= INTRA_IMG) // I, P
+	{
+		if (img->number > 0)
+			frame_no = p_frame_no += (256 + img->tr - last_P_no[0]) % 256;
+		else
+			frame_no = p_frame_no  = 0;
+	}
+	else // B
+	{
+		frame_no = p_frame_no - (256 + nextP_tr - img->tr) % 256;
+	}
+#endif
 
 	rewind(p_ref);
 	status = fseek (p_ref, frame_no*img->height*img->width*3/2, 0);
@@ -376,18 +282,9 @@ void find_snr(
 	}
 	else
 	{
-		if(img->type <= INTRA_IMG) // P pictures
-		{
-			snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1);      /* average snr chroma for all frames except first */
-			snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1);      /* average snr luma for all frames except first  */
-			snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1);      /* average snr luma for all frames except first  */
-		}
-		else // B pictures
-		{
-			snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr-1)+snr->snr_y)/(img->number+Bframe_ctr);      /* average snr chroma for all frames except first */
-			snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr-1)+snr->snr_u)/(img->number+Bframe_ctr);      /* average snr luma for all frames except first  */
-			snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr-1)+snr->snr_v)/(img->number+Bframe_ctr);      /* average snr luma for all frames except first  */
-		}
+		snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1); /* average snr chroma for all frames  */
+		snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1); /* average snr luma for all frames   */
+		snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1); /* average snr luma for all frames  */
 	}
 }
 
@@ -406,8 +303,8 @@ static int
 void loopfilter(struct img_par *img)
 {
   static int MAP[32];
-  byte imgY_tmp[288][352];                      /* temp luma image */
-  byte imgUV_tmp[2][144][176];                  /* temp chroma image */
+ // byte imgY_tmp[288][352];                      /* temp luma image */
+ // byte imgUV_tmp[2][144][176];                  /* temp chroma image */
 
   int x,y,y4,x4,k,uv,str1,str2;
 
@@ -782,6 +679,8 @@ int loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma)
   return 0;
 }
 
+
+
 /************************************************************************
 *
 *  Name :       get_pixel()
@@ -795,8 +694,28 @@ int loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma)
 *               but on block basis,
 *
 ************************************************************************/
-
 byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
+{
+
+	switch(img->mv_res)
+	{
+	case 0:
+
+		return(get_quarterpel_pixel(ref_frame,x_pos,y_pos,img));
+
+	case 1:
+
+		return(get_eighthpel_pixel(ref_frame,x_pos,y_pos,img));
+
+	default:
+
+		printf("\n wrong mv-resolution: %d \n",img->mv_res);
+		exit(1);
+	}
+
+}
+
+byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
 {
 
   int dx=0, x=0;
@@ -806,7 +725,12 @@ byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
   int result=0;
   int pres_x=0;
   int pres_y=0; 
- 
+
+
+  x_pos = max (0, min (x_pos, img->width *4-1));
+  y_pos = max (0, min (y_pos, img->height*4-1));
+
+
   /**********************/
   /*  applied filters   */
   /*                    */
@@ -905,117 +829,404 @@ byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
       }
     else if(dx==1&&dy==1)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*six[y+2][x+2];  
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*six[y+2][x+2];  
+			  }
+		  }
       }
     else if(dx==2&&dy==1)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*seven[y+2][x+2];
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*seven[y+2][x+2];
+			  }
+		  }
       }
     else if(dx==1&&dy==2)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*seven[x+2][y+2]; /* eight */
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*seven[x+2][y+2]; /* eight */
+			  }
+		  }
       }
     else if(dx==3&&dy==1)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*six[y+2][3-x];   /* nine */
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*six[y+2][3-x];   /* nine */
+			  }
+		  }
       }
     else if(dx==1&&dy==3)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*six[3-y][x+2];   /* ten */
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*six[3-y][x+2];   /* ten */
+			  }
+		  }
       }
     else if(dx==2&&dy==2)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*five[y+2][x+2];
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*five[y+2][x+2];
+			  }
+		  }
       }
     else if(dx==3&&dy==2)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*seven[3-x][3-y]; /* eleven */
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*seven[3-x][3-y]; /* eleven */
+			  }
+		  }
       }
     else if(dx==2&&dy==3)
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*seven[3-y][x+2]; /* twelve */
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*seven[3-y][x+2]; /* twelve */
+			  }
+		  }
       }
     else if(dx==3&&dy==3) /* not used if funny position is on */
       {
-	for(y=-2;y<4;y++)
-	  {
-	    pres_y=max(0,min(maxold_y,y_pos/4+y));
-	    for(x=-2;x<4;x++)
-	      {
-		pres_x=max(0,min(maxold_x,x_pos/4+x));
-		result+=mref[ref_frame][pres_y][pres_x]*six[3-y][3-x]; /* thirteen */
-	      }
-	  }
+		for(y=-2;y<4;y++)
+		  {
+			pres_y=max(0,min(maxold_y,y_pos/4+y));
+			for(x=-2;x<4;x++)
+			  {
+				pres_x=max(0,min(maxold_x,x_pos/4+x));
+				result+=mref[ref_frame][pres_y][pres_x]*six[3-y][3-x]; /* thirteen */
+			  }
+		  }
       }
     
   }
- 
- 
+  
  return max(0,min(255,(result+2048)/4096));
  
+}
+
+byte get_eighthpel_pixel(int ref_frame,int x_pos,int y_pos, struct img_par *img)
+{
+ int dx=0, x=0;
+ int dy=0, y=0;
+ int pres_x=0;
+ int pres_y=0;
+ int max_x=0,max_y=0;
+
+ byte tmp1[8]; 
+ byte tmp2[8]; 
+ byte tmp3[8];                  
+
+ double result=0;
+
+ x_pos = max (0, min (x_pos, (img->width *8-2)));
+ y_pos = max (0, min (y_pos, (img->height*8-2)));
+
+ dx = x_pos%8;
+ dy = y_pos%8;
+ pres_x=x_pos/8;
+ pres_y=y_pos/8;
+ max_x=img->width-1;
+ max_y=img->height-1;
+
+ /* choose filter depending on subpel position */
+ if(dx==0 && dy==0)                 /* fullpel position */
+   {
+     return(mref[ref_frame][pres_y][pres_x]);
+   }
+ else if(dx%2==0 && dy==0)           
+   {
+     for(x=-3;x<5;x++)
+       {
+		 tmp3[x+3]= mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))];
+       }
+     return(interpolate(tmp3,dx/2) );
+   }
+ else if(dx==0 && dy%2==0)           
+   { 
+     for(y=-3;y<5;y++) 
+       { 
+		 tmp1[y+3]= mref[ref_frame][max(0,min(pres_y+y,max_y))][pres_x]; 
+       } 
+     return( interpolate(tmp1,dy/2) ); 
+   } 
+ else if(dx%2==0 && dy%2==0)            
+   {  
+     for(y=-3;y<5;y++) 
+       {  
+		 for(x=-3;x<5;x++) 
+		 { 
+	       tmp3[x+3]=mref[ref_frame][max(0,min(pres_y+y,max_y))][max(0,min(pres_x+x,max_x))]; 
+		 } 
+		 tmp1[y+3]= interpolate(tmp3,dx/2); 
+       } 
+     return( interpolate(tmp1,dy/2) ); 
+   } 
+ else if((dx==1 && dy==0)||(dx==7 && dy==0))            
+   { 
+     for(x=-3;x<5;x++)  
+     { 	 
+		tmp1[x+3]= mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))]; 
+     } 
+     if(dx==1) 
+       return( (byte) ((interpolate(tmp1,1) + mref[ref_frame][pres_y][pres_x] +1)/2 )); 
+     else 
+       return( (byte) ((interpolate(tmp1,3) + mref[ref_frame][pres_y][max(0,min(pres_x+1,max_x))] +1)/2 ));    
+   }
+ else           
+   { 
+     for(y=-3;y<5;y++) 
+       { 
+		 for(x=-3;x<5;x++) 
+		 {	 
+			tmp3[x+3]= mref[ref_frame][max(0,min(pres_y+y,max_y))][max(0,min(pres_x+x,max_x))]; 
+		 } 
+		 tmp1[y+3]= interpolate(tmp3,dx/2); 
+		 tmp2[y+3]= interpolate(tmp3,(dx+1)/2); 
+       } 
+     return( (byte) (( interpolate(tmp1,dy/2) + interpolate(tmp2,dy/2) + interpolate(tmp1,(dy+1)/2) + interpolate(tmp2,(dy+1)/2) + 2 )/4 ));  
+   }   
+}
+
+byte interpolate(byte container[8],int modus)
+{
+
+ int i=0;
+ int sum=0;
+
+ static int h1[8] = {  -3,    12,   -37,   229,   71,   -21,     6,    -1 };  
+ static int h2[8] = {  -3,    12,   -39,   158,  158,   -39,    12,    -3 };  
+ static int h3[8] = {  -1,     6,   -21,    71,  229,   -37,    12,    -3 };  
+
+ switch(modus)
+   {
+   case 0:
+     return(container[3]);
+   case 1:
+     for(i=0;i<8;i++)
+       {
+         sum+=h1[i]*container[i];
+       }
+     return( (byte) max(0,min((sum+128)/256,255)) );
+   case 2:
+     for(i=0;i<8;i++)
+       {
+         sum+=h2[i]*container[i];
+       }
+     return ((byte) max(0,min((sum+128)/256,255)) );
+   case 3:
+     for(i=0;i<8;i++)
+       {
+		 sum+=h3[i]*container[i];
+       }
+     return((byte) max(0,min((sum+128)/256,255)) );
+   case 4:
+     return( (byte) container[4] );
+
+   default: return(-1);
+   }
+
+}
+
+
+
+/************************************************************************
+*
+*  Name :       read_new_slice()
+*
+*  Description: Reads new slice (picture) from bit_stream
+*
+*               
+************************************************************************/
+
+int read_new_slice(struct img_par *img, struct inp_par *inp)
+{
+    
+    int current_header;
+    Slice *currSlice = img->currentSlice;
+    //	int *partMap = assignSE2partition[inp->partition_mode];
+   
+    /* read new slice */
+    current_header = currSlice->readSlice(img,inp);
+    return  current_header;
+}
+
+
+/************************************************************************
+*
+*  Name :       init_frame()
+*
+*  Description: Initializes the parameters for a new frame
+*               
+************************************************************************/
+void init_frame(struct img_par *img, struct inp_par *inp)
+{
+    static int first_P = TRUE;
+	int i,j;
+
+    img->current_mb_nr=0;
+	img->current_slice_nr=0;
+
+	img->mb_y = img->mb_x = 0;
+	img->block_y = img->pix_y = img->pix_c_y = 0; /* define vertical positions   */
+	img->block_x = img->pix_x = img->pix_c_x = 0; /* define horizontal positions */
+
+	if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT)  // P pictures
+	  {
+#ifdef _ADAPT_LAST_GROUP_
+	    for (i = img->buf_cycle-1; i > 0; i--)
+	      last_P_no[i] = last_P_no[i-1];
+	    last_P_no[0] = nextP_tr;
+#endif
+	    nextP_tr=img->tr;
+	  }
+	else if(img->type==INTRA_IMG) // I picture
+	  nextP_tr=prevP_tr=img->tr;
+
+	if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT)
+	{
+		if(first_P) // first P picture
+		{
+			first_P = FALSE;
+			P_interval=nextP_tr-prevP_tr;
+		}
+		else // all other P pictures
+		{
+			write_prev_Pframe(img, p_out);	// imgY_prev, imgUV_prev -> file
+		}
+	}
+
+	if (img->type > B_IMG_MULT)
+	{
+		set_ec_flag(SE_PTYPE);
+		img->type = INTER_IMG_1;	/* concealed element */
+    }
+	
+
+	/* allocate memory for frame buffers */
+    if (img->number == 0)  get_mem4global_buffers(inp, img); 
+
+    init_loop_filter(img);
+
+    for(i=0;i<img->width/BLOCK_SIZE+1;i++)          /* set edge to -1, indicate nothing to predict from */
+		img->ipredmode[i+1][0]=-1;
+    for(j=0;j<img->height/BLOCK_SIZE+1;j++)
+		img->ipredmode[0][j+1]=-1;
+
+}
+
+
+void exit_frame(struct img_par *img, struct inp_par *inp)
+{
+    if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT )
+        copy2mref(img);
+}
+
+
+
+/************************************************************************
+*
+*  Name :       decode_one_slice()
+*
+*  Description: decodes one slice
+*
+************************************************************************/
+void decode_one_slice(struct img_par *img,struct inp_par *inp)
+{
+
+	Boolean end_of_slice = FALSE;
+    int read_flag;
+	Slice *currSlice = img->currentSlice;
+	
+	reset_ec_flags();
+	
+	while (end_of_slice == FALSE)	/* loop over macroblocks */
+	{
+
+#if TRACE
+		fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", img->tr, img->current_mb_nr, img->slice_numbers[img->current_mb_nr]);
+#endif
+
+		/* Initializes the current macroblock */
+	    start_macroblock(img,inp);
+        
+
+        /* Get the syntax elements from the NAL */
+        read_flag = read_one_macroblock(img,inp);
+
+
+		/* decode one macroblock */
+        switch(read_flag)
+        {
+        case DECODE_MB:
+		      decode_one_macroblock(img,inp);
+            break;
+        case DECODE_COPY_MB:
+            decode_one_CopyMB(img,inp);
+            break;
+        case DECODE_MB_BFRAME:
+            decode_one_macroblock_Bframe(img);
+            break;
+        default:
+		    printf("need to trigger error concealment or something here\n ");
+        }
+        end_of_slice=exit_macroblock(img,inp);
+	}
+}
+/************************************************************************
+*
+*  Name :       init_loop_filter()
+*
+*  Description: initializes loop filter
+*               
+************************************************************************/
+void init_loop_filter(struct img_par *img)
+{
+	int i, j;
+
+	for (i=0;i<img->width/4+2;i++)
+		for (j=0;j<img->height/4+2;j++)
+			loopb[i+1][j+1]=0;
+
+	for (i=0;i<img->width_cr/4+2;i++)
+		for (j=0;j<img->height_cr/4+2;j++)
+			loopc[i+1][j+1]=0;
 }
 

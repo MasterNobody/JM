@@ -42,7 +42,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /W3 /GX /O2 /Ob2 /I "lencod\inc" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
+# ADD CPP /nologo /W3 /GX /O2 /Ob2 /I "lencod\inc" /I "lencod/inc" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
 BSC32=bscmake.exe
@@ -66,7 +66,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /W3 /GX /ZI /O2 /I "lencod/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
+# ADD CPP /nologo /W3 /GX /ZI /Od /I "lencod/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -74,7 +74,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /pdbtype:sept
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe" /pdbtype:sept
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /profile /debug /machine:I386 /out:"./bin/lencod.exe"
 
 !ENDIF 
 
@@ -103,7 +103,15 @@ SOURCE=.\lencod\src\cabac.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\configfile.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\filehandle.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\header.c
 # End Source File
 # Begin Source File
 
@@ -116,6 +124,22 @@ SOURCE=.\lencod\src\lencod.c
 # Begin Source File
 
 SOURCE=.\lencod\src\macroblock.c
+# End Source File
+# Begin Source File
+
+SOURCE=".\lencod\src\mv-search.c"
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\rdopt.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\rdopt_coding_state.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\refbuf.c
 # End Source File
 # Begin Source File
 
@@ -143,6 +167,10 @@ SOURCE=.\lencod\inc\cabac.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\configfile.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\contributors.h
 # End Source File
 # Begin Source File
@@ -159,11 +187,31 @@ SOURCE=.\lencod\inc\global.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\header.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\image.h
 # End Source File
 # Begin Source File
 
 SOURCE=.\lencod\inc\macroblock.h
+# End Source File
+# Begin Source File
+
+SOURCE=".\lencod\inc\mv-search.h"
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\rdopt.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\rdopt_coding_state.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\refbuf.h
 # End Source File
 # End Group
 # End Target

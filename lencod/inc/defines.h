@@ -16,6 +16,39 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#define VCEG_M79_PICTURE_HEADER
+
+#define CHROMA_CHANGE
+#define NO_RDQUANT
+
+#define UMV
+
+#define _FAST_FULL_ME_
+#define _FULL_SEARCH_RANGE_
+#define _ADAPT_LAST_GROUP_
+#define _CHANGE_QP_
+#define _RD_OPT_
+#define _ADDITIONAL_REFERENCE_FRAME_
+
+// The fast integer search is implemented for UMV only
+#ifdef  _FAST_FULL_ME_
+#define UMV
+#endif
+
+
+//
+// The purpose of the following is to force the use of CHROMA_CHANGE and RD_QUANT
+// together, because this is how it is unfortunately implemented in block.c 
+// (dct_chroma())  StW, 5/10/01.  
+
+#ifdef CHROMA_CHANGE
+#define NO_RDQUANT
+#endif
+#ifdef NO_RDQUANT
+#define CHROMA_CHANGE
+#endif
+
+
 #define TRACE           0       /* 0:Trace off 1:Trace on*/
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) /* abs macro, faster than procedure */
@@ -24,7 +57,7 @@
 /* Picture types  */
 #define INTRA_IMG       0   /* I frame    */
 #define INTER_IMG       1   /* P frame    */
-#define B_IMG						2   /* B frame    */
+#define B_IMG			2   /* B frame    */
 
 
 /* inter MB modes */
@@ -82,7 +115,7 @@
 
 #define INIT_FRAME_RATE 30
 #define LEN_STARTCODE   31        /* length of start code */
-#define MAX_MULT_PRED   5         /* max number of frames to make inter prediction from */
+//#define MAX_MULT_PRED   5         /* max number of frames to make inter prediction from */
 #define EOS             1         /* End Of Sequence */
 
 
@@ -99,5 +132,9 @@
 #define MAX_PART_NR			8	/* Maximum number of different data partitions */ 
 													/* Some reasonable number which should reflect */
 													/* what is currently defined in the SE2Partition map (elements.h) */
+
+#define MAXPICTURETYPESEQUENCELEN	100		/* Maximum size of the string that defines the picture
+												types to be coded, e.g. "IBBPBBPBB" */
 #endif 	
+
 

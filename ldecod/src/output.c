@@ -26,36 +26,54 @@ void write_frame(
 	int postfilter,			/*!< postfilter on (=1) or off (=0) */
 	FILE *p_out)			/*!< filestream to output file */
 {
-	int i,j;
+  int i,j;
 
-	if(postfilter)
-	{
-		for(i=0;i<img->height;i++)
-			for(j=0;j<img->width;j++)
-				fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgY_pf[i][j])),p_out);
+  /*
+   * the mmin, mmax macros are taken out, because it makes no sense due to limited range of data type
+   */
 
-		for(i=0;i<img->height_cr;i++)
-			for(j=0;j<img->width_cr;j++)
-				fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV_pf[0][i][j])),p_out);
-
-		for(i=0;i<img->height_cr;i++)
-			for(j=0;j<img->width_cr;j++)
-				fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV_pf[1][i][j])),p_out);
-	}
-	else
-	{
-		for(i=0;i<img->height;i++)
-			for(j=0;j<img->width;j++)
-				fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgY[i][j])),p_out);
-
-		for(i=0;i<img->height_cr;i++)
-			for(j=0;j<img->width_cr;j++)
-				fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV[0][i][j])),p_out);
-
-		for(i=0;i<img->height_cr;i++)
-			for(j=0;j<img->width_cr;j++)
-				fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV[1][i][j])),p_out);
-	}
+  if(postfilter)
+    {
+      for(i=0;i<img->height;i++)
+	for(j=0;j<img->width;j++)
+	  {
+	    //fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgY_pf[i][j])),p_out);
+	    fputc(imgY_pf[i][j],p_out);
+	  }
+      for(i=0;i<img->height_cr;i++)
+	for(j=0;j<img->width_cr;j++)
+	  {
+	    //fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV_pf[0][i][j])),p_out);
+	    fputc(imgUV_pf[0][i][j],p_out);
+	  }
+      for(i=0;i<img->height_cr;i++)
+	for(j=0;j<img->width_cr;j++)
+	  {
+	    //fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV_pf[1][i][j])),p_out);
+	    fputc(imgUV_pf[1][i][j],p_out);
+	  }
+    }
+  else
+    {
+      for(i=0;i<img->height;i++)
+	for(j=0;j<img->width;j++)
+	  {
+	    //fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgY[i][j])),p_out);
+	    fputc(imgY[i][j],p_out);
+	  }
+      for(i=0;i<img->height_cr;i++)
+	for(j=0;j<img->width_cr;j++)
+	  {
+	    //fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV[0][i][j])),p_out);
+	    fputc(imgUV[0][i][j],p_out);
+	  }
+      for(i=0;i<img->height_cr;i++)
+	for(j=0;j<img->width_cr;j++)
+	  {
+	    //fputc((byte)mmin(MAX_PIX_VAL,mmax(MIN_PIX_VAL,imgUV[1][i][j])),p_out);
+	    fputc(imgUV[1][i][j],p_out);
+	  }
+    }
 }
 
 
@@ -70,12 +88,14 @@ void write_frame(
 void tracebits(
 	const char *trace_str,	/*!< tracing information, char array describing the symbol */
 	int len,				/*!< length of syntax element in bits */
-	int info)				/*!< infoword of syntax element */
+	int info,				/*!< infoword of syntax element */
+    int value1,
+    int value2)
 {
 	static int bitcounter = 0;
 
 	int i, chars;
-	int outint = 1;
+	//	int outint = 1;
 
 	if(len>=34)
 	{
@@ -83,11 +103,14 @@ void tracebits(
 		exit (0);
 	}
 
+
 	putc('@', p_trace);
 	chars = fprintf(p_trace, "%i", bitcounter);
 	while(chars++ < 6)
 		putc(' ',p_trace);
 	chars += fprintf(p_trace, "%s", trace_str);
+    //putc(' ',p_trace);chars++;
+    //chars += fprintf(p_trace, "%d,%d", value1,value2);
 	while(chars++ < 30)
 		putc(' ',p_trace);
 
@@ -119,3 +142,4 @@ void tracebits(
 	bitcounter += len;
 }
 #endif
+

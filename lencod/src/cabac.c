@@ -13,7 +13,7 @@
 #include <memory.h>
 #include "cabac.h"
 #include "global.h"
-#include "elements.h"
+
 
 
 /************************************************************************
@@ -123,7 +123,7 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
 *								counts (ini_flag = 1) or with a flat histogram (ini_flag = 0)
 *
 ************************************************************************/
-void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx, int ini_flag)
+void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag)
 {
 		
 	int i,j;
@@ -180,7 +180,7 @@ void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx,
 *								counts (ini_flag = 1) or with a flat histogram (ini_flag = 0)
 *
 ************************************************************************/
-void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ctx, int ini_flag)
+void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
 {
 		
 	int i,j,k;
@@ -333,7 +333,7 @@ void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
 *  Description: generates arithmetic code and passes the code to the buffer
 *
 ************************************************************************/
-int	writeSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart)
+int	writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart)
 {
 	int curr_len;
 	EncodingEnvironmentPtr eep_dp = &(this_dataPart->ee_cabac);
@@ -341,7 +341,7 @@ int	writeSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_
 	curr_len = arienco_bits_written(eep_dp);
 
 	/* perform the actual coding by calling the appropriate method */
-	se->writing(se, inp, img, eep_dp);
+	se->writing(se, eep_dp);
 
 	return (se->len = (arienco_bits_written(eep_dp) - curr_len));
 }
@@ -356,17 +356,14 @@ int	writeSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_
 *
 ***************************************************************************/
 
-void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se,
-																		struct inp_par *inp,
-																		struct img_par *img,
-																		EncodingEnvironmentPtr eep_dp)
+void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	int l;
 	int a, b;
 	int act_ctx;
 	int act_sym;
 	int log_sym;
-	int mode_sym;
+	int mode_sym=0;
 	int mask;
 	int mode16x16;
 
@@ -545,10 +542,7 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se,
 *
 ***************************************************************************/
 
-void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se,
-																			struct inp_par *inp,
-																			struct img_par *img,		
-																			EncodingEnvironmentPtr eep_dp)
+void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	static int prev_sym = 0;
 	static int count = 0; /* to detect a new row of intra prediction modes */
@@ -578,10 +572,7 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se,
 *
 *
 ***************************************************************************/
-void writeRefFrame2Buffer_CABAC(SyntaxElement *se,
-																	struct inp_par *inp,
-																	struct img_par *img,		
-																	EncodingEnvironmentPtr eep_dp)
+void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
 	Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -625,10 +616,7 @@ void writeRefFrame2Buffer_CABAC(SyntaxElement *se,
 *
 *
 ***************************************************************************/
-void writeMVD2Buffer_CABAC(SyntaxElement *se,
-														struct inp_par *inp,
-														struct img_par *img,
-														EncodingEnvironmentPtr eep_dp)
+void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	int step_h, step_v;
 	int i = img->subblock_x;
@@ -646,8 +634,8 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se,
 	int curr_mb_type = currMB->mb_type;
 	
 
-	step_h=inp->blc_size[curr_mb_type][0]/BLOCK_SIZE;     
-	step_v=inp->blc_size[curr_mb_type][1]/BLOCK_SIZE;      
+	step_h=input->blc_size[curr_mb_type][0]/BLOCK_SIZE;     
+	step_v=input->blc_size[curr_mb_type][1]/BLOCK_SIZE;      
 	
 	if (j==0)
 	{
@@ -706,10 +694,7 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se,
 *
 *
 ***************************************************************************/
-void writeBiMVD2Buffer_CABAC(SyntaxElement *se,
-														struct inp_par *inp,
-														struct img_par *img,
-														EncodingEnvironmentPtr eep_dp)
+void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	int step_h, step_v;
 	int i = img->subblock_x;
@@ -725,7 +710,7 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se,
 	
 	MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
 	Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-	int curr_mb_type = currMB->mb_type;
+	//int curr_mb_type = currMB->mb_type;
 	
 	if(backward == 0) 
 	{
@@ -796,10 +781,7 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se,
 *
 *
 ***************************************************************************/
-void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,
-														struct inp_par *inp,
-														struct img_par *img,
-														EncodingEnvironmentPtr eep_dp)
+void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	int act_ctx;
 	int act_sym;
@@ -823,10 +805,7 @@ void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,
 *
 *
 ***************************************************************************/
-void writeCBP2Buffer_CABAC(SyntaxElement *se,
-														struct inp_par *inp,
-														struct img_par *img,		
-														EncodingEnvironmentPtr eep_dp)
+void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
 	Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -917,10 +896,7 @@ void writeCBP2Buffer_CABAC(SyntaxElement *se,
 *
 *
 ***************************************************************************/
-void writeRunLevel2Buffer_CABAC(SyntaxElement *se,
-																struct inp_par *inp,
-																struct img_par *img,		
-																EncodingEnvironmentPtr eep_dp)
+void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
 	const int level = se->value1;
 	const int run = se->value2;
@@ -930,7 +906,7 @@ void writeRunLevel2Buffer_CABAC(SyntaxElement *se,
 	int max_run;
 
 	TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
-	Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+	//Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 	
 	unary_level_encode(eep_dp,(unsigned int) absm(level),ctx->level_context[curr_ctx_idx]);
 											
@@ -939,7 +915,8 @@ void writeRunLevel2Buffer_CABAC(SyntaxElement *se,
 		sign_of_level = ((level < 0) ? 1 : 0);
 		curr_level_ctx = 3;														
 		biari_encode_symbol(eep_dp, (unsigned char) sign_of_level, ctx->level_context[curr_ctx_idx] + curr_level_ctx );	
-		if (curr_ctx_idx != 0 && curr_ctx_idx != 3) // not double scan and not DC-chroma
+		if (curr_ctx_idx != 0 && curr_ctx_idx != 6 && curr_ctx_idx != 5) // not double scan and not DC-chroma
+		//if (curr_ctx_idx != 0 && curr_ctx_idx != 3) // not double scan and not DC-chroma
 				unary_bin_encode(eep_dp,(unsigned int) run,ctx->run_context[curr_ctx_idx],1);
 		else
 		{
@@ -1096,85 +1073,5 @@ void unary_mv_encode(EncodingEnvironmentPtr eep_dp,
 	return;
 }
 
-/************************************************************************
-*
-*  Name :       writeHeaderToBuffer()
-*
-*  Description: This function is used to write the image header 
-*								into the code buffer
-*
-*
-************************************************************************/
-void writeHeaderToBuffer(struct inp_par *inp, struct img_par *img)				
-{
-	int idx,down_shift;
-	int clen, hlen;
-	int dP_nr = assignSE2partition[inp->partition_mode][SE_HEADER];
-	Bitstream *currStream = (img->currentSlice->partArr[dP_nr]).bitstream;
-	int code_len = currStream->byte_pos;
-	int old_format = (inp->img_format == QCIF) ? 0 : 1; /* NOTE: current header allows only for QCIF and CIF format */
 
-	if (inp->img_format == QCIF)
-	{
-		hlen = 4;
-		down_shift= 8;
-	}
-	else		/* CIF */
-	{
-		hlen = 5;
-		down_shift= 16;
-	}
-	
-	idx = 0; /* write at beginning of bitstream buffer */
-
-	/*	write image format and length of code_stream by using the first header byte 
-			and one/two additional bytes (QCIF/CIF) */	
-	clen = code_len -hlen;
-	currStream->streamBuffer[idx++] = ((old_format & 0x01)<<7) + ( (clen>>down_shift) % 128) ;
-	down_shift-=8;
-	
-	currStream->streamBuffer[idx++] = (clen>>down_shift) % 256;
-	
-	idx=1;
-	if (inp->img_format == CIF)
-		currStream->streamBuffer[idx++] =  clen & 0xFF;
-
-	/* Byte 3 resp. 4: Temp. reference */
-	currStream->streamBuffer[idx++] = (img->number*(inp->jumpd+1)) % 256;
-
-	/* Byte 4 resp. 5: QP, intra/non-intra, B-/non-B, multiframe/non-multiframe */
-	currStream->streamBuffer[idx++] =  ( (img->qp << 3) + (((img->type == INTRA_IMG) ? 1 : 0) << 2) 
-																			+ (((img->type == B_IMG) ? 1 : 0) << 1) + ((inp->no_multpred > 1) ? 1 : 0) ) % 256;
-
-
-//	printf("%d %d %d %d %d\n", code_buffer[0],code_buffer[1],code_buffer[2],code_buffer[3],code_buffer[4]);
-
-}
-
-/************************************************************************
-*
-*  Name :       writeEOSToBuffer()
-*
-*  Description: This function is used to write the EOS symbol
-*								into the code buffer
-*
-*
-************************************************************************/
-void writeEOSToBuffer(struct inp_par *inp, struct img_par *img)				
-{
-	int dP_nr = assignSE2partition[inp->partition_mode][SE_EOS];
-	Bitstream *currStream = (img->currentSlice->partArr[dP_nr]).bitstream;
-	int old_format = (inp->img_format == QCIF) ? 0 : 1; /* NOTE: current header allows only for QCIF and CIF format */
-
-	
-	currStream->streamBuffer[currStream->byte_pos++] = ((old_format & 0x01)<<7);
-	currStream->streamBuffer[currStream->byte_pos++] = 0;
-	if (inp->img_format == CIF)
-		currStream->streamBuffer[currStream->byte_pos++] = 0; 
-	currStream->streamBuffer[currStream->byte_pos++] = 0;
-	currStream->streamBuffer[currStream->byte_pos++] = 0;
-	
-
-//	printf("%d %d %d %d %d\n", code_buffer[0],code_buffer[1],code_buffer[2],code_buffer[3],code_buffer[4]);
-}
 

@@ -70,7 +70,9 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
 *  Description: Initializes the EncodingEnvironment for the arithmetic coder
 *
 ************************************************************************/
-void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len )
+void arienco_start_encoding(EncodingEnvironmentPtr eep, 
+							unsigned char *code_buffer, 
+							int *code_len )
 {
 	
 	Elow = 0;
@@ -86,14 +88,14 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buff
 
 /************************************************************************
 *
-*  Name :				arienco_start_encoding()
+*  Name :				arienco_bits_written()
 *
 *  Description: Returns the number of currently written bits 
 *
 ************************************************************************/
 int arienco_bits_written(EncodingEnvironmentPtr eep)
 {
-   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8 - Ebits_to_go);
+   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8 + 2 - Ebits_to_go);
 }
 
 
@@ -307,3 +309,4 @@ void rescale_cum_freq( BiContextTypePtr   bi_ct)
 												 ( ( bi_ct->cum_freq[0] - old_cum_freq_of_one + 1 ) >> 1);
 }
  
+

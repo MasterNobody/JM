@@ -41,7 +41,7 @@
 
 
 
-#define MAXPARTITIONMODES	3	/*!< maximum possible partition modes as defined in assignSE2partition[][] */	
+#define MAXPARTITIONMODES	1	/*!< maximum possible partition modes as defined in assignSE2partition[][] */	
 
 /*!
  *	\brief	lookup-table to assign different elements to partition
@@ -68,14 +68,42 @@
  *			outlined in document Q15-J-23.
  */
 
+
+// A note on this table:
+//
+// While the assignment of values in enum data types is specified in C, it is not
+// very ood style to have an "elementnumber", not even as a comment.  
+// 
+// Hence a copy of the relevant structure from global.h here
+/*
+typedef enum {
+ 0	SE_HEADER,	
+ 1	SE_PTYPE,
+ 2	SE_MBTYPE,
+ 3	SE_REFFRAME,
+ 4	SE_INTRAPREDMODE,
+ 5	SE_MVD,
+ 6	SE_CBP_INTRA,
+ 7	SE_LUM_DC_INTRA,
+ 8	SE_CHR_DC_INTRA,
+ 9	SE_LUM_AC_INTRA,
+10	SE_CHR_AC_INTRA,
+11	SE_CBP_INTER,
+12	SE_LUM_DC_INTER,
+13	SE_CHR_DC_INTER,
+14	SE_LUM_AC_INTER,
+15	SE_CHR_AC_INTER,
+16	SE_BFRAME,
+17	SE_EOS,
+18	SE_MAX_ELEMENTS	*/ /* number of maximum syntax elements */
+
+/*} SE_type;*/				/* substituting the definitions in element.h */
+
+
 static int assignSE2partition[][SE_MAX_ELEMENTS] = 
 {
 	// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17		// elementnumber (no not uncomment)
 	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },		/*!< all elements in one partition no data partitioning */
-	{  0, 0, 1, 1, 1, 2, 3, 4, 5, 4, 6, 3, 4, 5, 4, 6, 0, 7 },		/*!< internet partition mode */
-	{  0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0 }		/*!< H.223 partition mode */
-};
-
-
-
+};																	
+																					
 #endif

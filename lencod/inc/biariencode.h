@@ -81,3 +81,4 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 
 #endif  /* BIARIENCOD_H */
 
+

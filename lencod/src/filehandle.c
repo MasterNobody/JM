@@ -19,13 +19,32 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <stdlib.h>
+#include <assert.h>
+#include "string.h"
 
+#include "defines.h"
 #include "global.h"
-#include "elements.h"
-#if TRACE
-#include <string.h>    /* strncpy */
-#endif
+#include "header.h"
 
+
+// Global Varibales
+
+static FILE *out;		// output file
+//static int bytepos;		// byte position in output file
+//static int bitpos;		// bit position in output file
+
+//
+//
+//
+//
+//
+//
+//
+/*
+
+The implemented solution for a unified picture header 
+
+*/
 /************************************************************************
 *
 *  Routine      void error(char *text)
@@ -50,61 +69,20 @@ void error(char *text)
 *
 ************************************************************************/
 
-int start_sequence(struct inp_par *inp)
+int start_sequence()
 {	
-	char string[255];
 
-	switch(inp->of_mode)
+	switch(input->of_mode)
 	{
 		case PAR_OF_26L:
-			if (inp->symbol_mode == UVLC)
-			{ 
-				/* Current TML File Format */
-				if ((p_out=fopen(inp->outfile,"wb"))==0)   /* open TML bitstream file */
-				{
-					sprintf(errortext, "Error open file %s  \n",inp->outfile);
+			if ((out=fopen(input->outfile,"wb"))==NULL) {
+					sprintf(errortext, "Error open file %s  \n",input->outfile);
 					error(errortext);
-				}
 			}
-			else
-			{
-				/* CABAC File Format */
-				if ((p_out=fopen(inp->outfile,"wb"))==0)    
-				{
-					sprintf(errortext, "Error open file %s \n",inp->outfile);  /* open CABAC bitstream file */
-					error(errortext);
-				}
-			}
-			return 0;
-		case PAR_OF_SLICE:
-			/* Slice File Format */
-			if ((p_out=fopen(inp->outfile,"wb"))==0)   /* open interim file */
-			{
-				sprintf(errortext, "Error open file %s  \n",inp->outfile);
-				error(errortext);
-			}
-
-			return 0;
-		case PAR_OF_NAL:
-			/* Slice File Format */
-			if ((p_out=fopen(inp->outfile,"wb"))==0)   /* open interim file */
-			{
-				sprintf(errortext, "Error open file %s  \n",inp->outfile);
-				error(errortext);
-			}
-
-			/* open file to write partition id and lengths as
-					we do not have a "real" data departitioner at 
-					the decoding side, which requires parsing the stream  */
-			sprintf(string, "%s.dp", inp->outfile);
-			if ((p_datpart=fopen(string,"wb"))==0)    
-			{
-				sprintf(errortext, "Error open file %s \n",string);
-				error(errortext);
-			}
+			SequenceHeader(out);
 			return 0;
 		default: 
-			sprintf(errortext, "Output File Mode %d not supported", inp->of_mode);
+			sprintf(errortext, "Output File Mode %d not supported", input->of_mode);
 			error(errortext);
 			return 1;
 	}				
@@ -119,65 +97,80 @@ int start_sequence(struct inp_par *inp)
 *
 ************************************************************************/
 
-int terminate_sequence(struct img_par *img, struct inp_par *inp)
+int terminate_sequence()
 {
 	Bitstream *currStream;
-	int stuffing=0xff;
-	int active_bitpos;
+	//int stuffing=0xff;
 
 
 	/* Mainly flushing of everything */
 	/* Add termination symbol, etc.  */
 
-	switch(inp->of_mode)
+	switch(input->of_mode)
 	{
 		case PAR_OF_26L:
 			currStream = ((img->currentSlice)->partArr[0]).bitstream;
-			if (inp->symbol_mode == UVLC)
+			if (input->symbol_mode == UVLC)
 			{ 
+
 				/* Current TML File Format */
 				/* Get the trailing bits of the last slice */
 				currStream->bits_to_go	= currStream->stored_bits_to_go;
 				currStream->byte_pos		= currStream->stored_byte_pos;
 				currStream->byte_buf		= currStream->stored_byte_buf;
-				/* Write EOS to bitstream buffer */
-				writeEOS2buffer(img, inp);
-				/* Stuff with ones and put out the last byte */
-				active_bitpos = 1 << (currStream->bits_to_go-1);
-				currStream->byte_buf <<= currStream->bits_to_go;
-				while (stuffing>active_bitpos)
-					stuffing=stuffing>>1;
-				currStream->byte_buf |= stuffing;
-				currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+
+				if (currStream->bits_to_go < 8)		// there are bits left in the last byte
+					currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
 				/* Write all remaining bits to output bitstream file */
-				fwrite (currStream->streamBuffer, 1, currStream->byte_pos, p_out);
-				fclose(p_out);
+				fwrite (currStream->streamBuffer, 1, currStream->byte_pos, out);
+				fclose(out);
 			}
 			else
 			{
 				/* CABAC File Format */
-				currStream->byte_pos = 0;
-				writeEOSToBuffer(inp, img);
-				/* Write all remaining bits to output bitstream file */
-				fwrite (currStream->streamBuffer, 1, currStream->byte_pos, p_out);
-				fclose(p_out);
+				fclose(out);
 			}
 			return 0;
-		case PAR_OF_SLICE:
-			/* Slice Format          */
-			fclose(p_out);
-			return 0;		
-		case PAR_OF_NAL:
-			/* NAL Format          */
-			fclose(p_out);
-			fclose(p_datpart);
-			return 0;
 		default: 
-			sprintf(errortext, "Output File Mode %d not supported", inp->of_mode);
+			sprintf(errortext, "Output File Mode %d not supported", input->of_mode);
 			error(errortext);
 			return 1;
 	}						
 }
+
+
+
+
+
+/*!
+ *	\fn		start_slice()
+ *
+ *	\return	number of bits used for the picture header, including the PSC.
+ 
+ *	\note
+ *
+ *	-Side effects:
+ *			Adds picture header symbols to the symbol buffer
+ *  -Remarks:
+ *			THIS IS AN INTERIM SOLUTION FOR A PICTURE HEADER, see VCEG-M79
+ *
+ *			Generates the Picture Header out of the information in img_par and inp-par,
+ *			and writes it to the symbol buffer.  The structure of the Picture Header
+ *			is discussed in VCEG-M79.  It is implemented as discussed there.  In addition,
+ *			it is preceeded by a picture start code, a UVLC-codeword of LEN=31 and INFO = 0.
+ *          It would have been possible to put information into this codeword, similar
+ *			to designs earlier than TML 5.9.  But it is deemed that the waste of 15
+ *			data bits is acceptable considering the advantages of being able to search
+ *			for a picture header quickly and easily, by looking for 30 consecutive, byte-
+ *			aligned zero bits.
+ *
+ *			The accounting of the header length (variable len) relies on the side effect
+ *			of writeUVLCSymbol() that sets len and info in the symbol variable parameter
+*/
+
+
+
+
 
 /************************************************************************
 *
@@ -188,64 +181,79 @@ int terminate_sequence(struct img_par *img, struct inp_par *inp)
 *
 ************************************************************************/
 
-int start_slice(struct img_par *img, struct inp_par *inp, SyntaxElement *sym)
+
+
+int start_slice(SyntaxElement *sym)
 {
 	EncodingEnvironmentPtr eep;
 	Slice *currSlice = img->currentSlice;
-	Bitstream *currStream;
+	Bitstream *currStream; 
 	int header_len;
 
-	switch(inp->of_mode)
+	switch(input->of_mode)
 	{
 		case PAR_OF_26L:
-			if (inp->symbol_mode == UVLC)
-				/* Current TML File Format */
-				return writeStartcode2buffer(img, inp, sym);
-			else
-			{
-				/* CABAC File Format */
-				/* initialize arithmetic coder */
-				eep = &((currSlice->partArr[0]).ee_cabac);
-				header_len = 4 + ( (inp->img_format == QCIF) ? 0 : 1);
+			if (input->symbol_mode == UVLC) {
 				currStream = (currSlice->partArr[0]).bitstream;
-				currStream->byte_pos = header_len;
+				if (img->current_mb_nr == 0) {
+					header_len = PictureHeader();		// Picture Header
+					header_len += SliceHeader (0);	// Slice Header without Start Code
+				} else {
+					header_len = SliceHeader (1);	// Slice Header with Start Code
+				}
+				
+				return header_len;
+			}
+			  else {										// H.26: CABAC File Format
+				eep = &((currSlice->partArr[0]).ee_cabac);
+				currStream = (currSlice->partArr[0]).bitstream;
+
+				assert (currStream->bits_to_go == 8);
+				assert (currStream->byte_buf == 0);
+				assert (currStream->byte_pos == 0);
+				memset(currStream->streamBuffer, 0, 12);		// fill first 12 bytes with zeros (debug only)
+
+				if (img->current_mb_nr == 0) {
+					header_len = PictureHeader();		// Picture Header
+					header_len += SliceHeader (0);	// Slice Header without Start Code
+				} else {
+					header_len = SliceHeader (1);	// Slice Header with Start Code
+				}
+				
+				// Note that PictureHeader() and SLiceHeader() set the buffer pointers as a side effect
+				// Hence no need for adjusting it manually (and preserving space to be patched later
+				
+				//reserve bits for d_MB_Nr 
+				currStream->header_len = header_len;
+				currStream->header_byte_buffer = currStream->byte_buf;
+				
+				currStream->byte_pos += ((31-currStream->bits_to_go)/8);
+				if ((31-currStream->bits_to_go)%8 != 0)
+					currStream->byte_pos++;
+				currStream->bits_to_go = 8;
+				currStream->byte_pos++;
+
+				// If there is an absolute need to communicate the partition size, this would be
+				// the space to insert it
 				arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
 				/* initialize context models */
-				init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);	
-				init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);	
-				return ( 8*header_len ); /* header will be written when coding of slice is finished */
-			}
-		case PAR_OF_SLICE:
-			/* Slice Format */
-			/* do not do anything in general now */
-			/* but here the Startcode is written to the buffer */
-			/* return writeStartcode2buffer(img, inp, sym);; */
-			/* More exact to match the decoder stuff */
-			if (inp->symbol_mode == UVLC)
-				currSlice->picture_type = sym->value1;
-			else
-			{
-				/* CABAC Symbol Mode */
-				sprintf(errortext, "Output File Mode %d in Symbol Mode %d not YET supported", inp->of_mode, inp->symbol_mode);
-				error(errortext);
-			}
-			return 0;
-		case PAR_OF_NAL:
-			/* NAL File Format */
-			if (inp->symbol_mode == UVLC)
-				return writeStartcode2buffer(img, inp, sym);
-			else
-			{
-				/* CABAC Symbol Mode */
-				sprintf(errortext, "Output File Mode %d in Symbol Mode %d not YET supported", inp->of_mode, inp->symbol_mode);
-				error(errortext);
+				init_contexts_MotionInfo(currSlice->mot_ctx, 1);	
+				init_contexts_TextureInfo(currSlice->tex_ctx, 1);
+
+				return header_len;
+
 			}
 		default: 
-			sprintf(errortext, "Output File Mode %d not supported", inp->of_mode);
+			sprintf(errortext, "Output File Mode %d not supported", input->of_mode);
 			error(errortext);
 			return 1;
 	}							
 }
+
+
+
+
+
 
 /************************************************************************
 *
@@ -255,136 +263,106 @@ int start_slice(struct img_par *img, struct inp_par *inp, SyntaxElement *sym)
 *
 ************************************************************************/
 
-int terminate_slice(struct img_par *img, struct inp_par *inp, struct stat_par  *stat)
+int terminate_slice()
 {
-	int i,bytes_written,bits_written;
+	int bytes_written;
 	Bitstream *currStream;
 	Slice *currSlice = img->currentSlice;
 	EncodingEnvironmentPtr eep;
+	int byte_pos, bits_to_go, start_data;
+	byte buffer;
+
+int null = 0;
 
 	/* Mainly flushing of everything */
 	/* Add termination symbol, etc.  */
-	switch(inp->of_mode)
+	switch(input->of_mode)
 	{
-		case PAR_OF_26L:	
-			if (inp->symbol_mode == UVLC)
+		case PAR_OF_26L:
+
+			
+			if (input->symbol_mode == UVLC)
 			{ 
-				/* Current TML File Format */
+				// Current TML File Format 
+				// Enforce byte alignment of next header: zero bit stuffing
 				currStream = (currSlice->partArr[0]).bitstream;
-				bytes_written = currStream->byte_pos; /* number of written bytes */
-				fwrite (currStream->streamBuffer, 1, bytes_written, p_out);
-				/* store the trailing bits in the beginning of the stream belonging to the next slice */
-				currStream->stored_bits_to_go = currStream->bits_to_go; /* store bits_to_go */
-				currStream->stored_byte_buf		= currStream->byte_buf;		/* store current byte */
-				currStream->stored_byte_pos		= 0; /* reset byte position */
+				
+				if (currStream->bits_to_go < 8) { // trailing bits to process 
+					currStream->byte_buf <<= currStream->bits_to_go;
+					currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+					currStream->bits_to_go = 8;
+				}
+				
+				bytes_written = currStream->byte_pos;
+				fwrite (currStream->streamBuffer, 1, bytes_written, out);
+
+				currStream->stored_bits_to_go = 8; // store bits_to_go
+				currStream->stored_byte_buf		= currStream->byte_buf;		// store current byte 
+				currStream->stored_byte_pos		= 0; // reset byte position 
+
 			}
 			else
 			{
+
 				/* CABAC File Format */
 				eep = &((currSlice->partArr[0]).ee_cabac);
 				currStream = (currSlice->partArr[0]).bitstream;
+
 				/* terminate the arithmetic code */
 				arienco_done_encoding(eep);
-				/* write header to code buffer */
-				writeHeaderToBuffer(inp, img);
-				bytes_written = currStream->byte_pos; /* number of written bytes */
+				
+				//Add Number of MBs of this slice to the header
+				//Save current state of Bitstream
+				currStream = (currSlice->partArr[0]).bitstream;
+				byte_pos = currStream->byte_pos;
+				bits_to_go = currStream->bits_to_go;
+				buffer = currStream->byte_buf; 
+				
+				//Go to the reserved bits
+				currStream->byte_pos = (currStream->header_len)/8;
+				currStream->bits_to_go = 8-(currStream->header_len)%8;
+				currStream->byte_buf = currStream->header_byte_buffer;
+				
+				//Add Info about last MB
+				LastMBInSlice();
+				
+				//And write the header to the output
+				bytes_written = currStream->byte_pos;
+				if (currStream->bits_to_go < 8) // trailing bits to process 
+				{ 
+						currStream->byte_buf <<= currStream->bits_to_go;
+						currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+						bytes_written++;
+						currStream->bits_to_go = 8;
+				}
+				fwrite (currStream->streamBuffer, 1, bytes_written, out);
+				stat->bit_ctr += 8*bytes_written;
+				
+				//Go back to the end of the stream
+				currStream->byte_pos = byte_pos; 
+				currStream->bits_to_go = bits_to_go;
+				currStream->byte_buf = buffer;
+
+
+				//Find start position of data bitstream
+				start_data = (currStream->header_len+31)/8;
+				if ((currStream->header_len+31)%8 != 0)
+					start_data++;
+				bytes_written = currStream->byte_pos - start_data; // number of written bytes
+
 				stat->bit_ctr += 8*bytes_written;			/* actually written bits */
-				fwrite (currStream->streamBuffer, 1, bytes_written, p_out);
-			}
-			return 0;
-		case PAR_OF_SLICE:
-			if (inp->symbol_mode == UVLC)
-			{ 
-				/* Slice File Format */
-				/* Write all Slice relevant information to file */
-				fwrite (&(currSlice->picture_id), 4, 1, p_out);
-				fwrite (&(currSlice->start_mb_nr), 4, 1, p_out);
-				fwrite (&(currSlice->qp), 4, 1, p_out);
-				fwrite (&(currSlice->format), 4, 1, p_out);
-				fwrite (&(currSlice->picture_type), 4, 1, p_out);
-				fwrite (&(currSlice->eos_flag), 4, 1, p_out);
-				fwrite (&(currSlice->max_part_nr), 4, 1, p_out);
-				fwrite (&(currSlice->dp_mode), 4, 1, p_out);
 
-				for (i=0; i<currSlice->max_part_nr; i++)
-				{
-					currStream = (currSlice->partArr[i]).bitstream;
-					bytes_written = currStream->byte_pos; /* number of written bytes */
-					bits_written = 8*bytes_written+8-currStream->bits_to_go; 
-					if (currStream->bits_to_go < 8) /* trailing bits to process */
-					{
-						currStream->byte_buf <<= currStream->bits_to_go;
-						currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-						bytes_written++;
-					}
+				
+				fwrite ((currStream->streamBuffer+start_data), 1, bytes_written, out);
 
-					/* write all bits to the output file */
-					/* write the next bit vector with length and bits */
-					fwrite (&bits_written, 4, 1, p_out);
-					fwrite (currStream->streamBuffer, 1, bytes_written, p_out);
-
-					/* Provide the next partition with a 'fresh' buffer */
-					currStream->stored_bits_to_go = 8; 
-					currStream->stored_byte_buf		= 0;	
-					currStream->stored_byte_pos		= 0; 
-				}
-			}
-			else
-			{
-				/* CABAC Symbol Mode */
-				sprintf(errortext, "Output File Mode %d in Symbol Mode %d not YET supported", inp->of_mode, inp->symbol_mode);
-				error(errortext);
-			}
-			return 0;
-		case PAR_OF_NAL:
-			if (inp->symbol_mode == UVLC)
-			{ 
-				/* NAL File Format */
-				for (i=0; i<currSlice->max_part_nr; i++)
-				{
-					currStream = (currSlice->partArr[i]).bitstream;
-					bytes_written = currStream->byte_pos; /* number of written bytes */
-					bits_written = 8*bytes_written+8-currStream->bits_to_go; 
-					if (currStream->bits_to_go < 8) /* trailing bits to process */
-					{
-						currStream->byte_buf <<= currStream->bits_to_go;
-						currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-						bytes_written++;
-					}
-					/* write all bits to the output file */
-					if (bits_written != 0)
-					{
-						/* Write info to dp-file */			
-						fprintf(p_datpart,"%d\n%d\n",i , bits_written);
-
-						fwrite (&bits_written, 4, 1, p_out);
-						fwrite (&i, 4, 1, p_out);   // DataType
-						fwrite (&(currSlice->picture_id), 4, 1, p_out);
-						fwrite (&(currSlice->slice_nr), 4, 1, p_out);
-						fwrite (&(currSlice->start_mb_nr), 4, 1, p_out);
-						fwrite (&(currSlice->qp), 4, 1, p_out);
-						fwrite (&(currSlice->format), 4, 1, p_out);
-						fwrite (currStream->streamBuffer, 1, bytes_written, p_out);
-
-						/* Provide the next slice with a 'fresh' buffer */
-						currStream->stored_bits_to_go = 8; 
-						currStream->stored_byte_buf		= 0;	
-						currStream->stored_byte_pos		= 0; 
-					}
-				}
-			}
-			else
-			{
-				/* CABAC Symbol Mode */
-				sprintf(errortext, "Output File Mode %d in Symbol Mode %d not YET supported", inp->of_mode, inp->symbol_mode);
-				error(errortext);
 			}
 			return 0;
 		default: 
-			sprintf(errortext, "Output File Mode %d not supported", inp->of_mode);
+			sprintf(errortext, "Output File Mode %d not supported", input->of_mode);
 			error(errortext);
 			return 1;
 	}									
 }
+
 
 

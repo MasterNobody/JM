@@ -4,18 +4,19 @@
 // H.26L TML coder/decoder
 //
 // Copytright (C) 2000 by
-//    Telenor Satellite Services, Norway
+//    Telenor Broadband Services, Norway
 //    Ericsson Radio Systems, Sweden
 //    TELES AG, Germany
 //    Nokia Inc., USA
 //	  Siemens AG, Germany
-//		Heinrich-Hertz-Institute for Communication Technology GmbH, Germany		
+//	  Heinrich-Hertz-Institute for Communication Technology GmbH, Germany		
+//	  University of Hannover, Institut of Communication Theory and Signal Processing,Germany
 //
 //
 // Full Contact Information
 //
 //    Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
-//    Telenor Satellite Services
+//    Telenor Broadband Services
 //    P.O.Box 6914 St.Olavs plass
 //    N-0130 Oslo, Norway
 //

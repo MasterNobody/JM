@@ -46,3 +46,20 @@
 //    Appelstr. 9a
 //    30167 Hannover, Germany
 //
+//    Guido Heising							      <heising@hhi.de>
+//	  Heinrich-Hertz-Institute
+//	  Einsteinufer 37
+//	  10587 Berlin
+//	  Germany
+//
+//		Gabi Blaettermann							  <blaetter@hhi.de>
+//		Heinrich-Hertz-Institute
+//		Einsteinufer 37
+//		10587 Berlin
+//		Germany
+//		
+//		Detlev Marpe							      <marpe@hhi.de>
+//		Heinrich-Hertz-Institute
+//		Einsteinufer 37
+//		10587 Berlin
+//		Germany

@@ -113,23 +113,20 @@ static char SEtypes[][20] =
  *			outlined in document Q15-J-23.
  */
 
-
 static int assignSE2partition[][SE_MAX_ELEMENTS] = 
 {
 	// 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17		// elementnumber (no not uncomment)
-	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },		/*!< all elements in one partition no data partitioning */
-	{  0, 0, 1, 1, 1, 2, 3, 4, 5, 4, 6, 3, 4, 5, 4, 6, 0, 7 },		/*!< internet partition mode */
-	{  0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0 }		/*!< H.223 partition mode */
+	{  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }		/*!< all elements in one partition no data partitioning */
 };
 
 static int ec_flag[SE_MAX_ELEMENTS];		/* array to set errorconcealment */
-int PartitionMode;	
+int PartitionMode;
 
 /*
  * function definitions for errorconcealment.c
  */
-int		set_ec_flag(int se);
-void	reset_ec_flags();
-int		get_concealed_element(int *len, int *info, int se);
+int	set_ec_flag(int se);
+void reset_ec_flags();
+int	get_concealed_element(SyntaxElement *sym);
 
 #endif

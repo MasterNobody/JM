@@ -1,0 +1,62 @@
+Changes from version 6.4 to 6.5
+
+
+Fast Integer Pixel Motion Estimation
+	- precalculation of SAD for all 4x4 blocks and all vector positions
+	- SAD calculation of nxm blocks is based on 4x4 SAD's
+	- search range center is the predictor of 16x16 block for all block sizes
+
+Extended Search range
+	- search range can be 39x39 at maximum
+	- search range reductions for older reference frames or older reference frames
+	  and smaller blocks can be enabled in the configuration file
+
+Unrestricted Motion Vectors
+	- Unrestricted motion vectors for P- and B-frames
+	- no range checking in Direct mode
+
+Adaption of P-Interval and Single Quantizer Change (primarily for MPEG-test)
+	- the interval P-P can be adapted at the very end of a sequence to hit the last
+	  frame which then have to be specified in the configuration file
+	- the quantization parameters can be changed once per sequence (config file)
+
+Rate-Distortion Optimization
+	- a rd-optimized mode can be enabled in the configuration file
+	- in rd-opt. mode:
+		- slightly modified rate-constrained motion estimation
+		- rate-constrained macroblock mode decision
+		- rate-constrained mode decision for 4x4 intra modes
+	- the rd-opt. mode decision need to code (DCT, Q, Q^-1, IDCT, entopy coding)
+	  each block/macroblock several times
+
+Increased Frame Buffer
+	- the frame buffer for long term memory prediction is no longer restricted to
+	  five reference frames
+	- the buffer size in the encoder will be adapted according to the number of reference
+	  frames given (config file) and the config file parameter "AdditionalReferenceFrame"
+	- the buffer size in the decoder has to be specified in the config file
+	- the parameter "AdditionalReferenceFrame" specifies a reference frame index which is
+	  considered during motion estimation
+	- E.g:	NumberReferenceFrames=5, AdditionalReferenceFrame=19
+		-> 20 reference frames are stored at encoder side
+		-> the frames with indizes 0,1,2,3,4, and 19 are searched during motion estimation
+
+NAL/Slices
+	- support of slices in both symbol modes
+	- at the decoder UVLC symbols are decoded by the time they are needed, not for the whole 
+	  slice at one time (to be in line with the encoder)
+	- data partitioning support has been (temporally) removed
+
+General
+	- Some clean-ups of data structures
+	- removal of superfluous source and include files in the decoder
+
+--
+
+Heiko Schwarz	<heiko.schwarz@hhi.de>
+Tobias Oelbaum	<oelbaum@hhi.de>
+Detlev Marpe	<marpe@hhi.de>
+
+
+
+

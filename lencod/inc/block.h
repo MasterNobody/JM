@@ -91,14 +91,7 @@ const int QP_SCALE_CR[32]=
   16,17,17,18,19,20,20,21,22,22,23,23,24,24,25,25
 }; 
 
-/* convert from H.263 QP to H.26L quant given by: quant=pow(2,QP/6) */
-const int QP2QUANT[32]= 
-{
-   1, 1, 1, 1, 2, 2, 2, 2,
-   3, 3, 3, 4, 4, 4, 5, 6,
-   6, 7, 8, 9,10,11,13,14,
-  16,17,20,23,25,29,32,36
-};
+
 
 /* single scan pattern */
 const byte SNGL_SCAN[16][2] =   
@@ -190,3 +183,4 @@ const byte COEFF_BIT_COST[3][16][16]=
 
 
 #endif
+

@@ -1,6 +1,6 @@
 /************************************************************************
 *
-*  UUVLC.h for H.26L decoder. 
+*  UVLC.h for H.26L decoder. 
 *  Copyright (C) 1999  Telenor Satellite Services, Norway
 *  
 *  Contacts: 
@@ -13,8 +13,8 @@
 *  
 ************************************************************************/
 
-#ifndef UUVLC_H
-#define UUVLC_H
+#ifndef _UVLC_H
+#define _UVLC_H
 
 /* Note that all NA values are filled with 0 */
 
