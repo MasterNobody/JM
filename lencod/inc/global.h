@@ -33,9 +33,11 @@ typedef unsigned char byte;
 #define absm(A) ((A)<(0) ? (-A):(A)) /* abs macro, faster than procedure */
 #define MAX_VALUE       999999   /* used for start value for some variables */
 
- /* Picture types  */
+/* Picture types  */
 #define INTRA_IMG       0
 #define INTER_IMG       1
+/* B pictures */
+#define B_IMG			2
 
 //<pu>
 /* coding of MBtypes */
@@ -57,6 +59,12 @@ typedef unsigned char byte;
 #define INTRA_MB_OLD    0       /* new intra prediction mode in inter frame         */
 #define INTRA_MB_NEW    1       /* 'old' intra prediction mode in inter frame       */
 #define INTRA_MB_INTER  2       /* Intra MB in inter frame, use the constants above */
+
+/* B pictures : img->imod */
+#define B_Forward       3
+#define B_Backward      4
+#define B_Bidirect      5
+#define B_Direct        6
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
@@ -116,8 +124,10 @@ byte imgY_org[288][352];          /* Reference luma image */
 byte imgY_pf[288][352];           /* Post filter luma image */
 
 byte imgUV[2][144][176];          /* Encoded chroma images  */
-byte imgUV_org[2][144][176];            /* Reference chroma images  */
+byte imgUV_org[2][144][176];      /* Reference chroma images  */
 byte imgUV_pf[2][144][176];       /* Post filter chroma images  */
+
+int imgY_tmp[576][704];           /* temporary solution: */
 
 /* fix from ver 4.1 */
 byte loopb[91][75];               /* array containing filter strenght for 4x4 luma block */
@@ -126,6 +136,12 @@ byte loopc[47][39];               /* array containing filter strenght for 4x4 ch
 
 byte mref[MAX_MULT_PRED][1152][1408];     /* 1/4 pix luma */
 byte mcef[MAX_MULT_PRED][2][352][288];    /*  pix chroma */
+
+/* B pictures */
+byte nextP_imgY[288][352];              /* Encoded next luma images */
+byte nextP_imgUV[2][144][176];				  /* Encoded next chroma images  */
+int  Bframe_ctr, frame_no, P_interval, nextP_tr;
+int  tot_time;
 
 char tracestring[100];
 
@@ -141,6 +157,7 @@ struct snr_par
   float snr_ua;                /* Average SNR U(dB) remaining frames  */
   float snr_va;                /* Average SNR V(dB) remaining frames  */
 };
+
 struct inp_par           /* all input parameters                */
 {
   int no_frames;                /* number of frames to be encoded                                              */
@@ -166,6 +183,11 @@ struct inp_par           /* all input parameters                */
   int slice_argument;           /* Argument to the specified slice algorithm */
   char infile[100];             /* YUV 4:2:0 input format*/
   char outfile[100];            /* H.26L compressed output bitstream*/
+
+  /* B pictures */
+  char dec_file[100], dec_file2[100];
+  int successive_Bframe;       /* number of B frames that will be used */
+  int qpB;                      /* QP of B frames */
 };
 
 struct img_par
@@ -217,6 +239,19 @@ struct img_par
 
   int lpfilter[6][602];        /* for use in loopfilter */
 
+	/* B pictures */
+	int tr;
+	int fw_mb_mode;
+	int fw_multframe_no;
+	int fw_blc_size_h;
+	int fw_blc_size_v;
+	int bw_mb_mode;
+	int bw_multframe_no;
+	int bw_blc_size_h;
+	int bw_blc_size_v;
+	int p_fwMV[4][4][5][9][2]; // for MVDFW
+	int p_bwMV[4][4][5][9][2]; // for MVDBW
+	int blk_bituse[10];   // it is included when getting bid_sad
 };
 
 struct stat_par                 /* statistics */
@@ -234,11 +269,17 @@ struct stat_par                 /* statistics */
   int   mode_use_intra[25];     /* Macroblock mode usage for Intra frames */
   int   mode_use_inter[33];
 
-  int   bit_use_head_mode[2];
-  int   tmp_bit_use_cbp[2];
-  int   bit_use_coeffY[2];
-  int   bit_use_coeffC[2];
-
+	/* B pictures */  
+	int   *mode_use_Bframe;
+	int   *bit_use_mode_Bframe; 
+	int   bit_ctr_P;
+	int   bit_ctr_B;
+	float bitrate_P;
+	float bitrate_B;
+	int   bit_use_head_mode[3];
+  int   tmp_bit_use_cbp[3];
+  int   bit_use_coeffY[3];
+  int   bit_use_coeffC[3];
 };
 
 /* prototypes */
@@ -256,8 +297,8 @@ void intrapred_luma(struct img_par *img,int CurrPixX,int CurrPixY);
 void init(struct img_par *img);
 void find_snr(struct snr_par *snr,struct img_par *img);
 void onethirdpix(struct img_par *img);
-void onethirdpix_separable(struct img_par *img);
-void image(struct img_par *img,struct inp_par *inp,struct stat_par *stat);
+void onethirdpix_separable(struct img_par *img); 
+void  image(struct img_par *img,struct inp_par *inp,struct stat_par *stat, struct snr_par *snr);
 int  find_sad(struct img_par *img,int hadamard);
 int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz,struct img_par *img);
 int  dct_chroma(int uv,int i11,struct img_par *img);
@@ -281,8 +322,30 @@ int find_sad2(struct img_par *img,int *intra_mode);
 void dct_luma2(struct img_par *img, int);
 
 void oneforthpix(struct img_par *img);
-int loop(struct img_par *img,int ibl,int ibr, int longFilt);
-void loopfilter_new(struct img_par *img);
+//int loop(struct img_par *img,int ibl,int ibr, int longFilt);
+//void loopfilter_new(struct img_par *img);
+int loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma);
+void loopfilter(struct img_par *img);
+
+/* B pictures */
+void oneforthpix_1(struct img_par *img);
+void oneforthpix_2(struct img_par *img);
+void initialize_Bframe(int *B_interval, int successive_Bframe, int no_Bframe_to_code,
+						struct img_par *img, struct inp_par *inp, struct stat_par *stat);
+void ReadImage(int frame_no, struct img_par *img);
+void code_Bframe(struct img_par *img, struct inp_par *inp, struct stat_par *stat);
+void intra_4x4(int *cbp, int *tot_intra_sad, int *intra_pred_modes, 
+							 struct img_par *img, struct inp_par *inp, struct stat_par *stat);
+void intra_16x16(int *tot_intra_sad, int *intra_pred_mode_2, struct img_par *img);
+int motion_search_Bframe(int tot_intra_sad, struct img_par *img, struct inp_par *inp);
+int get_fwMV(int *min_fw_sad, struct img_par *img, struct inp_par *inp, int tot_intra_sad);
+void get_bwMV(int *min_bw_sad, struct img_par *img, struct inp_par *inp_par);
+void get_bid(int *bid_sad, int fw_predframe_no, struct img_par *img, struct inp_par *inp);
+void get_dir(int *dir_sad, struct img_par *img, struct inp_par *inp);
+void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad, struct img_par *img);
+void create_imgY_cbp(int *cbp, struct img_par *img);
+void chroma_block(int *cbp, int *cr_cbp, struct img_par *img);
+void writeimage(int Bframe_to_code, int no_Bframe, struct img_par *img, struct inp_par *inp);
 
 /* files */
 FILE *p_dec;        /* internal decoded image for debugging*/
@@ -290,6 +353,7 @@ FILE *p_out;        /* H.26L output bitstream */
 FILE *p_stat;       /* status file for the last encoding session */
 FILE *p_log;        /* SNR file */
 FILE *p_in;         /* YUV */
+FILE *p_dec2;
 
 FILE *p_datpart;	/* file to write bitlength and id of all partitions */
 
@@ -298,7 +362,6 @@ FILE *p_trace;     /* Trace file */
 #endif
 
 /* NAL function pointers */
-
 void (*nal_init)();
 void (*nal_finit)();
 int  (*nal_put_startcode)(int tr, int mb_nr, int qp, int image_format, int sliceno, int type);

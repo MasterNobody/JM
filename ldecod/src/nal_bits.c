@@ -173,6 +173,7 @@ int bits_tml_find_startcode(
 			frame_bitoffset=(frame_bitoffset+len)%8;    /* bitoffest for first byte in new frame  */
 			no_symbols_in_slice=code_word_ctr;
 			code_word_ctr=0;
+
 			break;
 		}
 
@@ -189,7 +190,7 @@ int bits_tml_find_startcode(
 	}
 
 	/* Parse the first symbol which has the header information */
-	get_symbol("Headerinfo", &len,&info, SE_HEADER);
+	get_symbol("\nHeaderinfo", &len,&info, SE_HEADER);
 	switch (len)
 	{
 	case 33:

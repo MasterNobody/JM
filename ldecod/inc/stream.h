@@ -20,6 +20,8 @@
 #define  MAX_INFO_WORD  300000       /* for one frame */
 #define  MAX_FRAME_SIZE 200000      /* for bitstream */
 
+extern void tracebits(const char *trace_str,	int len,	int info)	;
+
 #endif
 
 

@@ -8,9 +8,10 @@
  *
  *			Inge Lille-Langøy       <inge.lille-langoy@telenor.com>
  *			Rickard Sjoberg         <rickard.sjoberg@era.ericsson.se>
- *			Stephan Wenger			<stewe@cs.tu-berlin.de>
- *			Jani Lainema			<jani.lainema@nokia.com>
+ *			Stephan Wenger		    <stewe@cs.tu-berlin.de>
+ *			Jani Lainema		    <jani.lainema@nokia.com>
  *			Sebastian Purreiter		<sebastian.purreiter@mch.siemens.de>
+ *			Byeong-Moon Jeon		<jeonbm@lge.com>
  *
  *	\note	tags are used for document system "doxygen"
  *			available at http://www.stack.nl/~dimitri/doxygen/index.html
@@ -66,7 +67,7 @@
 #include "elements.h"
 
 #define TML			"5"
-#define VERSION		"5.2"
+#define VERSION		"5.9"
 #define LOGFILE		"log.dec"
 #define DATADECFILE	"data.dec"
 #define TRACEFILE	"trace.dec"
@@ -224,13 +225,16 @@ int main(
 	fprintf(stdout,"--------------------------------------------------------------------------\n");
 
 
-	fprintf(stdout,"Frame  TR    QP   SnrY    SnrU    SnrV   Time(ms)\n");
+	fprintf(stdout,"Frame   TR    QP  SnrY    SnrU    SnrV   Time(ms)\n");
 
 	init(img);
 	img->number=0;
 	reset_ec_flags();  /*<pu> reset all error concealment flags */
+
+	/* B pictures */
+	Bframe_ctr=0;
 	
-	while (nal_find_startcode(p_in, &img->tr, &img->qp, &mb_nr, &img->format) != 0)                     /* while not end of seqence, read next image to buffer */
+	while (nal_find_startcode(p_in, &img->tr, &img->qp, &mb_nr, &img->format) != 0) /* while not end of seqence, read next image to buffer */
 	{
 		int return_value;
 
@@ -254,7 +258,8 @@ int main(
 #endif
 			time( &ltime1 );                                  /* start time s  */
 
-			return_value = decode_slice(img,inp,mb_nr);
+			return_value = decode_slice(img, inp, mb_nr, p_out);
+
 			switch(return_value)
 			{
 			case SEARCH_SYNC:
@@ -275,22 +280,41 @@ int main(
 				tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
 				tot_time=tot_time + tmp_time;
 
-				fprintf(stdout,"%2d %5d %5d %7.4f %7.4f %7.4f %5d\n",
-						img->number,img->tr,img->qp,snr->snr_y,snr->snr_u,snr->snr_v,
+				if(img->type == INTRA_IMG) // I picture
+					fprintf(stdout,"%3d(I) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+						frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,
+						tmp_time);
+				else if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictures
+					fprintf(stdout,"%3d(P) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+						frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,
+						tmp_time);
+				else // B pictures
+					fprintf(stdout,"%3d(B) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+						frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,
 						tmp_time);
 
-				write_frame(img,inp->postfilter,p_out);         /* write image to output YUV file */
-				img->number++;                                  /* frame counter */
+				fflush(stdout);
+				
+				if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictres
+					copy_Pframe(img, inp->postfilter);	// imgY-->imgY_prev, imgUV-->imgUV_prev
+				else // I or B pictures
+					write_frame(img,inp->postfilter,p_out);         /* write image to output YUV file */
+				
+				if(img->type <= INTRA_IMG)   // I or P pictures
+					img->number++;           
 				break;
 			}
 		}
 		reset_ec_flags();  /*<pu> reset all error concealment flags */
 	}
+	// B PICTURE : save the last P picture
+	write_prev_Pframe(img, p_out);
 
 	fprintf(stdout,"-------------------- Average SNR all frames ------------------------------\n");
-	fprintf(stdout," SNR Y(dB)     : %5.2f\n",snr->snr_ya);
-	fprintf(stdout," SNR U(dB)     : %5.2f\n",snr->snr_ua);
-	fprintf(stdout," SNR V(dB)     : %5.2f\n",snr->snr_va);
+	fprintf(stdout," SNR Y(dB)           : %5.2f\n",snr->snr_ya);
+	fprintf(stdout," SNR U(dB)           : %5.2f\n",snr->snr_ua);
+	fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snr_va);
+	fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001); 
 	fprintf(stdout,"--------------------------------------------------------------------------\n");
 	fprintf(stdout," Exit TML %s decoder, ver %s \n",TML,VERSION);
 
@@ -314,7 +338,7 @@ int main(
 		}
 	}
 	else
-		p_log=fopen("log_dec.dat","a");                    /* File exist,just open for appending */
+		p_log=fopen("log.dec","a");                    /* File exist,just open for appending */
 
 #ifdef WIN32
 	_strdate( timebuf );
@@ -354,28 +378,50 @@ int main(
 	sprintf(string,"%s", DATADECFILE);
 	p_log=fopen(string,"a");
 
-	fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
-	        "%2.2f %2.2f %2.2f %5d "
-	        "%2.2f %2.2f %2.2f %5d %.3f\n",
-	        img->number, 0, img->qp,
-	        snr->snr_y1,
-	        snr->snr_u1,
-	        snr->snr_v1,
-	        0,
-	        0.0,
-	        0.0,
-	        0.0,
-	        0,
-	        snr->snr_ya,
-	        snr->snr_ua,
-	        snr->snr_va,
-	        0,
-	        (double)0.001*tot_time/(img->number));
-
+	if(Bframe_ctr != 0) // B picture used
+	{
+		fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
+			"%2.2f %2.2f %2.2f %5d "
+			"%2.2f %2.2f %2.2f %5d %.3f\n",
+			img->number, 0, img->qp,
+			snr->snr_y1,
+			snr->snr_u1,
+			snr->snr_v1,
+			0,
+			0.0,
+			0.0,
+			0.0,
+			0,
+			snr->snr_ya,
+			snr->snr_ua,
+			snr->snr_va,
+			0,
+			(double)0.001*tot_time/(img->number+Bframe_ctr-1));
+	}
+	else 
+	{
+		fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
+			"%2.2f %2.2f %2.2f %5d "
+			"%2.2f %2.2f %2.2f %5d %.3f\n",
+			img->number, 0, img->qp,
+			snr->snr_y1,
+			snr->snr_u1,
+			snr->snr_v1,
+			0,
+			0.0,
+			0.0,
+			0.0,
+			0,
+			snr->snr_ya,
+			snr->snr_ua,
+			snr->snr_va,
+			0,
+			(double)0.001*tot_time/img->number);
+	}
+	
 	fclose(p_log);
 
-	//  getchar();
-	exit(0);
+	return 0;
 }
 
 
@@ -383,8 +429,7 @@ int main(
  *	\fn		init()
  *	\brief	Initilize some arrays
  */
-void init(
-	struct img_par *img)	/*!< image parameters */
+void init(struct img_par *img)	/*!< image parameters */
 {
 	int i;
 	/* initilize quad matrix used in snr routine */

@@ -74,7 +74,7 @@ bits_tml_put_startcode(int tr, int mb_nr, int qp, int image_format, int sliceno,
 		/* Picture startcode */
 		int len=LEN_STARTCODE;
 		info=(tr<<7)+(qp << 2)+(image_format << 1);
-		put_symbol("Headerinfo",len,info, sliceno, type);
+		put_symbol("\nHeaderinfo",len,info, sliceno, type);
 		return len;
 	}
 	else

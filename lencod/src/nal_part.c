@@ -230,7 +230,7 @@ int part_tml_put_startcode(int tr, int mb_nr, int qp, int image_format, int slic
 		len = LEN_STARTCODE;
 		info=(tr<<7)+(qp << 2)+(image_format << 1);
 		//printf ("part_tml_put_startcode: putting len %d n info %d for first symbol\n", len, info);
-		put_symbol("Headerinfo",len,info, sliceno, SE_HEADER);
+		put_symbol("\nHeaderinfo",len,info, sliceno, SE_HEADER);
 		return len;
 	}
 	else

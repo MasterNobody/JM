@@ -118,6 +118,6 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info)
 		bitcounter+=2;
 	}
 	*info = inf;
-	return bitcounter;                                              /* return absolute offset in bit from start of frame */
+	return bitcounter;           /* return absolute offset in bit from start of frame */
 }
 

@@ -8,6 +8,7 @@
 // Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
 // Stephan Wenger                  <stewe@cs.tu-berlin.de>
 // Jani Lainema                    <jani.lainema@nokia.com>
+// Byeong-Moon Jeon                <jeonbm@lge.com>
 // *************************************************************************************
 // *************************************************************************************
 #include "contributors.h"
@@ -23,33 +24,17 @@
 #include "elements.h"
 
 #define TML 	"5"
-#define VERSION "5.2"
+#define VERSION "5.9"
 
 void main(int argc,char **argv)
 {
 	char config_filename[100];
 	int bit_use[2][2] ;
-	int i,j,k;
+	int i,j;
 	int scale_factor;
 	char name[20];
-
-	time_t ltime1;                  /* for time measurement */
-	time_t ltime2;
-
-#ifdef WIN32
-	struct _timeb tstruct1;
-	struct _timeb tstruct2;
-#else
-	struct tm *l_time;
-	char string[20];
-	struct timeb tstruct1;
-	struct timeb tstruct2;
-	time_t now;
-#endif
-
+	int bit_use_Bframe;
 	char timebuf[128];
-	int tot_time=0;                 /* time for total encoding session */
-	int tmp_time;
 
 	struct inp_par    *inp;         /* input parameters from input configuration file   */
 	struct stat_par   *stat;        /* statistics                                       */
@@ -72,6 +57,12 @@ void main(int argc,char **argv)
 
 	read_input(inp,config_filename);
 
+	/* B pictures */
+	stat->mode_use_Bframe = (int *)malloc(sizeof(int)*41);
+	stat->bit_use_mode_Bframe =  (int *)malloc(sizeof(int)*41);
+	for(i=0; i<41; i++) 
+		stat->mode_use_Bframe[i]=stat->bit_use_mode_Bframe[i]=0;
+
 	printf("--------------------------------------------------------------------------\n");
 	printf(" Encoder config file               : %s \n",config_filename);
 	printf("--------------------------------------------------------------------------\n");
@@ -82,7 +73,6 @@ void main(int argc,char **argv)
 	printf(" Output log file                   : log.dat \n");
 	printf(" Output statistics file            : stat.dat \n");
 	printf("--------------------------------------------------------------------------\n");
-
 
 	img->framerate=INIT_FRAME_RATE;                     /* The basic frame rate (of the original sequence) */
 
@@ -99,7 +89,6 @@ void main(int argc,char **argv)
 	init(img);
 
 	/* Prediction mode is set to -1 outside the frame, indicating that no prediction can be made from this part*/
-
 	for (i=0; i < img->width/BLOCK_SIZE+1; i++)
 	{
 		img->ipredmode[i+1][0]=-1;
@@ -109,89 +98,32 @@ void main(int argc,char **argv)
 		img->ipredmode[0][j+1]=-1;
 	}
 
-	printf("Frame  Bit/pic  QP   SnrY    SnrU    SnrV    Bitrate  Time(ms)\n");
+	printf("Frame  Bit/pic   QP   SnrY    SnrU    SnrV    Time(ms)\n");
 
 	img->mb_y_upd=0;
 
 	nal_init();
 
+	/* B pictures */
+	Bframe_ctr=0;
+	tot_time=0;                 // time for total encoding session 
+		
 	for (img->number=0; img->number < inp->no_frames; img->number++)
 	{
-
-#ifdef WIN32
-	    _ftime (&tstruct1);				/* start time ms */
-#else
-		ftime (&tstruct1);				/* start time ms */
-#endif
-		time( &ltime1 );        /* start time s  */
-
-		image(img,inp,stat);
-
-		/*  New inloop filter is used for all frames frames */
-		loopfilter_new(img);
-
-		/*  The 1/4 pixel upsampling of the decoded frame is produced.
-		    This will be used both for motion search and prediction for future frames
-		*/
-		oneforthpix(img);
-
-		find_snr(snr,img);        /* find SNR for the last image */
-
-		/* write decoded image to file, just for debugging */
-		if (inp->write_dec)
-		{
-			for (i=0; i < img->height; i++)
-				for (j=0; j < img->width; j++)
-					fputc(min(imgY[i][j],255),p_dec);
-
-			for (k=0; k < 2; ++k)
-				for (i=0; i < img->height/2; i++)
-					for (j=0; j < img->width/2; j++)
-						fputc(min(imgUV[k][i][j],255),p_dec);
-		}
-
-		time( &ltime2 );        /* end time sec */
-#ifdef WIN32
-	    _ftime (&tstruct2);		/* end time ms  */
-#else
-		ftime (&tstruct2);		/* end time ms  */
-#endif
-
-		tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
-		tot_time=tot_time + tmp_time;
-
-		/*  Output to terminal */
-
-		stat->bitr= (float)stat->bit_ctr_0*img->framerate/(inp->no_frames*(inp->jumpd+1)) +
-		            stat->bit_ctr*img->framerate/((img->number+1)*(inp->jumpd+1));
-
-
-		printf(" %2d %8d %5d %7.4f %7.4f %7.4f  %8.0f %5d\n",
-		       img->number*(inp->jumpd+1), stat->bit_ctr-stat->bit_ctr_n,
-		       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, stat->bitr, tmp_time);
-
-		if (img->number == 0)
-		{
-			stat->bitr0=stat->bitr;           /* store bitrate for first frame */
-			stat->bit_ctr_0=stat->bit_ctr;    /* store bit usage for first frame */
-			stat->bit_ctr=0;
-		}
-		stat->bit_ctr_n=stat->bit_ctr;      /* store last bit usage */
+		image(img,inp,stat, snr);
 	}
 
-	/*  write End Of Sequence */
 
+	/* write End Of Sequence */
 	put_symbol("EOS",LEN_STARTCODE,EOS,img->current_slice_nr,SE_EOS);
 
 	bit_use[0][0]=1;
-
 	bit_use[1][0]=max(1,inp->no_frames-1);
 
 	// Shut down NAL as all symbols are now available
 	nal_finit();
 
 	/*  Accumulate bit usage for inter and intra frames */
-
 	bit_use[0][1]=bit_use[1][1]=0;
 
 	for (i=0; i < 9; i++)
@@ -205,10 +137,24 @@ void main(int argc,char **argv)
 		bit_use[j][1]+=stat->bit_use_coeffC[j];
 	}
 
+	/* B pictures */
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) {
+		bit_use_Bframe=0;
+		for(i=0; i<41; i++)
+			bit_use_Bframe += stat->bit_use_mode_Bframe[i]; // fw_predframe_no, blk_size
+		bit_use_Bframe += stat->bit_use_head_mode[2];
+		bit_use_Bframe += stat->tmp_bit_use_cbp[2];
+		bit_use_Bframe += stat->bit_use_coeffY[2];
+		bit_use_Bframe += stat->bit_use_coeffC[2];
 
-	if (inp->no_frames > 1)
-	{
-		stat->bitrate=(bit_use[0][1]+bit_use[1][1])*(float)img->framerate/(inp->no_frames*(inp->jumpd+1));
+		stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P)*(float)(img->framerate/(inp->jumpd+1))/inp->no_frames;	
+		stat->bitrate_B=(stat->bit_ctr_B)*(float)(img->framerate/(inp->jumpd+1))*inp->successive_Bframe/Bframe_ctr;			
+	}
+	else {
+		if (inp->no_frames > 1) 
+		{
+			stat->bitrate=(bit_use[0][1]+bit_use[1][1])*(float)img->framerate/(inp->no_frames*(inp->jumpd+1));
+		}
 	}
 
 	fprintf(stdout,"--------------------------------------------------------------------------\n");
@@ -227,30 +173,41 @@ void main(int argc,char **argv)
 		fprintf(stdout," Error robustness                  : On\n");
 	else if(inp->img_format==1)
 		fprintf(stdout," Error robustness                  : Off\n");
-
 	fprintf(stdout,   " Search range                      : %d\n",inp->search_range);
-
-
-	fprintf(stdout,   " No of ref. frames used in pred    : %d\n",inp->no_multpred);
-
-	fprintf(stdout,   " Total encoding time for the seq.  : %d\n",tot_time);
+	fprintf(stdout,   " No of ref. frames used in P pred  : %d\n",inp->no_multpred);
+	if(inp->successive_Bframe != 0)
+		fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",inp->no_multpred);
+	
+	fprintf(stdout,   " No of B pictures used             : %d\n",  inp->successive_Bframe);
+	if(inp->successive_Bframe != 0)
+		fprintf(stdout,   " QP                                : I %d, P %d, B %d \n", inp->qp0, inp->qpN, inp->qpB);
+	else 
+		fprintf(stdout,   " QP                                : I %d, P %d \n", inp->qp0, inp->qpN);
+	fprintf(stdout,   " Total encoding time for the seq.  : %.3f sec \n",tot_time*0.001); 
 
 	fprintf(stdout,"------------------ Average data all frames  ------------------------------\n");
 	fprintf(stdout," SNR Y(dB)                         : %5.2f\n",snr->snr_ya);
 	fprintf(stdout," SNR U(dB)                         : %5.2f\n",snr->snr_ua);
 	fprintf(stdout," SNR V(dB)                         : %5.2f\n",snr->snr_va);
-	fprintf(stdout," Bit usage per frame               : %5.2f\n",(float)(bit_use[1][1]+bit_use[0][1])/img->number);
-	fprintf(stdout," Bit rate                          : %5.2f\n",stat->bitrate);
-	fprintf(stdout," Bit sum                           : %u\n",bit_use[1][1]+bit_use[0][1]);
+  
+	if(inp->successive_Bframe != 0) {
+		fprintf(stdout, " Bit rate of Base Layer (kb/s)     : %5.2f\n", stat->bitrate_P/1000);
+		fprintf(stdout, " Bit rate of Enhanced Layer (kb/s) : %5.2f\n", stat->bitrate_B/1000);
+		fprintf(stdout, " Total Bit rate (kb/s)             : %5.2f\n", stat->bitrate_P/1000+stat->bitrate_B/1000);
+	}
+	else {
+		fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n", 
+			bit_use[0][1]+bit_use[1][1], bit_use[0][1], bit_use[1][1]);
+		fprintf(stdout, " Bit rate (kb/s)                   : %5.2f\n", stat->bitrate/1000);
+	}	
+	
 	fprintf(stdout,"--------------------------------------------------------------------------\n");
 	fprintf(stdout,"Exit TML %s encoder ver %s\n", TML, VERSION);
 
-	/*
-	  status file
-	*/
+	/* status file */
 	if ((p_stat=fopen("stat.dat","wb"))==0)
 	{
-		printf("Error open file %s  \n",p_stat);
+		printf("Error open file %s  \n", p_stat);
 		exit(0);
 	}
 	fprintf(p_stat," -------------------------------------------------------------- \n");
@@ -259,8 +216,15 @@ void main(int argc,char **argv)
 	fprintf(p_stat,   " Sequence                     : %s\n",inp->infile);
 	fprintf(p_stat,   " No.of coded pictures         : %d\n",inp->no_frames);
 	fprintf(p_stat,   " Freq. for encoded bitstream  : %3.0f\n",(float)img->framerate/(float)(inp->jumpd+1));
-	fprintf(p_stat,   " Bitate(kb/s)                 : %6.2f\n",stat->bitrate);
-
+	
+	/* B pictures*/
+	if(inp->successive_Bframe != 0) {
+		fprintf(p_stat,   " BaseLayer Bitrate(kb/s)      : %6.2f\n", stat->bitrate_P/1000);
+		fprintf(p_stat,   " EnhancedLyaer Bitrate(kb/s)  : %6.2f\n", stat->bitrate_B/1000);
+	}
+	else 
+		fprintf(p_stat,   " Bitate(kb/s)                 : %6.2f\n", stat->bitrate/1000);
+  
 	if(inp->hadamard)
 		fprintf(p_stat," Hadamard transform           : Used\n");
 	else
@@ -284,10 +248,12 @@ void main(int argc,char **argv)
 		fprintf(p_stat," Error robustness             : Off\n");
 
 	fprintf(p_stat,   " Search range                 : %d\n",inp->search_range);
-	fprintf(p_stat,   " No of frame used in pred     : %d\n",inp->no_multpred);
+	fprintf(p_stat,   " No of frame used in P pred   : %d\n",inp->no_multpred);
+	if(inp->successive_Bframe != 0)
+		fprintf(p_stat,   " No of frame used in B pred   : %d\n",inp->no_multpred);
 
 	fprintf(p_stat," -------------------|---------------|---------------|\n");
-	fprintf(p_stat," Item               |   Intra       |  All frames   |\n");
+	fprintf(p_stat,"     Item           |     Intra     |   All frames  |\n");
 	fprintf(p_stat," -------------------|---------------|---------------|\n");
 	fprintf(p_stat," SNR Y(dB)          |");
 	fprintf(p_stat," %5.2f         |",snr->snr_y1);
@@ -295,14 +261,14 @@ void main(int argc,char **argv)
 	fprintf(p_stat," SNR U/V (dB)       |");
 	fprintf(p_stat," %5.2f/%5.2f   |",snr->snr_u1,snr->snr_v1);
 	fprintf(p_stat," %5.2f/%5.2f   |\n",snr->snr_ua,snr->snr_va);
-	/*     QUANT. */
+
+	/* QUANT. */
 	fprintf(p_stat," Average quant      |");
 	fprintf(p_stat," %5d         |",absm(inp->qp0));
 	fprintf(p_stat," %5.2f         |\n",(float)stat->quant1/max(1.0,(float)stat->quant0));
-	/*     MODE */
-
-	fprintf(p_stat,"\n");
-	fprintf(p_stat," -------------------|---------------|\n");
+	
+	/* MODE */
+	fprintf(p_stat,"\n -------------------|---------------|\n");
 	fprintf(p_stat,"   Intra            |   Mode used   |\n");
 	fprintf(p_stat," -------------------|---------------|\n");
 
@@ -310,9 +276,9 @@ void main(int argc,char **argv)
 	for (i=1;i<24;i++)
 		fprintf(p_stat," Mode %d intra new\t| %5d         |\n",i,stat->mode_use_intra[i]);
 
-	fprintf(p_stat," -------------------|---------------|---------------|\n");
+	fprintf(p_stat,"\n -------------------|---------------|---------------|\n");
 	fprintf(p_stat,"   Inter            |   Mode used   | Vector bit use|\n");
-	fprintf(p_stat," -------------------|---------------|---------------|\n");
+	fprintf(p_stat," -------------------|---------------|---------------|");
 
 	fprintf(p_stat,"\n Mode 0  (copy)  \t| %5d         | %5.0f         |",stat->mode_use_inter[0],(float)stat->bit_use_mode_inter[0]/(float)bit_use[1][0]);
 	fprintf(p_stat,"\n Mode 1  (16x16) \t| %5d         | %5.0f         |",stat->mode_use_inter[1],(float)stat->bit_use_mode_inter[1]/(float)bit_use[1][0]);
@@ -326,38 +292,70 @@ void main(int argc,char **argv)
 	for (i=9;i<33;i++)
 		fprintf(p_stat,"\n Mode %d intr.new \t| %5d         |",i,stat->mode_use_inter[i]);
 
-	fprintf(p_stat,"\n");
-	/*     BITS. */
-	fprintf(p_stat," -------------------|---------------|---------------|\n");
-	fprintf(p_stat,"  Bit usage:        |  Intra        | Inter         |\n");
-	fprintf(p_stat," -------------------|---------------|---------------|\n");
-	fprintf(p_stat," Header+modeinfo\t|");
-	fprintf(p_stat," %5d         |",stat->bit_use_head_mode[0]);
-	fprintf(p_stat," %5d         |",stat->bit_use_head_mode[1]/bit_use[1][0]);
+	/* B pictures */
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) {
+		fprintf(p_stat,"\n\n -------------------|---------------|\n");
+		fprintf(p_stat,"   B frame          |   Mode used   |\n");
+		fprintf(p_stat," -------------------|---------------|");
+  
+		for(i=0; i<16; i++)
+			fprintf(p_stat,"\n Mode %d   \t| %5d         |", i, stat->mode_use_Bframe[i]);        
+		fprintf(p_stat,"\n Mode %d intra old\t| %5d     |", 16, stat->mode_use_Bframe[16]);             
+		for (i=17; i<41; i++)
+			fprintf(p_stat,"\n Mode %d intr.new \t| %5d     |",i, stat->mode_use_Bframe[i]);              
+	}
+  
+	fprintf(p_stat,"\n\n -------------------|---------------|---------------|---------------|\n");
+	fprintf(p_stat,"  Bit usage:        |     Intra     |    Inter      |   B frame     |\n");
+	fprintf(p_stat," -------------------|---------------|---------------|---------------|\n");
 
+	fprintf(p_stat," Header+modeinfo    |");
+	fprintf(p_stat," %7d       |",stat->bit_use_head_mode[0]);
+	fprintf(p_stat," %7d       |",stat->bit_use_head_mode[1]/bit_use[1][0]);
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+		fprintf(p_stat," %7d       |",stat->bit_use_head_mode[2]/Bframe_ctr);
+	else fprintf(p_stat," %7d       |", 0);
 	fprintf(p_stat,"\n");
+
 	fprintf(p_stat," CBP Y/C            |");
 	for (j=0; j < 2; j++)
 	{
-		fprintf(p_stat," %5d         |",stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
+		fprintf(p_stat," %7.2f       |", (float)stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
 	}
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+		fprintf(p_stat," %7.2f       |", (float)stat->tmp_bit_use_cbp[2]/Bframe_ctr);
+	else fprintf(p_stat," %7.2f       |", 0.);
 	fprintf(p_stat,"\n");
 
-	/* bit usage for coeffisients */
-	fprintf(p_stat," Coeffs. Y          | %7d       | %7d       |\n",stat->bit_use_coeffY[0]/bit_use[0][0],stat->bit_use_coeffY[1]/bit_use[1][0]);
-	fprintf(p_stat," Coeffs. C          | %7d       | %7d       |\n",stat->bit_use_coeffC[0]/bit_use[0][0],stat->bit_use_coeffC[1]/bit_use[1][0]);
-	fprintf(p_stat," -------------------|---------------|---------------|\n");
-	fprintf(p_stat," Total pr.pict.     |");
-	for (i=0; i < 2; i++)
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+		fprintf(p_stat," Coeffs. Y          | %7.2f      | %7.2f       | %7.2f       |\n",
+			(float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], (float)stat->bit_use_coeffY[2]/Bframe_ctr);
+	else 
+		fprintf(p_stat," Coeffs. Y          | %7.2f      | %7.2f       | %7.2f       |\n",
+			(float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], 0.);
+  
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+		fprintf(p_stat," Coeffs. C          | %7.2f       | %7.2f       | %7.2f       |\n",
+			(float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], (float)stat->bit_use_coeffC[2]/Bframe_ctr);   
+	else 
+		fprintf(p_stat," Coeffs. C          | %7.2f       | %7.2f       | %7.2f       |\n",
+			(float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], 0.);   
+
+	fprintf(p_stat," -------------------|---------------|---------------|---------------|\n");
+  
+	fprintf(p_stat," average bits/frame |");
+	for (i=0; i < 2; i++) 
 	{
-		fprintf(p_stat," %5d         |",bit_use[i][1]/bit_use[i][0]);
+		fprintf(p_stat," %7d       |",bit_use[i][1]/bit_use[i][0]);
 	}
-	fprintf(p_stat,"\n");
-	fprintf(p_stat," -------------------|---------------|---------------|\n");
+	if(inp->successive_Bframe!=0 && Bframe_ctr!=0) 
+		fprintf(p_stat," %7d       |", bit_use_Bframe/Bframe_ctr);
+	else fprintf(p_stat," %7d       |", 0);
 
-	/*
-	write to log file
-	*/
+	fprintf(p_stat,"\n");
+	fprintf(p_stat," -------------------|---------------|---------------|---------------|\n");
+
+	/* write to log file	*/
 	if (fopen("log.dat","r")==0)                      /* check if file exist */
 	{
 		if ((p_log=fopen("log.dat","a"))==0)            /* append new statistic at the end */
@@ -370,7 +368,7 @@ void main(int argc,char **argv)
 			fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
 			fprintf(p_log,"|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                               |\n");
 			fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-			fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Quant1|QuantN|Format|Hadamard|Search r|#Ref |Freq |Intra upd|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr 1|#Bitr N|\n");
+			fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Quant1|QuantN|Format|Hadamard|Search r|#Ref |Freq |Intra upd|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr P|#Bitr B|\n");
 			fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
 		}
 	}
@@ -428,34 +426,71 @@ void main(int argc,char **argv)
 	fprintf(p_log,"%5.3f|",snr->snr_ya);
 	fprintf(p_log,"%5.3f|",snr->snr_ua);
 	fprintf(p_log,"%5.3f|",snr->snr_va);
-	fprintf(p_log,"%7.0f|",stat->bitr0);
-	fprintf(p_log,"%7.0f|\n",stat->bitrate);
+	if(inp->successive_Bframe != 0)
+	{
+		fprintf(p_log,"%7.0f|",stat->bitrate_P);
+		fprintf(p_log,"%7.0f|\n",stat->bitrate_B);
+	}
+	else
+	{
+		fprintf(p_log,"%7.0f|",stat->bitrate);
+		fprintf(p_log,"%7.0f|\n",0.0);
+	}
 
 	fclose(p_log);
 
 	p_log=fopen("data.txt","a");
 
-	fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
-	        "%2.2f %2.2f %2.2f %5d "
-	        "%2.2f %2.2f %2.2f %5d %.3f\n",
-	        inp->no_frames, inp->qp0, inp->qpN,
-	        snr->snr_y1,
-	        snr->snr_u1,
-	        snr->snr_v1,
-	        stat->bit_ctr_0,
-	        0.0,
-	        0.0,
-	        0.0,
-	        0,
-	        snr->snr_ya,
-	        snr->snr_ua,
-	        snr->snr_va,
-	        (stat->bit_ctr_0+stat->bit_ctr)/inp->no_frames,
-	        (double)0.001*tot_time/inp->no_frames);
+	if(inp->successive_Bframe != 0) // B picture used
+	{
+		fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
+			    "%2.2f %2.2f %2.2f %5d "
+				"%2.2f %2.2f %2.2f %5d %5d %.3f\n",
+				inp->no_frames, inp->qp0, inp->qpN,
+				snr->snr_y1,
+				snr->snr_u1,
+				snr->snr_v1,
+				stat->bit_ctr_0,
+				0.0,
+				0.0,
+				0.0,
+				0,
+				snr->snr_ya,
+				snr->snr_ua,
+				snr->snr_va,
+				(stat->bit_ctr_0+stat->bit_ctr)/inp->no_frames,
+				stat->bit_ctr_B/Bframe_ctr,
+				(double)0.001*tot_time/(inp->no_frames+Bframe_ctr));
+	}
+	else 
+	{
+		fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
+			    "%2.2f %2.2f %2.2f %5d "
+				"%2.2f %2.2f %2.2f %5d %5d %.3f\n",
+				inp->no_frames, inp->qp0, inp->qpN,
+				snr->snr_y1,
+				snr->snr_u1,
+				snr->snr_v1,
+				stat->bit_ctr_0,
+				0.0,
+				0.0,
+				0.0,
+				0,
+				snr->snr_ya,
+				snr->snr_ua,
+				snr->snr_va,
+				(stat->bit_ctr_0+stat->bit_ctr)/inp->no_frames,
+				0,
+				(double)0.001*tot_time/inp->no_frames);
+	}
 
 	fclose(p_log);
 	if (p_datpart != NULL)
 		fclose(p_datpart);
+
+	/* B pictures */
+	free(stat->mode_use_Bframe);
+	free(stat->bit_use_mode_Bframe);
 }
 
 /************************************************************************
@@ -528,7 +563,7 @@ void read_input(struct inp_par *inp,char config_filename[])
 	fscanf(fd,"%*[^\n]");
 	if(inp->no_multpred > MAX_MULT_PRED)
 	{
-		printf("Error : input parameter 'no_multpred' exceeds limit, check configuration file \n");
+		printf("Error : input parameter 'no_multpred' exceeds limit (1...5), check configuration file \n");
 		exit(0);
 	}
 
@@ -551,8 +586,7 @@ void read_input(struct inp_par *inp,char config_filename[])
 	                                                        In connection with this intra update,restrictions is put on
 	    motion vectors to prevent errors to propagate from the past */
 	fscanf(fd,"%*[^\n]");
-	fscanf(fd,"%ld,",&inp->write_dec);                  /*  0: Do not write decoded image to file
-	    1: Write decoded image to file */
+	fscanf(fd,"%ld,",&inp->write_dec);     /*  0: Do not write decoded image to file, 1: Write decoded image to file */
 	/* read block sizes for motion search */
 	fscanf(fd,"%*[^\n]");
 	fscanf(fd,"%ld,",&bck_tmp);
@@ -606,17 +640,40 @@ void read_input(struct inp_par *inp,char config_filename[])
 	}
 	fscanf(fd,"%*[^\n]");
 
-	fscanf(fd,"%s",inp->infile);                        /* YUV 4:2:0 input format */
+	fscanf(fd,"%s",inp->infile);   /* YUV 4:2:0 input format */
 	fscanf(fd,"%*[^\n]");
 
-	fscanf(fd,"%s",inp->outfile);                       /* H.26L compressed output bitsream */
+	fscanf(fd,"%s",inp->outfile);  /* H.26L compressed output bitsream */
 	fscanf(fd,"%*[^\n]");
+
+	if ((p_in=fopen(inp->infile,"rb"))==0)  
+	{
+		printf("Input file %s does not exist \n",inp->infile);
+		exit(0);
+	}
+	if ((p_out=fopen(inp->outfile,"wb"))==0)   /* bitstream */
+	{
+		printf("Error open file %s  \n",inp->outfile);
+		exit(0);
+	}
+	if ((p_dec=fopen("test.dec", "wb"))==0)    /* decodet picture,for debugging */
+	{
+		printf("Error open file test.dec \n");
+		exit(0);
+	}
+#if TRACE
+	if ((p_trace=fopen("trace_enc.txt","w"))==0)
+	{
+		printf("Error open file trace_enc.txt\n");
+		exit(0);
+	}
+#endif
 
 	fscanf(fd,"%d",&(NAL_mode));                        /* NAL mode */
 	fscanf(fd,"%*[^\n]");
 
 	/*!
-	 *	\note
+	 *	note !!
 	 * 		open file to write partition id and lengths as
 	 *		we do not have a "real" data departitioner at 
 	 *		the decoding side, which requires parsing the stream
@@ -675,28 +732,17 @@ void read_input(struct inp_par *inp,char config_filename[])
 	fscanf(fd,"%d",&(inp->slice_argument));
 	fscanf(fd,"%*[^\n]");
 
-	if ((p_in=fopen(inp->infile,"rb"))==0)
+
+	/* B pictures */
+	fscanf(fd,"%ld,",&inp->successive_Bframe);    /* 0: B frame is not added */
+	fscanf(fd,"%*[^\n]");
+	fscanf(fd,"%ld,",&inp->qpB);                    /* QP of B frames (max 31) */
+	fscanf(fd,"%*[^\n]");
+	if (inp->qpB > 31 && inp->qpB <= 0)             
 	{
-		printf("Input file %s does not exist \n",inp->infile);
-		exit(0);
+		printf("Error input parameter quant_B,check configuration file\n");
+		exit (0);
 	}
-	if ((p_out=fopen(inp->outfile,"wb"))==0)            /* bitstream */
-	{
-		printf("Error open file %s  \n",inp->outfile);
-		exit(0);
-	}
-	if ((p_dec=fopen("test.dec","wb"))==0)              /* decodet picture,for debugging */
-	{
-		printf("Error open file test.dec \n");
-		exit(0);
-	}
-#if TRACE
-	if ((p_trace=fopen("trace_enc.txt","w"))==0)
-	{
-		printf("Error open file trace_enc.txt\n");
-		exit(0);
-	}
-#endif
 }
 
 
@@ -769,12 +815,19 @@ void init(struct img_par *img)
 		}
 	}
 
-	/*     quad(0:255) SNR quad array */
-
+	/* quad(0:255) SNR quad array */
 	for (i=0; i < 256; ++i) /* fix from TML1 / TML2 sw, truncation removed */
 	{
 		i2=i*i;
 		img->quad[i]=i2;
+	}
+
+	/* B pictures : img->blk_bitsue[] is used when getting bidirection SAD */
+	for (i=0; i < 7; i++) 
+	{
+		if(i==0) img->blk_bituse[i]=1;
+		else if(i==1 || i==2) img->blk_bituse[i]=3;
+		else img->blk_bituse[i]=5;
 	}
 }
 

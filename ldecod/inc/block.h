@@ -31,5 +31,4 @@ int const MAP[4][4]=
 extern const int JQ1[];
 extern const byte FILTER_STR[32][4];/*defined in image.h */
 
-
 #endif

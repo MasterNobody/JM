@@ -1,7 +1,0 @@
-Changes from version 4.6 to version 5.1
-
-Bug fix in the data partitioning: the encoder now writes bits of all (including
-the last) picture to the packet file.
-Bug fix: cleaned out debug messages
-
-Contact: stewe@cs.tu-berlin.de

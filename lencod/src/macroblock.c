@@ -93,7 +93,7 @@ void macroblock(struct img_par *img,struct inp_par *inp,struct stat_par *stat)
 	int intra_pred_mode_2;                /* best 16x16 intra mode */
 
 	int ii,jj,ii0,jj0,ii1,jj1,if1,jf1,if0,jf0;
-	int i1,j1,i3,j3,m2,jg2;
+	int i1,j1,i3,j3,m2,jg2,mvDiffX,mvDiffY;
 
 	int interintra;                       /* distinction between inter or intra elements */
 	int se;                               /* type of syntaxelement */
@@ -464,35 +464,38 @@ void macroblock(struct img_par *img,struct inp_par *inp,struct stat_par *stat)
 		}
 		else /* inter  */
 		{
-			for (i=0;i<4;i++)
-			{
-				ii=img->block_x+i;
-				i3=ii/2;
-				for (j=0;j<4;j++)
-				{
-					jj=img->block_y+j;
-					j3=jj/2;
+      for (i=0;i<4;i++)
+      {
+        ii=img->block_x+i;
+        i3=ii/2;
+        for (j=0;j<4;j++)
+        {
+          jj=img->block_y+j;
+          j3=jj/2;
 
-					if (((tmp_mv[0][jj][ii+4]/4!=tmp_mv[0][jj][ii-1+4]/4)||(tmp_mv[1][jj][ii+4]/4!=tmp_mv[1][jj][ii-1+4]/4)))
-					{
-						loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
-						loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-						/*          if (img->block_x>0 )*/ /* CIF mismatch */
-						/* fix from ver 4.1 */
-						loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
-						loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-					}
-					if (((tmp_mv[0][jj][ii+4]/4!=tmp_mv[0][jj-1][ii+4]/4)||(tmp_mv[1][jj][ii+4]/4!=tmp_mv[1][jj-1][ii+4]/4)))
-					{
-						loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
-						loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-						/*if (img->block_x>0 )*/ /* CIF mismatch */
-						/* fix from ver 4.1 */
-						loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
-						loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
-					}
-				}
-			}
+          mvDiffX = tmp_mv[0][jj][ii+4] - tmp_mv[0][jj][ii-1+4];
+          mvDiffY = tmp_mv[1][jj][ii+4] - tmp_mv[1][jj][ii-1+4];
+
+          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
+          { 
+            loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
+            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1); 
+            loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
+            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
+          }
+
+          mvDiffX = tmp_mv[0][jj][ii+4] - tmp_mv[0][jj-1][ii+4];
+          mvDiffY = tmp_mv[1][jj][ii+4] - tmp_mv[1][jj-1][ii+4];
+
+          if((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
+          {
+            loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
+            loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
+            loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
+            loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
+          }
+        }
+      }
 		}
 
 
@@ -804,7 +807,7 @@ void macroblock(struct img_par *img,struct inp_par *inp,struct stat_par *stat)
 
 										loopc[m2+i1  ][jg2+j1+1]=max(loopc[m2+i1  ][jg2+j1+1],1);
 										loopc[m2+i1+1][jg2+j1  ]=max(loopc[m2+i1+1][jg2+j1  ],1);
-										loopc[m2-i1+2][jg2+j1+1]=max(loopc[m2-i1+2][jg2+j1+1],1);
+										loopc[m2+i1+2][jg2+j1+1]=max(loopc[m2+i1+2][jg2+j1+1],1);
 										loopc[m2+i1+1][jg2+j1+2]=max(loopc[m2+i1+1][jg2+j1+2],1);
 									}
 								}

@@ -9,6 +9,7 @@
  *			Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *			Jani Lainema                    <jani.lainema@nokia.com>
  *			Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
+ *			Thomas Wedi						<wedi@tnt.uni-hannover.de>
  */
 #include "contributors.h"
 
@@ -26,8 +27,7 @@
  *	\fn		ResetSlicePredictions()
  *	\brief
  */
-void ResetSlicePredictions(
-	struct img_par *img)	/*!< image parameters (modified) */
+void ResetSlicePredictions(struct img_par *img)	
 {
 	int x_pos = img->mb_x * 16;
 	int y_pos = img->mb_y * 16;
@@ -71,7 +71,7 @@ int macroblock(
 {
 	int js[2][2];
 	int i,j,ii,jj,iii,jjj,i1,j1,ie,j4,i4,k,i0,pred_vec,j0;
-	int js0,js1,js2,js3,jf;
+	int js0,js1,js2,js3,jf,mvDiffX,mvDiffY;
 	int coef_ctr,vec,cbp,uv,ll;
 	int scan_loop_ctr;
 	int level,run;
@@ -220,6 +220,32 @@ int macroblock(
 
 	if (img->imod==INTRA_MB_INTER && img->mb_mode==COPY_MB) /*keep last macroblock*/
 	{
+		// luma
+		for(j=0;j<MB_BLOCK_SIZE;j++)
+		{
+			jj=img->pix_y+j;
+			for(i=0;i<MB_BLOCK_SIZE;i++)
+			{
+				ii=img->pix_x+i;
+				imgY[jj][ii]=get_pixel(ref_frame,ii*4,jj*4,img);
+				// imgY[jj][ii]=mref[ref_frame][jj*4][ii*4];
+			}
+		}
+
+		// chroma
+		for(uv=0;uv<2;uv++)
+		{
+			for(j=0;j<MB_BLOCK_SIZE/2;j++)
+			{
+				jj=img->pix_c_y+j;
+				for(i=0;i<MB_BLOCK_SIZE/2;i++)
+				{
+					ii=img->pix_c_x+i;
+					imgUV[uv][jj][ii]=mcef[ref_frame][uv][jj][ii];
+				}
+			}
+		}
+
 		for (i=0;i<4;i++)
 		{
 			ii=img->block_x+i;
@@ -228,20 +254,18 @@ int macroblock(
 			{
 				jj=img->block_y+j;
 				j3=jj/2;
-
-				if ((img->mv[ii-1+4][jj][0]/4)!=0||(img->mv[ii-1+4][jj][1]/4!=0))
+				
+				if (((img->mv[ii-1+4][jj][0]/4)!=0||(img->mv[ii-1+4][jj][1]/4!=0)) && ii > 0)				
 				{
 					loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
 					loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-					/*if (img->block_x>0 ) fix from ver 4.1 */
 					loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
 					loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
 				}
-				if ((img->mv[ii+4][jj-1][0]/4!=0)||(img->mv[ii+4][jj-1][1]/4!=0))
+				if (((img->mv[ii+4][jj-1][0]/4!=0)||(img->mv[ii+4][jj-1][1]/4!=0)) && jj > 0)
 				{
 					loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
 					loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-					/*if (img->block_x>0 )  fix from ver 4.1 */
 					loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
 					loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
 				}
@@ -564,7 +588,6 @@ int macroblock(
 	}
 	else /* inter */
 	{
-
 		for (i=0;i<4;i++)
 		{
 			ii=img->block_x+i;
@@ -573,19 +596,25 @@ int macroblock(
 			{
 				jj=img->block_y+j;
 				j3=jj/2;
-				if ((img->mv[ii+4][jj][0]/4!=img->mv[ii-1+4][jj][0]/4)||(img->mv[ii+4][jj][1]/4!=img->mv[ii-1+4][jj][1]/4))
+
+				mvDiffX = img->mv[ii+4][jj][0] - img->mv[ii-1+4][jj][0];
+				mvDiffY = img->mv[ii+4][jj][1] - img->mv[ii-1+4][jj][1];
+
+				if ((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && ii > 0)
 				{
 					loopb[ii  ][jj+1]=max(loopb[ii  ][jj+1],1);
 					loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-					/* if (img->block_x>0 )fix from ver 4.1 */
 					loopc[i3  ][j3+1]=max(loopc[i3  ][j3+1],1);
 					loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
 				}
-				if ((img->mv[ii+4][jj][0]/4!=img->mv[ii+4][jj-1][0]/4)||(img->mv[ii+4][jj][1]/4!=img->mv[ii+4][jj-1][1]/4))
+
+				mvDiffX = img->mv[ii+4][jj][0] - img->mv[ii+4][jj-1][0];
+				mvDiffY = img->mv[ii+4][jj][1] - img->mv[ii+4][jj-1][1];
+
+				if ((mvDiffX*mvDiffX >= 16 || mvDiffY*mvDiffY >= 16) && jj > 0)
 				{
 					loopb[ii+1][jj  ]=max(loopb[ii+1][jj  ],1);
 					loopb[ii+1][jj+1]=max(loopb[ii+1][jj+1],1);
-					/*if (img->block_x>0 ) fix from ver 4.1 */
 					loopc[i3+1][j3  ]=max(loopc[i3+1][j3  ],1);
 					loopc[i3+1][j3+1]=max(loopc[i3+1][j3+1],1);
 				}
@@ -893,7 +922,7 @@ int macroblock(
 
 									loopc[m2+i1  ][jg2+j1+1]=max(loopc[m2+i1  ][jg2+j1+1],1);
 									loopc[m2+i1+1][jg2+j1  ]=max(loopc[m2+i1+1][jg2+j1  ],1);
-									loopc[m2-i1+2][jg2+j1+1]=max(loopc[m2-i1+2][jg2+j1+1],1);
+									loopc[m2+i1+2][jg2+j1+1]=max(loopc[m2+i1+2][jg2+j1+1],1);
 									loopc[m2+i1+1][jg2+j1+2]=max(loopc[m2+i1+1][jg2+j1+2],1);
 								}
 							}
@@ -933,7 +962,8 @@ int macroblock(
 					{
 						vec2_y=(j4*4+jj)*4;
 						vec1_y=vec2_y+img->mv[i4+4][j4][1];
-						img->mpr[ii+ioff][jj+joff]=mref[ref_frame][vec1_y][vec1_x];
+						img->mpr[ii+ioff][jj+joff]=get_pixel(ref_frame,vec1_x,vec1_y,img);
+						// img->mpr[ii+ioff][jj+joff]=mref[ref_frame][vec1_y][vec1_x];
 					}
 				}
 			}

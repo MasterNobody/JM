@@ -276,7 +276,7 @@ static int GetSlice (
 	static int currentPicID = 0, currentFormat = 0;
 	int dt = 0, bitcount = 0;
 	int firsttime = TRUE;
-	int picid, sliceid, startmb, qp, format;
+	int picid=0, sliceid=0, startmb=0, qp=0, format;
 	int bytecount, res, i;
 	int len, info;
 	int headerpart;

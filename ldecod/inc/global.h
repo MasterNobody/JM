@@ -36,6 +36,10 @@ typedef unsigned char   byte;                   /*  8 bit unsigned */
 #define INTER_IMG_MULT  1
 #define INTRA_IMG       2
 
+// B pictures
+#define B_IMG_1			3
+#define B_IMG_MULT		4
+
 /* coding of MBtypes */
 #define INTRA_CODED_MB  0
 #define INTER_CODED_MB  1
@@ -50,10 +54,19 @@ typedef unsigned char   byte;                   /*  8 bit unsigned */
 #define M4x8_MB         6
 #define M4x4_MB         7
 #define INTRA_MB        8                       /* intra coded MB in inter frame */
+
+// B pictures : MB mode
+#define INTRA_MB_B      16
+
 /* imod constants */
 #define INTRA_MB_OLD    0       /* new intra prediction mode in inter frame         */
 #define INTRA_MB_NEW    1       /* 'old' intra prediction mode in inter frame       */
 #define INTRA_MB_INTER  2       /* Intra MB in inter frame, use the constants above */
+// B pictures : imod
+#define B_Forward       3
+#define B_Backward      4
+#define B_Bidirect      5
+#define B_Direct        6
 
 /* 4x4 intra prediction modes */
 /*#define DC_PRED         0
@@ -79,7 +92,7 @@ typedef unsigned char   byte;                   /*  8 bit unsigned */
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
 
-#define MAX_MULT_PRED    5                      /* max number of reference frames
+#define MAX_MULT_PRED   5                      /* max number of reference frames
 
 /* QCIF format */
 #define IMG_WIDTH       176                     /* luma */
@@ -125,7 +138,6 @@ typedef unsigned char   byte;                   /*  8 bit unsigned */
 #define MVPRED_UR       3
 
 int refFrArr[72][88];                           /* Array for reference frames of each block */
-
 int slice_numbers[396];
 
 byte imgY[288][352];                            /* array for the decoded luma component     */
@@ -133,9 +145,14 @@ byte imgY_pf[288][352];                         /* Post filter luma image */
 byte imgUV[2][144][176];                        /* array for the chroma component           */
 byte imgUV_pf[2][144][176];                     /* Post filter luma image */
 
-byte mref[MAX_MULT_PRED][1152][1408];     /* 1/4 pix luma */
-//byte mcef[MAX_MULT_PRED][2][352][288];    /*  pix chroma */ /*memory hole*/
-byte mcef[MAX_MULT_PRED][2][288][352];    /*  pix chroma */
+// B pictures
+int  Bframe_ctr;
+byte prevP_tr, nextP_tr, P_interval;
+int  frame_no;
+
+// byte mref[MAX_MULT_PRED][1152][1408];        /* 1/4 pix luma, not used any more			*/
+byte mref[MAX_MULT_PRED][288][352];             /* 1/1 pix luma for direct interpolation	*/
+byte mcef[MAX_MULT_PRED][2][288][352];			/* pix chroma								*/
 
 /* fix from ver 4.1 */
 //byte loopb[91][75];
@@ -151,7 +168,7 @@ struct img_par
   int current_mb_nr;
   int current_slice_nr;
   int format;                                  /* frame format CIF or QCIF                  */
-  int tr;                                      /* temporal reference, 8 bit, wrapps at 255  */
+  int tr;                                     /* temporal reference, 8 bit, wrapps at 255  */
   int frame_cycle;                             /* cycle through all stored reference frames */
   int qp;                                      /* quant for the current frame               */
   int type;                                    /* image type INTER/INTRA                    */
@@ -182,6 +199,15 @@ struct img_par
 
   byte li[8];                                 /* 8 pix input to loopfilter routine */
   byte lu[8];                                 /* 8 pix output from loopfilter routine */
+
+	/* B pictures */
+	int fw_mv[92][72][3], bw_mv[92][72][3];
+	int fw_multframe_no;
+	int fw_blc_size_h;
+	int fw_blc_size_v;
+	int bw_multframe_no;
+	int bw_blc_size_h;
+	int bw_blc_size_v;
 };
 
 /* signal to noice ratio parameters */
@@ -213,8 +239,18 @@ FILE *p_trace;
 
 /* prototypes */
 void    get_symbol(char *tracestring, int *len, int *info, int type);
-int     decode_slice(struct img_par *img,struct inp_par *inp, int mb_nr);
+int     decode_slice(struct img_par *img,struct inp_par *inp, int mb_nr,FILE *p_out);
 void    write_frame(struct img_par *img,int,FILE *p_out);
+
+// B pictures
+void    write_prev_Pframe(struct img_par *img,FILE *p_out);
+void    copy_Pframe(struct img_par *img,int);
+void		oneforthpix_1(struct img_par *img);
+void		oneforthpix_2(struct img_par *img);
+void		initialize_Bframe( );
+void		decode_Bframe(struct img_par *img, int mb_nr, int stop_mb);
+int			mb_Bframe(struct img_par *img);
+
 void    itrans(struct img_par *img,int ioff,int joff,int i0,int j0);
 int     intrapred(struct img_par *img,int ioff,int joff,int i4,int j4);
 void    onethirdpix(struct img_par *img);
@@ -227,8 +263,11 @@ void    linfo_levrun_intra(int len,int info,int *level,int *irun);
 void    linfo_levrun_c2x2(int len,int info,int *level,int *irun);
 void    find_snr(struct snr_par *snr,struct img_par *img, FILE *p_ref, int postfilter);
 void    init(struct img_par *img);
-void    loopfilter_new(struct img_par *img);
-int     loop(struct img_par *img,int ibl,int ibr, int longFilt);
+void    loopfilter(struct img_par *img);
+int     loop(struct img_par *img, int ibl, int ibr, int longFilt, int chroma);
+//int     loop(struct img_par *img,int ibl,int ibr, int longFilt);
+//void    loopfilter_new(struct img_par *img);
+
 
 void	oneforthpix(struct img_par *img);
 void	itrans_2(struct img_par *img);
@@ -261,5 +300,12 @@ void part_tml_get_symbol(int *len, int *info, int type);
 int  part_tml_startcode_follows();
 int  part_tml_find_startcode(FILE *p_in, int *tr, int *qp, int *mb_nr, int *format);
 int  part_tml_symbols_available (int type);
+
+/* Functions for direct interpolation */
+byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
+byte get_pixel_nextP(int x_pos, int y_pos, struct img_par *img);
+void copy2mref(struct img_par *img);
+void copy2mref_1(struct img_par *img);
+void copy2mref_2(struct img_par *img);
 
 #endif

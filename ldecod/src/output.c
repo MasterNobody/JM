@@ -59,6 +59,8 @@ void write_frame(
 }
 
 
+
+
 /*!
  *	\fn		tracebits()
  *  \brief	Tracing bitpatterns for symbols

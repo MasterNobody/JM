@@ -40,3 +40,9 @@
 //    P.O.Box 80 17 07
 //    D-81617 Munich, Germany
 //
+//    Thomas Wedi                     <wedi@tnt.uni-hannover.de>
+//    University of Hannover
+//    Institut of Communication Theory and Signal Processing
+//    Appelstr. 9a
+//    30167 Hannover, Germany
+//
