@@ -913,6 +913,12 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
           bi = img->block_x + bx;
           bj = img->block_y + by;
 
+          if (img->constrained_intra_pred_flag)
+          {
+            left_block.available = left_block.available ? img->intra_block[left_block.mb_addr] : 0;
+            top_block.available  = top_block.available  ? img->intra_block[top_block.mb_addr]  : 0;
+          }
+
           // !! KS: not sure if the follwing is still correct...
           ts=ls=0;   // Check to see if the neighboring block is SI
           if (IS_OLDINTRA(currMB) && img->type == SI_SLICE)           // need support for MBINTLC1
@@ -1854,6 +1860,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   // left block
   getLuma4x4Neighbour(mb_nr, i, j, -1, 0, &pix);
+/* to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz = img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -1862,6 +1874,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   // top block
   getLuma4x4Neighbour(mb_nr, i, j, 0, -1, &pix);
+/* to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -1894,6 +1912,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
 
   // left block
   getChroma4x4Neighbour(mb_nr, i%2, j-4, -1, 0, &pix);
+/*  to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz = img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -1902,6 +1926,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
   
   // top block
   getChroma4x4Neighbour(mb_nr, i%2, j-4, 0, -1, &pix);
+/*  to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz += img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -3059,6 +3089,12 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
           if (img->apply_weights)
           {
+            if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+            {
+              ref_idx >>=1;
+            }
+
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
                 img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][0] *  tmp_block[ii][jj]+ img->wp_round_luma) >>img->luma_log2_weight_denom)  + img->wp_offset[pred_dir][ref_idx][0] );
@@ -3335,6 +3371,11 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           {
             if (img->apply_weights)
             {
+              if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+              {
+                fw_ref_idx >>=1;
+              }
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
                   img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  + img->wp_round_luma)>>img->luma_log2_weight_denom) + img->wp_offset[0][fw_ref_idx][0]);
@@ -3350,6 +3391,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           {              
             if (img->apply_weights)
             {
+              if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+              {
+                fw_ref_idx >>=1;
+                bw_ref_idx >>=1;
+              }
+
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
                   img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log2_weight_denom) + img->wp_offset[1][bw_ref_idx][0]);
@@ -3363,8 +3411,16 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           }
           else if(img->apply_weights)
           {
-            int alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0];
-            int alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0];
+            int alpha_fw, alpha_bw;
+            if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+              (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+            {
+              fw_ref_idx >>=1;
+              bw_ref_idx >>=1;
+            }
+
+            alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0];
+            alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0];
             
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  

@@ -359,10 +359,10 @@ static void pred_weight_table()
   int i,j;
 
   img->luma_log2_weight_denom = ue_v ("SH: luma_log2_weight_denom", currStream);
-  img->wp_round_luma = 1<<(img->luma_log2_weight_denom - 1);
+  img->wp_round_luma = img->luma_log2_weight_denom ? 1<<(img->luma_log2_weight_denom - 1): 0;
   
   img->chroma_log2_weight_denom = ue_v ("SH: chroma_log2_weight_denom", currStream);
-  img->wp_round_chroma = 1<<(img->chroma_log2_weight_denom - 1);
+  img->wp_round_chroma = img->chroma_log2_weight_denom ? 1<<(img->chroma_log2_weight_denom - 1): 0;
 
   reset_wp_params(img);
 
@@ -392,7 +392,7 @@ static void pred_weight_table()
       }
       else
       {
-        img->wp_weight[0][i][j] = 1<<img->luma_log2_weight_denom;
+        img->wp_weight[0][i][j] = 1<<img->chroma_log2_weight_denom;
         img->wp_offset[0][i][j] = 0;
       }
     }
@@ -425,7 +425,7 @@ static void pred_weight_table()
         }
         else
         {
-          img->wp_weight[1][i][j] = 1<<img->luma_log2_weight_denom;
+          img->wp_weight[1][i][j] = 1<<img->chroma_log2_weight_denom;
           img->wp_offset[1][i][j] = 0;
         }
       }
@@ -526,8 +526,6 @@ void decoding_poc(struct img_par *img)
   // for POC mode 0:
   unsigned int        MaxPicOrderCntLsb = (1<<(active_sps->log2_max_pic_order_cnt_lsb_minus4+4));
 
-  img->PreviousSlicePOC=img->ThisPOC;		
-
   switch ( img->pic_order_cnt_type )
   {
   case 0: // POC MODE 0
@@ -566,9 +564,6 @@ void decoding_poc(struct img_par *img)
     if(img->idr_flag)
     {
       img->FrameNumOffset=0;     //  first pix of IDRGOP, 
-      // why the following two lines?????		used to detect new frame below 
-      img->FirstFieldType = img->bottom_field_flag;              //save type of first field of frame
-                                                            //NB may not work with mixed field & frame coding
       img->delta_pic_order_cnt[0]=0;                        //ignore first delta
       if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
     }
@@ -613,41 +608,16 @@ void decoding_poc(struct img_par *img)
       img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
       img->bottompoc = img->toppoc + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
       img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
-      if(img->PreviousSlicePOC!=img->ThisPOC)
-      {         //new frame detected
-        if(img->disposable_flag)
-          push_poc(img->toppoc,img->bottompoc,NONREFFRAME);
-        else
-          push_poc(img->toppoc,img->bottompoc,REFFRAME);
-      }
     }
     else if (img->bottom_field_flag==0)
     {  //top field 
       img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
       img->bottompoc = 0;
-      if((img->PreviousSlicePOC!=img->ThisPOC)  &&  (img->FirstFieldType==img->bottom_field_flag))
-      {           //new frame detected
-        if(img->disposable_flag)
-          push_poc(img->toppoc,0,NONREFFRAME);
-        else
-          push_poc(img->toppoc,0,REFFRAME);
-      }
-      else
-        toprefpoc[0] = img->toppoc;                //2nd field of same frame
     } 
     else
     {  //bottom field
       img->toppoc = 0;
       img->ThisPOC = img->bottompoc = img->ExpectedPicOrderCnt + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
-      if(img->PreviousSlicePOC!=img->ThisPOC  &&  img->FirstFieldType==img->bottom_field_flag)
-      {           //new frame detected
-        if(img->disposable_flag)
-          push_poc(0,img->bottompoc,NONREFFRAME);
-        else 
-          push_poc(0,img->bottompoc,REFFRAME);
-      }
-      else 
-        bottomrefpoc[0] = img->bottompoc;          //2nd field of same frame
     }
   
     // 4th (last) update "Previous" stuff for next slice
@@ -758,12 +728,6 @@ int dumppoc(struct img_par *img) {
     printf ("MaxFrameNum                           %d\n", img->MaxFrameNum);
 
     return 0;
-}
-
-// this function is likely to be updated according to how POC values are managed in JM.
-int poc_distance( int refa, int refb)
-{
-  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
 }
 
 /*!

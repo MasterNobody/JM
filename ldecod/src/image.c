@@ -17,6 +17,7 @@
  *    - Gabi Blaettermann               <blaetter@hhi.de>
  *    - Ye-Kui Wang                     <wyk@ieee.org>
  *    - Antti Hallapuro                 <antti.hallapuro@nokia.com>
+ *    - Alexis Tourapis                 <alexismt@ieee.org>
  ***********************************************************************
  */
 
@@ -330,15 +331,7 @@ void find_snr(
 
   // calculate frame number
   // KS: This works for the way, the HHI encoder sets POC
-  if (img->field_pic_flag)
     frame_no = img->ThisPOC/2;
-  else
-  {
-    if (!active_sps->frame_mbs_only_flag && !img->MbaffFrameFlag)
-      frame_no = img->ThisPOC;   
-    else
-      frame_no = img->ThisPOC/2;
-  }
 
   rewind(p_ref);
 
@@ -422,11 +415,17 @@ void find_snr(
       snr->snr_va=50;
 
   }
-  else
+/*  else
   {
     snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1); // average snr chroma for all frames
     snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1); // average snr luma for all frames
     snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1); // average snr luma for all frames
+  } */
+ else
+  {
+    snr->snr_ya=(float)(snr->snr_ya*(img->number - 1 + Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr); // average snr luma for all frames
+    snr->snr_ua=(float)(snr->snr_ua*(img->number - 1 + Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr); // average snr chroma for all frames
+    snr->snr_va=(float)(snr->snr_va*(img->number - 1 + Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr); // average snr chromafor all frames
   }
 }
 
@@ -1286,46 +1285,16 @@ void reset_wp_params(struct img_par *img)
 
 void fill_wp_params(struct img_par *img)
 {
-  int i, j, n;
+  int i, j;
   int comp;
   int log_weight_denom;
   int p0, pt;
-//  int p1;
   int bframe = (img->type==B_SLICE);
-  int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
-  int index;
   int max_bwd_ref, max_fwd_ref;
   int x,z;
 
   max_fwd_ref = img->num_ref_idx_l0_active;
   max_bwd_ref = img->num_ref_idx_l1_active;
-
-
-if ((img->weighted_bipred_idc > 0) && (img->type == B_SLICE))
-  {
-    if (!img->disposable_flag )
-    {
-      for (index = 0; index < MAX_REFERENCE_PICTURES; index++)
-      {
-        fwd_ref[index] = index;
-        if (index == 0)
-          n = 1;
-        else if (index == 1)
-          n = 0;
-        else
-          n = index;
-        bwd_ref[index] = n;
-      }
-    }
-    else 
-    {
-       for (index = 0; index < MAX_REFERENCE_PICTURES - 1; index++)
-       {
-         fwd_ref[index] = index+1;
-       }
-       bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
-    }
-  }      
 
   if (img->weighted_bipred_idc == 2 && bframe)
   {
@@ -1342,12 +1311,11 @@ if ((img->weighted_bipred_idc > 0) && (img->type == B_SLICE))
         img->wp_weight[0][i][comp] = 1<<log_weight_denom;
         img->wp_weight[1][i][comp] = 1<<log_weight_denom;
       }
-        }
+    }
   }
 
   if (bframe)
   {
-
     for (i=0; i<max_fwd_ref; i++)
     {
       for (j=0; j<max_bwd_ref; j++)
@@ -1362,31 +1330,25 @@ if ((img->weighted_bipred_idc > 0) && (img->type == B_SLICE))
           }
           else if (img->weighted_bipred_idc == 2)
           {
-            pt = poc_distance (fwd_ref[i], bwd_ref[j]);
-            if (pt == 0)
+            pt = listX[LIST_1][j]->poc - listX[LIST_0][i]->poc;
+            if (pt == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
             {
               img->wbp_weight[0][i][j][comp] =   32;
               img->wbp_weight[1][i][j][comp] =   32;
             }
             else
             {
-              p0 = poc_distance (fwd_ref[i], -1);
- //             p1 = poc_distance (-1, bwd_ref[j]);
+              p0 = img->ThisPOC - listX[LIST_0][i]->poc;
 
-			  x = (16384 + (pt>>1))/pt;
-			  z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+              x = (16384 + (pt>>1))/pt;
+              z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
               img->wbp_weight[1][i][j][comp] = z >> 2;
               img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
-			  if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
-			  {
-				  img->wbp_weight[1][i][j][comp] = 32;
-				  img->wbp_weight[0][i][j][comp] = 32;
-			  }
-
-
-               if (comp == 0)
-                      printf ("bpw weight[%d][%d] = %d, %d\n", i,j,
-                              img->wbp_weight[0][i][j][0], img->wbp_weight[1][i][j][0]);
+              if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
+              {
+                img->wbp_weight[1][i][j][comp] = 32;
+                img->wbp_weight[0][i][j][comp] = 32;
+              }
             }
           }
         }

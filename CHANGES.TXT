@@ -1,3 +1,13 @@
+Changes for Decoder Version JM 7.1 to JM 7.0
+--------------------------------------------
+Bug fixes
+- loop filter (KS)
+- weighted prediction (KS)
+- reference list generation (KS)
+- 8x8 direct modes (AT)
+- constrained intra prediction (KS)
+
+
 Changes for Decoder Version JM 7.0 to JM 6.2
 --------------------------------------------
 Bug fixes

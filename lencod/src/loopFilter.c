@@ -63,8 +63,6 @@ void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
 {
   int       mb_x, mb_y ;
 
-  return;
-
   for( mb_y=0 ; mb_y<(img->height>>4) ; mb_y++ )
     for( mb_x=0 ; mb_x<(img->width>>4) ; mb_x++ )
       DeblockMb( img, imgY, imgUV, mb_y, mb_x ) ;

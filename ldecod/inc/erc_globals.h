@@ -16,7 +16,7 @@
 #define _ERC_GLOBALS_H_
 
 
-#include <memory.h>
+#include <string.h>
 
 /* "block" means an 8x8 pixel area */
 

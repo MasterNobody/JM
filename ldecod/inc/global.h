@@ -39,9 +39,6 @@ typedef unsigned char   byte;                   //!<  8 bit unsigned
 typedef int             int32;
 typedef unsigned int    u_int32;
 
-unsigned int toprefpoc[MAX_REFERENCE_PICTURES];
-unsigned int bottomrefpoc[MAX_REFERENCE_PICTURES];
-
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
 
@@ -303,6 +300,8 @@ typedef struct macroblock
   int           cbp, cbp_blk ;
   unsigned long cbp_bits;
 
+  int           is_skip;
+
   int           i16mode;
   int           b8mode[4];
   int           b8pdir[4];
@@ -495,9 +494,8 @@ typedef struct img_par
   unsigned int AbsFrameNum;
     signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
   unsigned int PreviousFrameNum, FrameNumOffset, ExpectedDeltaPerPicOrderCntCycle;
-  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc,FirstFieldType;
+  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc;
            int Previousdelta_pic_order_cnt[2], PreviousPOC, ThisPOC;
-           int PreviousSlicePOC;
            int PreviousFrameNumOffset;
   // /////////////////////////
 
@@ -601,10 +599,6 @@ void init_conf(struct inp_par *inp, char *config_filename);
 void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
 void init(struct img_par *img);
 
-void init_poc();
-void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind );
-
-
 void malloc_slice(struct inp_par *inp, struct img_par *img);
 void free_slice(struct inp_par *inp, struct img_par *img);
 
@@ -676,8 +670,6 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 void fill_wp_params(struct img_par *img);
 
 void reset_wp_params(struct img_par *img);
-
-int poc_distance( int refa, int refb);
 
 void FreePartition (DataPartition *dp, int n);
 DataPartition *AllocPartition();

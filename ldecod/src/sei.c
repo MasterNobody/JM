@@ -14,19 +14,15 @@
 
 #include "contributors.h"
 
-#include <assert.h>
 #include <stdlib.h>
-#include <malloc.h>
-#include <math.h>
+#include <assert.h>
 #include <string.h>
 
-#include "parsetcommon.h"
 #include "global.h"
 #include "memalloc.h"
 #include "sei.h"
 #include "vlc.h"
 #include "header.h"
-
 
 extern int UsedBits;
 

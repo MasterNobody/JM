@@ -183,6 +183,7 @@
 
       Jill Boyce                      <jill.boyce@thomson.net>
       Cristina Gomila                 <cristina.gomila@thomson.net>
+      Alexis Tourapis                 <alexandros.tourapis@thomson.net>
       Thomson
       2 Independence Way
       Princeton, NJ 08540

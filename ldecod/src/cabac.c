@@ -13,15 +13,12 @@
  */
 
 #include <stdlib.h>
-#include <math.h>
-#include <memory.h>
-#include <assert.h> // for debugging
 #include <string.h>
+
+#include "global.h"
 #include "cabac.h"
 #include "memalloc.h"
-#include "header.h"
 #include "elements.h"
-#include "global.h"
 #include "image.h"
 #include "biaridecod.h"
 #include "mb_access.h"
@@ -432,7 +429,11 @@ void readB8_typeInfo_CABAC (SyntaxElement *se,
     }
   }
   se->value1 = act_sym;
-//	if (act_sym == 13)				printf(" stop");
+
+#if TRACE
+  fprintf(p_trace, "@%d %s\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fflush(p_trace);
+#endif
 }
 
 /*!

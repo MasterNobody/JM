@@ -90,7 +90,6 @@
 
 #include <assert.h>
 #include <stdlib.h>
-#include <memory.h>
 #include <math.h>
 #include <string.h>
 #include <ctype.h>

@@ -15,18 +15,10 @@
 
 #define CONTEXT_INI_C
 
-#include <stdlib.h>
-#include <assert.h>
-#include <math.h>
-#include <string.h>
-
 #include "defines.h"
 #include "global.h"
 #include "biaridecod.h"
-
 #include "ctx_tables.h"
-
-
 
 
 #define BIARI_CTX_INIT2(ii,jj,ctx,tab,num) \

@@ -15,16 +15,14 @@
  */
 #include "contributors.h"
 
-#include <math.h>
 #include <stdlib.h>
-#include <memory.h>
+#include <math.h>
 #include <string.h>
 #include <assert.h>
 
 #include "global.h"
 #include "vlc.h"
 #include "elements.h"
-#include "header.h"
 
 
 // A little trick to avoid those horrible #if TRACE all over the source code

@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 7.0
+ *     JM 7.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -95,7 +95,7 @@
 #include "erc_api.h"
 
 #define JM          "7"
-#define VERSION     "7.0"
+#define VERSION     "7.1"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -171,7 +171,6 @@ int main(int argc, char **argv)
 
   // B pictures
   Bframe_ctr=0;
-  init_poc();
 
   // time for total decoding session
   tot_time = 0;
@@ -208,51 +207,6 @@ int main(int argc, char **argv)
   return 0;
 }
 
-/*!
- ***********************************************************************
- * \brief
- *    Initializes the POC structure with appropriate parameters.
- * 
- ***********************************************************************
- */
-void init_poc()
-{
-  int i;
-
-  for(i=0; i<MAX_NO_POC_FRAMES; i++)
-  {
-    toprefpoc[i] = bottomrefpoc[i] = 1<<29;            //init with large 
-  }
-  img->PreviousSlicePOC = img->ThisPOC = -145376;  //init with unlikely value
-}
-
-/*!
- ***********************************************************************
- * \brief
- *    Pushes values onto the POC ref arrays  toprefpoc[] & bottomrefpoc[] 
- * 
- ***********************************************************************
- */
-void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind )
-{
-  int i;
-  static int current_is_ref = 0;                //indicates if current top value is for a ref frame
-
-         if(current_is_ref){
-                 for(i=MAX_NO_POC_FRAMES-1; i>0; i--){          //move all the data down by one
-                        toprefpoc[i] = toprefpoc[i-1] ; 
-                        bottomrefpoc[i] = bottomrefpoc[i-1] ;
-                 }
-         }      
-        
-        toprefpoc[0] = topvalue;                //put new data
-        bottomrefpoc[0] = bottomvalue;
-
-        current_is_ref = ref_frame_ind;         //new data type
-
-}
-
-
 
 /*!
  ***********************************************************************
@@ -270,6 +224,7 @@ void init(struct img_par *img)  //!< image parameters
     img->quad[i]=i*i; // fix from TML 1, truncation removed
   }
 }
+
 
 /*!
  ************************************************************************

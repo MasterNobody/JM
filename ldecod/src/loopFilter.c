@@ -63,8 +63,6 @@ void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
   unsigned i;
   int mb_x, mb_y ;
 
-//  return;
-
   for (i=0; i<img->PicSizeInMbs; i++)
   {
     get_mb_block_pos(i, &mb_x, &mb_y);
@@ -158,7 +156,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
   int    **list0_refIdxArr = dec_picture->ref_idx[LIST_0];
   int    **list1_refIdxArr = dec_picture->ref_idx[LIST_1];
 
-  if (img->structure==FRAME)
+  if ((img->structure==FRAME) || !dir)
     *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
   else
     *((int*)Strength) = ININT_STRENGTH[3] ;                        //  Strength=3. for fields
@@ -170,8 +168,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
     blkP = BLK_NUM[dir][(edge-1) & 3][idx] ; 
     
 
-    if( ( img->type != SP_SLICE) && (img->type != SI_SLICE)
-          && !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
+    if(  !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
           && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
     {
       if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
@@ -193,7 +190,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
         else
           Strength[idx] =    (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
                              (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4 ) |
-                             (list1_refIdxArr[blk_x][blk_y]   !=   list1_refIdxArr[blk_x2][blk_y2] );
+                             (list0_refIdxArr[blk_x][blk_y]   !=   list0_refIdxArr[blk_x2][blk_y2] );
       }
     }
   }

@@ -26,10 +26,7 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
 
-#define MAX_NO_POC_FRAMES      10   //size of poc ref array = max no ref frames+1
 #define MAX_LENGTH_POC_CYCLE   10   //max no in type 1 poc cycle
-#define NONREFFRAME             0  // used with push_poc
-#define REFFRAME                1
 
 #define LIST_0 0
 #define LIST_1 1
@@ -122,7 +119,7 @@
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
 
-#define MAX_REFERENCE_PICTURES 15
+#define MAX_REFERENCE_PICTURES 30
 
 #ifndef WIN32
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value

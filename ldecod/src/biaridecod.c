@@ -15,9 +15,8 @@
  */
 
 #include <stdlib.h>
-#include <math.h>
+
 #include "global.h"
-#include "biaridecod.h"
 #include "memalloc.h"
 
 extern int symbolCount;
