@@ -456,6 +456,15 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
+#ifdef _LEAKYBUCKET_
+  // consistency check for Number of Leaky Bucket parameters
+  if(input->NumberLeakyBuckets < 2 || input->NumberLeakyBuckets > 255) 
+  {
+    snprintf(errortext, ET_SIZE, "Number of Leaky Buckets should be between 2 and 255 but is %d \n", input->NumberLeakyBuckets);
+    error(errortext, 400);
+  }
+#endif
+
   // Set block sizes
 
   // First, initialize input->blc_size to all zeros

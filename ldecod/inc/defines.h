@@ -58,6 +58,7 @@
 #define MAX_CODED_FRAME_SIZE 200000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
 #define TRACE           1                   //!< 0:Trace off 1:Trace on
+#define _LEAKYBUCKET_
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 #define MAX_VALUE       999999              //!< used for start value for some variables

@@ -308,8 +308,6 @@ void find_snr(
   Slice *currSlice = img->currentSlice;
 #ifndef _ADAPT_LAST_GROUP_
   byte       diff;
-#else
-  static int p_frame_no;
 #endif
 
 #ifndef _ADAPT_LAST_GROUP_
@@ -429,27 +427,29 @@ void find_snr(
  *
  ************************************************************************
  */
-byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
+void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
 {
 
   switch(img->mv_res)
   {
   case 0:
 
-    return(get_quarterpel_pixel(ref_frame,x_pos,y_pos,img));
+    get_quarterpel_block(ref_frame,x_pos,y_pos,img,block);
+    break;
 
   case 1:
 
-    return(get_eighthpel_pixel(ref_frame,x_pos,y_pos,img));
+    get_eighthpel_block(ref_frame,x_pos,y_pos,img,block);
+    break;
 
   default:
 
     snprintf(errortext, ET_SIZE, "wrong mv-resolution: %d",img->mv_res);
     error(errortext, 600);
-    return -1;
+    break;
   }
-
 }
+
 
 /*!
  ************************************************************************
@@ -457,19 +457,17 @@ byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
  *    Interpolation of 1/4 subpixel
  ************************************************************************
  */
-byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img)
+void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
 {
 
-  int dx, x;
-  int dy, y;
+  int dx, dy;
+  int x, y;
+  int i, j;
   int maxold_x,maxold_y;
-
-  int result = 0, result1, result2;
+  int result;
   int pres_x;
   int pres_y; 
-
-  int tmp_res[6];
-
+  int tmp_res[4][9];
   static const int COEF[6] = {
     1, -5, 20, 20, -5, 1
   };
@@ -482,132 +480,125 @@ byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *im
   maxold_x = img->width-1;
   maxold_y = img->height-1;
 
-  if (dx == 0 && dy == 0) { /* fullpel position */
-    result = mref[ref_frame][max(0,min(maxold_y,y_pos))][max(0,min(maxold_x,x_pos))];
+  if (dx == 0 && dy == 0) {  /* fullpel position */
+    for (j = 0; j < BLOCK_SIZE; j++)
+      for (i = 0; i < BLOCK_SIZE; i++)
+        block[i][j] = mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
   }
-  else if (dx == 3 && dy == 3) { /* funny position */
-    result = (mref[ref_frame][max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos))  ]+
-              mref[ref_frame][max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos+1))]+
-              mref[ref_frame][max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos+1))]+
-              mref[ref_frame][max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos))  ]+2)/4;
+  else if (dx == 3 && dy == 3) {  /* funny position */
+    for (j = 0; j < BLOCK_SIZE; j++)
+      for (i = 0; i < BLOCK_SIZE; i++)
+        block[i][j] = (
+          mref[ref_frame][max(0,min(maxold_y,y_pos+j))  ][max(0,min(maxold_x,x_pos+i))  ]+
+          mref[ref_frame][max(0,min(maxold_y,y_pos+j))  ][max(0,min(maxold_x,x_pos+i+1))]+
+          mref[ref_frame][max(0,min(maxold_y,y_pos+j+1))][max(0,min(maxold_x,x_pos+i+1))]+
+          mref[ref_frame][max(0,min(maxold_y,y_pos+j+1))][max(0,min(maxold_x,x_pos+i))  ]+2)/4;
   }
   else { /* other positions */
 
-    if (dy == 0) {
+    if (dy == 0) { /* No vertical interpolation */
 
-      pres_y = max(0,min(maxold_y,y_pos));
-      for(x=-2;x<4;x++) {
-        pres_x = max(0,min(maxold_x,x_pos+x));
-        result += mref[ref_frame][pres_y][pres_x]*COEF[x+2];
-      }
-
-      result = max(0, min(255, (result+16)/32));
-
-      if (dx == 1) {
-        result = (result + mref[ref_frame][pres_y][max(0,min(maxold_x,x_pos))])/2;
-      }
-      else if (dx == 3) {
-        result = (result + mref[ref_frame][pres_y][max(0,min(maxold_x,x_pos+1))])/2;
-      }
-    }
-    else if (dx == 0) {
-
-      pres_x = max(0,min(maxold_x,x_pos));
-      for(y=-2;y<4;y++) {
-        pres_y = max(0,min(maxold_y,y_pos+y));
-        result += mref[ref_frame][pres_y][pres_x]*COEF[y+2];
-      }
-
-      result = max(0, min(255, (result+16)/32));
-
-      if (dy == 1) {
-        result = (result + mref[ref_frame][max(0,min(maxold_y,y_pos))][pres_x])/2;
-      }
-      else if (dy == 3) {
-        result = (result + mref[ref_frame][max(0,min(maxold_y,y_pos+1))][pres_x])/2;
-      }
-    }
-    else if (dx == 2) {
-
-      for(y=-2;y<4;y++) {
-        result = 0;
-        pres_y = max(0,min(maxold_y,y_pos+y));
-        for(x=-2;x<4;x++) {
-          pres_x = max(0,min(maxold_x,x_pos+x));
-          result += mref[ref_frame][pres_y][pres_x]*COEF[x+2];
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -2; x < 4; x++)
+            result += mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
         }
-        tmp_res[y+2] = result;
       }
 
-      result = 0;
-      for(y=-2;y<4;y++) {
-        result += tmp_res[y+2]*COEF[y+2];
-      }
-
-      result = max(0, min(255, (result+512)/1024));
-
-      if (dy == 1) {
-        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
-      }
-      else if (dy == 3) {
-        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+      if ((dx&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))])/2;
       }
     }
-    else if (dy == 2) {
+    else if (dx == 0) {  /* No horizontal interpolation */
 
-      for(x=-2;x<4;x++) {
-        result = 0;
-        pres_x = max(0,min(maxold_x,x_pos+x));
-        for(y=-2;y<4;y++) {
-          pres_y = max(0,min(maxold_y,y_pos+y));
-          result += mref[ref_frame][pres_y][pres_x]*COEF[y+2];
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -2; y < 4; y++)
+            result += mref[ref_frame][max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
         }
-        tmp_res[x+2] = result;
       }
 
-      result = 0;
-      for(x=-2;x<4;x++) {
-        result += tmp_res[x+2]*COEF[x+2];
-      }
-
-      result = max(0, min(255, (result+512)/1024));
-
-      if (dx == 1) {
-        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
-      }
-      else {
-        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+      if ((dy&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+           block[i][j] = (block[i][j] + mref[ref_frame][max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))])/2;
       }
     }
-    else {
+    else if (dx == 2) {  /* Vertical & horizontal interpolation */
 
-      result = 0;
-      pres_y = dy == 1 ? y_pos : y_pos+1;
-      pres_y = max(0,min(maxold_y,pres_y));
-
-      for(x=-2;x<4;x++) {
-        pres_x = max(0,min(maxold_x,x_pos+x));
-        result += mref[ref_frame][pres_y][pres_x]*COEF[x+2];
+      for (j = -2; j < BLOCK_SIZE+3; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++)
+          for (tmp_res[i][j+2] = 0, x = -2; x < 4; x++)
+            tmp_res[i][j+2] += mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
       }
 
-      result1 = max(0, min(255, (result+16)/32));
-
-      result = 0;
-      pres_x = dx == 1 ? x_pos : x_pos+1;
-      pres_x = max(0,min(maxold_x,pres_x));
-
-      for(y=-2;y<4;y++) {
-        pres_y = max(0,min(maxold_y,y_pos+y));
-        result += mref[ref_frame][pres_y][pres_x]*COEF[y+2];
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -2; y < 4; y++)
+            result += tmp_res[i][j+y+2]*COEF[y+2];
+          block[i][j] = max(0, min(255, (result+512)/1024));
+        }
       }
 
-      result2 = max(0, min(255, (result+16)/32));
-      result = (result1+result2)/2;
+      if ((dy&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[i][j+2+dy/2]+16)/32)))/2;
+      }
+    }
+    else if (dy == 2) {  /* Horizontal & vertical interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = -2; i < BLOCK_SIZE+3; i++)
+          for (tmp_res[j][i+2] = 0, y = -2; y < 4; y++)
+            tmp_res[j][i+2] += mref[ref_frame][max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -2; x < 4; x++)
+            result += tmp_res[j][i+x+2]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+512)/1024));
+        }
+      }
+
+      if ((dx&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[j][i+2+dx/2]+16)/32)))/2;
+      }
+    }
+    else {  /* Diagonal interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          pres_y = dy == 1 ? y_pos+j : y_pos+j+1;
+          pres_y = max(0,min(maxold_y,pres_y));
+          for (result = 0, x = -2; x < 4; x++)
+            result += mref[ref_frame][pres_y][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          pres_x = dx == 1 ? x_pos+i : x_pos+i+1;
+          pres_x = max(0,min(maxold_x,pres_x));
+          for (result = 0, y = -2; y < 4; y++)
+            result += mref[ref_frame][max(0,min(maxold_y,y_pos+j+y))][pres_x]*COEF[y+2];
+          block[i][j] = (block[i][j] + max(0, min(255, (result+16)/32))) / 2;
+        }
+      }
+
     }
   }
 
-  return result;
 }
+
 
 /*!
  ************************************************************************
@@ -616,50 +607,65 @@ byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *im
  ************************************************************************
  */
 
-static int interpolaX(int ref_frame, int pres_x, int pres_y, const int *coefx, int max_x, int max_y)
+static void get_fullpel_block(int ref_frame,int x_pres, int y_pres, int max_x, int max_y, int block[BLOCK_SIZE][BLOCK_SIZE])
 {
-  int x, result = 0;
+  int i, j;
 
-  pres_y = max(0,min(max_y,pres_y));
-  for(x=-3;x<5;x++)
-    result += mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))]*coefx[x+3];
-
-  return max(0, min(255, (result+128)/256));
+  for (j = 0; j < BLOCK_SIZE; j++)
+    for (i = 0; i < BLOCK_SIZE; i++)
+      block[i][j] = mref[ref_frame][max(0,min(y_pres+j,max_y))][max(0,min(x_pres+i,max_x))];
 }
 
-static int interpolaY(int ref_frame, int pres_x, int pres_y, const int *coefy, int max_x, int max_y)
+static void interp_block_X(int ref_frame, int pres_x, int pres_y, const int *coefx, int max_x, int max_y, int block[BLOCK_SIZE][BLOCK_SIZE])
 {
-  int y, result = 0;
+  int i, j, x;
+  int result;
 
-  pres_x = max(0,min(max_x,pres_x));
-  for(y=-3;y<5;y++)
-    result += mref[ref_frame][max(0,min(pres_y+y,max_y))][pres_x]*coefy[y+3];
-
-  return max(0, min(255, (result+128)/256));
-}
-
-static int interpola2D(int ref_frame, int x_pos, int y_pos, const int *coefx, const int *coefy, int max_x, int max_y)
-{
-  int x, y;
-  int pres_y;
-  int result = 0;
-  int tmp[8]; 
-
-  for(y=-3;y<5;y++) {
-
-    pres_y = max(0,min((y_pos>>3)+y,max_y));
-
-    for(tmp[y+3]=0, x=-3;x<5;x++)
-      tmp[y+3] += mref[ref_frame][pres_y][max(0,min((x_pos>>3)+x,max_x))]*coefx[x+3];
+  for (j = 0; j < BLOCK_SIZE; j++) {
+    for (i = 0; i < BLOCK_SIZE; i++) {
+      for(result = 0, x = -3; x < 5; x++)
+        result += mref[ref_frame][max(0,min(max_y,pres_y+j))][max(0,min(pres_x+i+x,max_x))]*coefx[x+3];
+      block[i][j] = max(0, min(255, (result+128)/256));
+    }
   }
-
-  for(y=-3;y<5;y++)
-    result += tmp[y+3]*coefy[y+3];
-
-  return max(0, min(255, (result+32768)/65536));
 }
- 
-byte get_eighthpel_pixel(int ref_frame,int x_pos,int y_pos, struct img_par *img)
+
+static void interp_block_Y(int ref_frame, int pres_x, int pres_y, const int *coefy, int max_x, int max_y, int block[BLOCK_SIZE][BLOCK_SIZE])
+{
+  int i, j, y;
+  int result;
+
+  for (j = 0; j < BLOCK_SIZE; j++) {
+    for (i = 0; i < BLOCK_SIZE; i++) {
+      for(result = 0, y = -3; y < 5; y++)
+        result += mref[ref_frame][max(0,min(pres_y+j+y,max_y))][max(0,min(max_x,pres_x+i))]*coefy[y+3];
+      block[i][j] = max(0, min(255, (result+128)/256));
+    }
+  }
+}
+
+static void interp_block_3_1(int block[BLOCK_SIZE][BLOCK_SIZE],
+                             int block1[BLOCK_SIZE][BLOCK_SIZE],
+                             int block2[BLOCK_SIZE][BLOCK_SIZE])
+{
+  int i, j;
+
+  for (j = 0; j < BLOCK_SIZE; j++)
+    for (i = 0; i < BLOCK_SIZE; i++)
+      block[i][j] = (3*block1[i][j] + block2[i][j] + 2) / 4;
+}
+
+static void average_block(int block[BLOCK_SIZE][BLOCK_SIZE], int block2[BLOCK_SIZE][BLOCK_SIZE])
+{
+  int i, j;
+
+  for (j = 0; j < BLOCK_SIZE; j++)
+    for (i = 0; i < BLOCK_SIZE; i++)
+      block[i][j] = (block[i][j] + block2[i][j]) / 2;
+}
+
+
+void get_eighthpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
 {
   static const int COEF[3][8] = {
     {-3, 12, -37, 229,  71, -21,  6, -1},
@@ -667,14 +673,16 @@ byte get_eighthpel_pixel(int ref_frame,int x_pos,int y_pos, struct img_par *img)
     {-1,  6, -21,  71, 229, -37, 12, -3}
   };
 
+  int block2[BLOCK_SIZE][BLOCK_SIZE];
   int dx=0, x=0;
   int dy=0, y=0;
   int pres_x=0;
   int pres_y=0;
   int max_x=0,max_y=0;
 
-  int tmp[8]; 
-  int result, result1, result2;
+  int tmp[4][4+8]; 
+  int result;
+  int i, j;
 
 
   dx = x_pos&7;
@@ -684,130 +692,161 @@ byte get_eighthpel_pixel(int ref_frame,int x_pos,int y_pos, struct img_par *img)
   max_x = img->width-1;
   max_y = img->height-1;
 
+
   /* choose filter depending on subpel position */
   if(dx==0 && dy==0) {                /* fullpel position */
-    return (mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x,max_x))]);
+    get_fullpel_block(ref_frame, pres_x, pres_y, max_x, max_y, block);
   }
-  else if(dy == 0) {
+  else if(dy == 0) {  /* Only horizontal interpolation */
     if (dx == 1)
-      result1 = mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x,max_x))];
+      get_fullpel_block(ref_frame, pres_x, pres_y, max_x, max_y, block);
     else
-      result1 = interpolaX(ref_frame, pres_x, pres_y, COEF[dx/2-1], max_x, max_y);
+      interp_block_X(ref_frame, pres_x, pres_y, COEF[dx/2-1], max_x, max_y, block);
 
-    if ((dx&1) == 0)
-      result = result1;
-    else {
+    if ((dx&1) != 0) {
       if (dx == 7)
-        result2 = mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x+1,max_x))];
+        get_fullpel_block(ref_frame, pres_x+1, pres_y, max_x, max_y, block2);
       else
-        result2 = interpolaX(ref_frame, pres_x, pres_y, COEF[dx/2], max_x, max_y);
+        interp_block_X(ref_frame, pres_x, pres_y, COEF[dx/2], max_x, max_y, block2);
 
-      result = (result1+result2)/2;
+      average_block(block, block2);
     }
   }
-  else if (dx == 0) {
+  else if (dx == 0) {  /* Only vertical interpolation */
     if (dy == 1)
-      result1 = mref[ref_frame][max(0,min(pres_y,max_y))][max(0,min(pres_x,max_x))];
+      get_fullpel_block(ref_frame, pres_x, pres_y, max_x, max_y, block);
     else
-      result1 = interpolaY(ref_frame, pres_x, pres_y, COEF[dy/2-1], max_x, max_y);
+      interp_block_Y(ref_frame, pres_x, pres_y, COEF[dy/2-1], max_x, max_y, block);
 
-    if ((dy&1) == 0)
-      result = result1;
-    else {
+    if ((dy&1) != 0) {
       if (dy == 7)
-        result2 = mref[ref_frame][max(0,min(pres_y+1,max_y))][max(0,min(pres_x,max_x))];
+        get_fullpel_block(ref_frame, pres_x, pres_y+1, max_x, max_y, block2);
       else
-        result2 = interpolaY(ref_frame, pres_x, pres_y, COEF[dy/2], max_x, max_y);
+        interp_block_Y(ref_frame, pres_x, pres_y, COEF[dy/2], max_x, max_y, block2);
 
-      result = (result1+result2)/2;
+      average_block(block, block2);
     }
   }
-  else if ((dx&1) == 0) {
+  else if ((dx&1) == 0) {  /* Horizontal 1/4-pel and vertical 1/8-pel interpolation */
 
-    for(y=-3;y<5;y++) {
-      pres_y = max(0,min((y_pos>>3)+y,max_y));
-      for(tmp[y+3]=0, x=-3;x<5;x++) {
-        tmp[y+3] += mref[ref_frame][pres_y][max(0,min(pres_x+x,max_x))]*COEF[dx/2-1][x+3];
+    for (j = -3; j < BLOCK_SIZE+5; j++) {
+      for (i = 0; i < BLOCK_SIZE; i++) {
+        for (tmp[i][j+3] = 0, x = -3; x < 5; x++)
+          tmp[i][j+3] += mref[ref_frame][max(0,min(pres_y+j,max_y))][max(0,min(pres_x+i+x,max_x))]*COEF[dx/2-1][x+3];
       }
     }
 
-    if (dy == 1)
-      result1 = tmp[3]*256;
-    else {
-      for(result1=0, y=-3;y<5;y++) {
-        result1 += tmp[y+3]*COEF[dy/2-1][y+3];
-      }
+    if (dy == 1) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+        for (i = 0; i < BLOCK_SIZE; i++)
+          block[i][j] = max(0, min(255, (tmp[i][j+3]+128)/256));
     }
-    result1 = max(0, min(255, (result1+32768)/65536));
-
-    if ((dy&1) == 0)
-      result = result1;
     else {
-      if (dy == 7)
-        result2 = tmp[4]*256;
-      else {
-        for(result2=0, y=-3;y<5;y++) {
-          result2 += tmp[y+3]*COEF[dy/2][y+3];
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -3; y < 5; y++)
+            result += tmp[i][j+y+3]*COEF[dy/2-1][y+3];
+          block[i][j] = max(0, min(255, (result+32768)/65536));
         }
       }
-      result2 = max(0, min(255, (result2+32768)/65536));
+    }
 
-      result = (result1+result2)/2;
+    if ((dy&1) != 0) {
+      if (dy == 7) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block2[i][j] = max(0, min(255, (tmp[i][j+4]+128)/256));
+      }
+      else {
+        for (j = 0; j < BLOCK_SIZE; j++) {
+          for (i = 0; i < BLOCK_SIZE; i++) {
+            for(result = 0, y = -3; y < 5; y++)
+              result += tmp[i][j+y+3]*COEF[dy/2][y+3];
+            block2[i][j] = max(0, min(255, (result+32768)/65536));
+          }
+        }
+      }
+
+      average_block(block, block2);
     }
   }
-  else if ((dy&1) == 0) {
+  else if ((dy&1) == 0) {  /* Vertical 1/4-pel and horizontal 1/8-pel interpolation */
 
-    for(x=-3;x<5;x++) {
-      pres_x = max(0,min((x_pos>>3)+x,max_x));
-      for(tmp[x+3]=0, y=-3;y<5;y++) {
-        tmp[x+3] += mref[ref_frame][max(0,min(pres_y+y,max_y))][pres_x]*COEF[dy/2-1][y+3];
+    for (j = 0; j < BLOCK_SIZE; j++) {
+      for (i = -3; i < BLOCK_SIZE+5; i++) {
+        for (tmp[j][i+3] = 0, y = -3; y < 5; y++)
+          tmp[j][i+3] += mref[ref_frame][max(0,min(pres_y+j+y,max_y))][max(0,min(pres_x+i,max_x))]*COEF[dy/2-1][y+3];
       }
     }
 
-    if (dx == 1)
-      result1 = tmp[3]*256;
+    if (dx == 1) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+        for (i = 0; i < BLOCK_SIZE; i++)
+          block[i][j] = max(0, min(255, (tmp[j][i+3]+128)/256));
+    }
     else {
-      for(result1=0, x=-3;x<5;x++) {
-        result1 += tmp[x+3]*COEF[dx/2-1][x+3];
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -3; x < 5; x++)
+            result += tmp[j][i+x+3]*COEF[dx/2-1][x+3];
+          block[i][j] = max(0, min(255, (result+32768)/65536));
+        }
       }
     }
-    result1 = max(0, min(255, (result1+32768)/65536));
 
-    if (dx == 7)
-      result2 = tmp[4]*256;
+    if (dx == 7) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+        for (i = 0; i < BLOCK_SIZE; i++)
+          block2[i][j] = max(0, min(255, (tmp[j][i+4]+128)/256));
+    }
     else {
-      for(result2=0, x=-3;x<5;x++) {
-        result2 += tmp[x+3]*COEF[dx/2][x+3];
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -3; x < 5; x++)
+            result += tmp[j][i+x+3]*COEF[dx/2][x+3];
+          block2[i][j] = max(0, min(255, (result+32768)/65536));
+        }
       }
     }
-    result2 = max(0, min(255, (result2+32768)/65536));
 
-    result = (result1+result2)/2;
+    average_block(block, block2);
   }
-  else if ((dx == 1 || dx == 7) && (dy == 1 || dy == 7)) {
-    result1 = interpolaX(ref_frame, pres_x, (y_pos+1)>>3, COEF[(dx+1)/4], max_x, max_y);
-    result2 = interpolaY(ref_frame, (x_pos+1)>>3, pres_y, COEF[(dy+1)/4], max_x, max_y);
-    result = (result1+result2)/2;
+  else if ((dx == 1 || dx == 7) && (dy == 1 || dy == 7)) { /* Diagonal averaging */
+    interp_block_X(ref_frame, pres_x, (y_pos+1)>>3, COEF[(dx+1)/4], max_x, max_y, block);
+    interp_block_Y(ref_frame, (x_pos+1)>>3, pres_y, COEF[(dy+1)/4], max_x, max_y, block2);
+    average_block(block, block2);
   }
-  else if (dx == 1 || dx == 7 || dy == 1 || dy == 7) {
+  else if (dx == 1 || dx == 7 || dy == 1 || dy == 7) { /* Diagonal linear interpolation */
 
-    result1 = interpolaX(ref_frame, pres_x, (y_pos+3)>>3, COEF[1], max_x, max_y);
-    result2 = interpolaY(ref_frame, (x_pos+3)>>3, pres_y, COEF[1], max_x, max_y);
+    interp_block_X(ref_frame, pres_x, (y_pos+3)>>3, COEF[1], max_x, max_y, block);
+    interp_block_Y(ref_frame, (x_pos+3)>>3, pres_y, COEF[1], max_x, max_y, block2);
 
     if (dx == 1 || dx == 7)
-      result = (result1 + 3*result2 + 2)/4;
+      interp_block_3_1(block, block2, block);
     else
-      result = (3*result1 + result2 + 2)/4;
+      interp_block_3_1(block, block, block2);
   }
-  else {
-    result1 = interpola2D(ref_frame, x_pos, y_pos, COEF[1], COEF[1], max_x, max_y);
-    result2 = mref[ref_frame][max(0,min(max_y,(y_pos+3)>>3))][max(0,min(max_x,(x_pos+3)>>3))];
-    result = (3*result1 + result2 + 2)/4;
-  }
+  else { /* Diagonal interpolation using a full pixel and a center 1/2-pixel */
 
-  return (byte)result;
+    for (j = -3; j < BLOCK_SIZE+5; j++) {
+      for (i = 0; i < BLOCK_SIZE; i++) {
+        for (tmp[i][j+3] = 0, x = -3; x < 5; x++)
+          tmp[i][j+3] += mref[ref_frame][max(0,min(pres_y+j,max_y))][max(0,min(pres_x+i+x,max_x))]*COEF[1][x+3];
+      }
+    }
+
+    for (j = 0; j < BLOCK_SIZE; j++) {
+      for (i = 0; i < BLOCK_SIZE; i++) {
+        for (result = 0, y = -3; y < 5; y++)
+          result += tmp[i][j+y+3]*COEF[1][y+3];
+        block[i][j] = max(0, min(255, (result+32768)/65536));
+      }
+    }
+
+    get_fullpel_block(ref_frame, (x_pos+3)>>3, (y_pos+3)>>3, max_x, max_y, block2);
+    interp_block_3_1(block, block, block2);
+  }
 }
-
 
 /*!
  ************************************************************************
@@ -1111,7 +1150,6 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 
   Boolean end_of_slice = FALSE;
   int read_flag;
-  Slice *currSlice = img->currentSlice;
 
   img->cod_counter=-1;
 

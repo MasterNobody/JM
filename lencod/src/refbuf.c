@@ -124,6 +124,7 @@ pel_t UMVPelY_11 (pel_t *Pic, int y, int x)
  ************************************************************************
  */
 static pel_t line[16];
+#if 0
 pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
 {
   int i;
@@ -132,6 +133,40 @@ pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
     line[i] = UMVPelY_11 (Pic, y, x+i);
   return line;
 }
+#else
+pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
+{
+  int i, maxx;
+  pel_t *Picy;
+
+  Picy = &Pic [max(0,min(img->height-1,y)) * img->width];
+
+  if (x < 0) {                    // Left edge ?
+
+    maxx = min(0,x+16);
+    for (i = x; i < maxx; i++)
+      line[i-x] = Picy [0];       // Replicate left edge pixel
+
+    maxx = x+16;
+    for (i = 0; i < maxx; i++)    // Copy non-edge pixels
+      line[i-x] = Picy [i];
+  }
+  else if (x > img->width-16)  {  // Right edge ?
+
+    maxx = img->width;
+    for (i = x; i < maxx; i++)
+      line[i-x] = Picy [i];       // Copy non-edge pixels
+
+    maxx = x+16;
+    for (i = max(img->width,x); i < maxx; i++)
+      line[i-x] = Picy [img->width-1];  // Replicate right edge pixel
+  }
+  else                            // No edge
+    return &Picy [x];
+
+  return line;
+}
+#endif
 
 
 /*!
@@ -171,23 +206,23 @@ pel_t UMVPelY_14 (pel_t **Pic, int y, int x)
     if (y < 0)
       return Pic [y&3][x&3];
     if (y > height4)
-      return Pic [height4+y&3][x&3];
+      return Pic [height4+(y&3)][x&3];
     return Pic [y][x&3];
   }
 
   if (x > width4)
   {
     if (y < 0)
-      return Pic [y&3][width4+x&3];
+      return Pic [y&3][width4+(x&3)];
     if (y > height4)
-      return Pic [height4+y&3][width4+x&3];
-    return Pic [y][width4+x&3];
+      return Pic [height4+(y&3)][width4+(x&3)];
+    return Pic [y][width4+(x&3)];
   }
 
   if (y < 0)    // note: corner pixels were already processed
     return Pic [y&3][x];
   if (y > height4)
-    return Pic [height4+y&3][x];
+    return Pic [height4+(y&3)][x];
 
   return Pic [y][x];
 }
@@ -204,34 +239,34 @@ pel_t FastPelY_14 (pel_t **Pic, int y, int x)
  *    Reference buffer, 1/8th pel
  ************************************************************************
  */
-pel_t	UMVPelY_18 (pel_t **Pic, int y, int x)
+pel_t UMVPelY_18 (pel_t **Pic, int y, int x)
 {
-	byte out;
-	int yfloor, xfloor, xq, yq;
+  byte out;
+  int yfloor, xfloor, xq, yq;
 
   /* Maximum values (padding included) */
   int maxx8 = (img->width +2*IMG_PAD_SIZE-2)*8;
-	int maxy8 = (img->height+2*IMG_PAD_SIZE-2)*8;
+  int maxy8 = (img->height+2*IMG_PAD_SIZE-2)*8;
 
   /* Compensate for frame padding */
   x = x + IMG_PAD_SIZE*8;
   y = y + IMG_PAD_SIZE*8;
 
-	if (x < 0)
+  if (x < 0)
     x = x&7;
   else if (x > maxx8)
     x = maxx8 + (x&7);
 
-	if (y < 0)
+  if (y < 0)
     y = y&7;
   else if (y > maxy8)
     y = maxy8 + (y&7);
 
-	xfloor = x>>1;
-	yfloor = y>>1;
+  xfloor = x>>1;
+  yfloor = y>>1;
 
-	if( (x&1) && (y&1) )
-	{
+  if( (x&1) && (y&1) )
+  {
     xq = x&7; 
     yq = y&7;
 
@@ -271,35 +306,35 @@ pel_t	UMVPelY_18 (pel_t **Pic, int y, int x)
         out=( Pic[yfloor][xfloor] + Pic[yfloor+1][xfloor+1] ) / 2;
       }
     }
-	}
-	else if (x&1)
-	{
-		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor  ][xfloor+1] ) / 2;
-	}
-	else if (y&1)
-	{
-		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor+1][xfloor  ] ) / 2;
-	}
-	else
-		out=  Pic[yfloor  ][xfloor  ];
+  }
+  else if (x&1)
+  {
+    out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor  ][xfloor+1] ) / 2;
+  }
+  else if (y&1)
+  {
+    out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor+1][xfloor  ] ) / 2;
+  }
+  else
+    out=  Pic[yfloor  ][xfloor  ];
 
-	return(out);
+  return(out);
 }
 
 pel_t FastPelY_18 (pel_t **Pic, int y, int x)
-{	
-	byte out;
-	int yfloor, xfloor, xq, yq;
+{
+  byte out;
+  int yfloor, xfloor, xq, yq;
 
   /* Compensate for frame padding */
   x = x + IMG_PAD_SIZE*8;
   y = y + IMG_PAD_SIZE*8;
 
-	xfloor = x>>1;
-	yfloor = y>>1;
+  xfloor = x>>1;
+  yfloor = y>>1;
 
-	if( (x&1) && (y&1) )
-	{
+  if( (x&1) && (y&1) )
+  {
     xq = x&7; 
     yq = y&7;
 
@@ -339,19 +374,19 @@ pel_t FastPelY_18 (pel_t **Pic, int y, int x)
         out=( Pic[yfloor][xfloor] + Pic[yfloor+1][xfloor+1] ) / 2;
       }
     }
-	}
-	else if (x&1)
-	{
-		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor  ][xfloor+1] ) / 2;
-	}
-	else if (y&1)
-	{
-		out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor+1][xfloor  ] ) / 2;
-	}
-	else
-		out=  Pic[yfloor  ][xfloor  ];
+  }
+  else if (x&1)
+  {
+    out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor  ][xfloor+1] ) / 2;
+  }
+  else if (y&1)
+  {
+    out=( Pic[yfloor  ][xfloor  ] + Pic[yfloor+1][xfloor  ] ) / 2;
+  }
+  else
+    out=  Pic[yfloor  ][xfloor  ];
 
-	return(out);
+  return(out);
 }
 
 

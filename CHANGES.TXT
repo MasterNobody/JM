@@ -1,3 +1,20 @@
+Changes for Version 9.4 to Version 9.0
+--------------------------------------
+New Features
+* Block based interpolation at the decoder (AH)
+* vbv multiple leaky buffer compliance feature (SR)
+* 16x16 intra prediction clipping (GC)
+
+Bug Fixes
+* CABAC dquant mapping (GB)
+* Interpolation filter fix (AH)
+* Chroma mismatch fix (MG)
+
+Cleanups
+* move leaky buffer stuff into own files (KS)
+* make leaky buffer output look less ugly (KS)
+* remove some gcc -Wall warnings (KS)
+
 Changes for Version 9.0 to Version 8.7
 --------------------------------------
 New Features
@@ -203,18 +220,20 @@ Changes for Version 8.0 relative to Version 6.1
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
 KS      Karsten Sühring         suehring@hhi.de
-
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
+GC	Guy Cote                guy@videolocus.com
 GB      Gabi Blättermann        blaetter@hhi.de
 GS      Gary Sullivan		garysull@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
+MG      Michael Gallant         mgallant@videolocus.com
 PL      Peter List              Peter.List@t-systems.de
 RK	Ragip Kurceren 		ragip.kurceren@nokia.com
 RS      Rickard Sjöberg         Rickard.Sjoberg@era.ericsson.se
+SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 TO      Tobias Oelbaum          drehvial@gmx.net
 TSt	Thomas Stockhammer	stockhammer@lnt.ei.tum.de

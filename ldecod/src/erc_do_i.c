@@ -333,10 +333,9 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
 static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int32 picSizeX, int *condition )
 {
   int row, column, srcCounter = 0,  thr = ERC_BLOCK_CORRUPTED,
-    lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0, 
-    firstColumn = 0, areaHeight = 0, i = 0, smoothColumn = 0;
+      lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0, 
+      areaHeight = 0, i = 0, smoothColumn = 0;
   int predBlocks[8], step = 1;
-  byte *yCurrBlock = NULL;
   
   /* in the Y component do the concealment MB-wise (not block-wise):
   this is useful if only whole MBs can be damaged or lost */

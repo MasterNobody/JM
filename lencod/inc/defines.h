@@ -59,6 +59,7 @@
 #define _ADAPT_LAST_GROUP_
 #define _CHANGE_QP_
 #define _ADDITIONAL_REFERENCE_FRAME_
+#define _LEAKYBUCKET_
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 

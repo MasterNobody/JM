@@ -681,6 +681,8 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
  */
 int decode_one_macroblock_Bframe(struct img_par *img)
 {
+  int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
+  int tmp_blockbw[BLOCK_SIZE][BLOCK_SIZE];
   int js[2][2];
   int i,j,ii,jj,i1,j1,j4,i4;
   int js0,js1,js2,js3,jf,ifx;
@@ -766,18 +768,14 @@ int decode_one_macroblock_Bframe(struct img_par *img)
       // //////////////////////////////////
       else if(img->imod==B_Forward)
       {
+        vec1_x = i4*4*mv_mul + img->fw_mv[i4+BLOCK_SIZE][j4][0];
+        vec1_y = j4*4*mv_mul + img->fw_mv[i4+BLOCK_SIZE][j4][1];
+
+        get_block(ref_frame_fw,vec1_x,vec1_y,img,tmp_block);
+
         for(ii=0;ii<BLOCK_SIZE;ii++)
-        {
-          vec2_x=(i4*4+ii)*mv_mul;
-          vec1_x=vec2_x+img->fw_mv[i4+BLOCK_SIZE][j4][0];
-          for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          {
-            vec2_y=(j4*4+jj)*mv_mul;
-            vec1_y=vec2_y+img->fw_mv[i4+BLOCK_SIZE][j4][1];
-            // direct interpolation:
-            img->mpr[ii+ioff][jj+joff]=get_pixel(ref_frame_fw,vec1_x,vec1_y,img);
-          }
-        }
+          for(jj=0;jj<BLOCK_SIZE;jj++)
+            img->mpr[ii+ioff][jj+joff] = tmp_block[ii][jj];
       }
 
       // //////////////////////////////////
@@ -785,18 +783,14 @@ int decode_one_macroblock_Bframe(struct img_par *img)
       // //////////////////////////////////
       else if(img->imod==B_Backward)
       {
+        vec1_x = i4*4*mv_mul + img->bw_mv[i4+BLOCK_SIZE][j4][0];
+        vec1_y = j4*4*mv_mul + img->bw_mv[i4+BLOCK_SIZE][j4][1];
+
+        get_block(ref_frame_bw,vec1_x,vec1_y,img,tmp_blockbw);
+
         for(ii=0;ii<BLOCK_SIZE;ii++)
-        {
-          vec2_x=(i4*4+ii)*mv_mul;
-          vec1_x=vec2_x+img->bw_mv[i4+BLOCK_SIZE][j4][0];
-          for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          {
-            vec2_y=(j4*4+jj)*mv_mul;
-            vec1_y=vec2_y+img->bw_mv[i4+BLOCK_SIZE][j4][1];
-            // direct interpolation:
-            img->mpr[ii+ioff][jj+joff]=get_pixel(ref_frame_bw,vec1_x,vec1_y,img);
-          }
-        }
+          for(jj=0;jj<BLOCK_SIZE;jj++)
+            img->mpr[ii+ioff][jj+joff] = tmp_blockbw[ii][jj];
       }
 
       // //////////////////////////////////
@@ -804,21 +798,19 @@ int decode_one_macroblock_Bframe(struct img_par *img)
       // //////////////////////////////////
       else if(img->imod==B_Bidirect)
       {
+        vec2_x=i4*4*mv_mul;
+        vec1_x=vec2_x+img->fw_mv[i4+BLOCK_SIZE][j4][0];
+        vec1_xx=vec2_x+img->bw_mv[i4+BLOCK_SIZE][j4][0];
+        vec2_y=j4*4*mv_mul;
+        vec1_y=vec2_y+img->fw_mv[i4+BLOCK_SIZE][j4][1];
+        vec1_yy=vec2_y+img->bw_mv[i4+BLOCK_SIZE][j4][1];
+
+        get_block(ref_frame_fw,vec1_x,vec1_y,img,tmp_block);
+        get_block(ref_frame_bw,vec1_xx,vec1_yy,img,tmp_blockbw);
+
         for(ii=0;ii<BLOCK_SIZE;ii++)
-        {
-          vec2_x=(i4*4+ii)*mv_mul;
-          vec1_x=vec2_x+img->fw_mv[i4+BLOCK_SIZE][j4][0];
-          vec1_xx=vec2_x+img->bw_mv[i4+BLOCK_SIZE][j4][0];
-          for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          {
-            vec2_y=(j4*4+jj)*mv_mul;
-            vec1_y=vec2_y+img->fw_mv[i4+BLOCK_SIZE][j4][1];
-            vec1_yy=vec2_y+img->bw_mv[i4+BLOCK_SIZE][j4][1];
-            // direct interpolation:
-            img->mpr[ii+ioff][jj+joff]=(int)((get_pixel(ref_frame_fw,vec1_x,vec1_y,img)+
-                                      get_pixel(ref_frame_bw,vec1_xx,vec1_yy,img))/2.+.5);
-          }
-        }
+          for(jj=0;jj<BLOCK_SIZE;jj++)
+            img->mpr[ii+ioff][jj+joff] = (tmp_block[ii][jj]+tmp_blockbw[ii][jj]+1)/2;
       }
 
       // //////////////////////////////////
@@ -853,24 +845,19 @@ int decode_one_macroblock_Bframe(struct img_par *img)
           ref_frame=(img->number - 1 - refFrArr[j4][i4] + img->buf_cycle)%img->buf_cycle;
         }
 
+        vec2_x=i4*4*mv_mul;
+        vec1_x=vec2_x+img->dfMV[i4+BLOCK_SIZE][j4][0];
+        vec1_xx=vec2_x+img->dbMV[i4+BLOCK_SIZE][j4][0];
+        vec2_y=j4*4*mv_mul;
+        vec1_y=vec2_y+img->dfMV[i4+BLOCK_SIZE][j4][1];
+        vec1_yy=vec2_y+img->dbMV[i4+BLOCK_SIZE][j4][1];
+
+        get_block(ref_frame,vec1_x,vec1_y,img,tmp_block);
+        get_block(ref_frame_bw,vec1_xx,vec1_yy,img,tmp_blockbw);
+
         for(ii=0;ii<BLOCK_SIZE;ii++)
-        {
-          vec2_x=(i4*4+ii)*mv_mul;
-
-          vec1_x=vec2_x+img->dfMV[i4+BLOCK_SIZE][j4][0];
-          vec1_xx=vec2_x+img->dbMV[i4+BLOCK_SIZE][j4][0];
-          for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          {
-            vec2_y=(j4*4+jj)*mv_mul;
-
-            vec1_y=vec2_y+img->dfMV[i4+BLOCK_SIZE][j4][1];
-            vec1_yy=vec2_y+img->dbMV[i4+BLOCK_SIZE][j4][1];
-            // LG :  direct residual coding
-            // Wedi: direct interpolation
-            img->mpr[ii+ioff][jj+joff]= (int)((get_pixel(ref_frame,vec1_x,vec1_y,img)
-                                             +get_pixel(ref_frame_bw,vec1_xx,vec1_yy,img))/2.+.5);
-          }
-        }
+          for(jj=0;jj<BLOCK_SIZE;jj++)
+            img->mpr[ii+ioff][jj+joff] = (tmp_block[ii][jj]+tmp_blockbw[ii][jj]+1)/2;
       }
 
       itrans(img,ioff,joff,i,j);      // use DCT transform and make 4x4 block m7 from prediction block mpr

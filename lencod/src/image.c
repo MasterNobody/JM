@@ -89,6 +89,10 @@ static void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
  */
 int encode_one_frame()
 {
+#ifdef _LEAKYBUCKET_
+  extern long Bit_Buffer[10000];
+  extern unsigned long total_frame_buffer;
+#endif
   Boolean end_of_frame = FALSE;
   SyntaxElement sym;
 
@@ -166,6 +170,11 @@ int encode_one_frame()
 
   // Write reconstructed images
   write_reconstructed_image();
+#ifdef _LEAKYBUCKET_
+  // Store bits used for this frame and increment counter of no. of coded frames
+  Bit_Buffer[total_frame_buffer] = stat->bit_ctr - stat->bit_ctr_n;
+  total_frame_buffer++;
+#endif
   if(img->number == 0)
   {
     printf("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
@@ -676,7 +685,7 @@ void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
       PutPel_14 (out4Y, j-IMG_PAD_SIZE*4, i-IMG_PAD_SIZE*4+1, (pel_t) (max(0,min(255,(int)(FastPelY_14(out4Y, j-IMG_PAD_SIZE*4, i-IMG_PAD_SIZE*4)+FastPelY_14(out4Y, j-IMG_PAD_SIZE*4, min(ie2+2,i+2)-IMG_PAD_SIZE*4))/2))));
     }
   for (i=0;i<ie2+4;i++)
-	{
+  {
     for (j=0;j<je2+3;j+=2)
     {
       if( i%2 == 0 ) {
@@ -708,13 +717,13 @@ void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
     }
   }
 
-	/*  Chroma: */
-	for (j=0; j < img->height_cr; j++) {
+  /*  Chroma: */
+  for (j=0; j < img->height_cr; j++) {
     memcpy(outU[j],imgUV[0][j],img->width_cr); // just copy 1/1 pix, interpolate "online" 
     memcpy(outV[j],imgUV[1][j],img->width_cr);
   }
 
-	// Generate 1/1th pel representation (used for integer pel MV search)
+  // Generate 1/1th pel representation (used for integer pel MV search)
   GenerateFullPelRepresentation (out4Y, ref11, img->width, img->height);
 
 }
@@ -835,25 +844,25 @@ void oneeighthpix(int prior_B_frame)
         h3[6]* img4Y_tmp[min(maxy,y+3)][x4]+ 
         h3[7]* img4Y_tmp[min(maxy,y+4)][x4]+ 256*256/2 ) / (256*256);
       
-		  y4  = (y-IMG_PAD_SIZE)*4;
+      y4  = (y-IMG_PAD_SIZE)*4;
       x4p = x4-IMG_PAD_SIZE*4;
- 		  
-		  if(prior_B_frame)
-		  {
-			  PutPel_14 (mref_P, y4,   x4p, (pel_t) max(0,min(255,i0)));   
-			  PutPel_14 (mref_P, y4+1, x4p, (pel_t) max(0,min(255,i1)));   
-			  PutPel_14 (mref_P, y4+2, x4p, (pel_t) max(0,min(255,i2)));   
-			  PutPel_14 (mref_P, y4+3, x4p, (pel_t) max(0,min(255,i3)));   
-		  }
-		  else
-		  {
-			  PutPel_14 (mref[img->frame_cycle], y4,   x4p, (pel_t) max(0,min(255,i0)));   
-			  PutPel_14 (mref[img->frame_cycle], y4+1, x4p, (pel_t) max(0,min(255,i1)));   
-			  PutPel_14 (mref[img->frame_cycle], y4+2, x4p, (pel_t) max(0,min(255,i2)));
-			  PutPel_14 (mref[img->frame_cycle], y4+3, x4p, (pel_t) max(0,min(255,i3)));   
-		  }
+  
+      if(prior_B_frame)
+      {
+        PutPel_14 (mref_P, y4,   x4p, (pel_t) max(0,min(255,i0)));   
+        PutPel_14 (mref_P, y4+1, x4p, (pel_t) max(0,min(255,i1)));   
+        PutPel_14 (mref_P, y4+2, x4p, (pel_t) max(0,min(255,i2)));   
+        PutPel_14 (mref_P, y4+3, x4p, (pel_t) max(0,min(255,i3)));   
+      }
+      else
+      {
+        PutPel_14 (mref[img->frame_cycle], y4,   x4p, (pel_t) max(0,min(255,i0)));   
+        PutPel_14 (mref[img->frame_cycle], y4+1, x4p, (pel_t) max(0,min(255,i1)));   
+        PutPel_14 (mref[img->frame_cycle], y4+2, x4p, (pel_t) max(0,min(255,i2)));
+        PutPel_14 (mref[img->frame_cycle], y4+3, x4p, (pel_t) max(0,min(255,i3)));   
+      }
 
-	  }
+    }
   }
 
   if(!prior_B_frame)

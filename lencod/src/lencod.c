@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 9.0
+ *     TML 9.4
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -78,9 +78,10 @@
 #endif
 #include "global.h"
 #include "configfile.h"
+#include "leaky_bucket.h"
 
 #define TML     "9"
-#define VERSION "9.00"
+#define VERSION "9.40"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -159,9 +160,13 @@ int main(int argc,char **argv)
       {
         img->type = INTER_IMG;        // P-frame
         if (input->sp_periodicity)
+        {
           if ((img->number % input->sp_periodicity) ==0)
-              img->types=SP_IMG;
+          {
+            img->types=SP_IMG;
+          }
           else img->types=INTER_IMG;
+        }
       }
     }
     else
@@ -174,10 +179,12 @@ int main(int argc,char **argv)
       {
         img->type = INTER_IMG;        // P-frame
         if (input->sp_periodicity)
+        {
           if ((img->number % input->sp_periodicity) ==0)
               img->types=SP_IMG;
           else img->types=INTER_IMG;
-       }
+        }
+      }
     }
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -221,6 +228,10 @@ int main(int argc,char **argv)
   // free structure for rd-opt. mode decision
   clear_rdopt ();
 
+#ifdef _LEAKYBUCKET_
+  calc_buffer();
+#endif
+
   // report everything
   report();
 
@@ -234,7 +245,6 @@ int main(int argc,char **argv)
 
   return 0;
 }
-
 
 /*!
  ***********************************************************************
@@ -950,7 +960,7 @@ void report()
   fprintf(p_log,"| %1.5s |",string );
 
   strftime (string, sizeof string, "%H:%M:%S", l_time);
-  fprintf(p_log,"| %1.5s |",string );
+  fprintf(p_log," %1.5s |",string );
 #endif
 
   for (i=0;i<20;i++)
@@ -1064,7 +1074,7 @@ void report()
  */
 void init()
 {
-  int k=0, i, ii, ind, j, i2;
+  int i, ii, ind, j, i2;
 
   InitMotionVectorSearchModule();
 
@@ -1183,7 +1193,7 @@ int get_mem4global_buffers()
     no_mem_exit("get_mem4global_buffers: mcef");
   for(j=0;j<img->buf_cycle+1;j++)
   {
-    memory_size += get_mem3D(&(mcef[j]), 2, img->width_cr*2, img->height_cr*2);
+    memory_size += get_mem3D(&(mcef[j]), 2, img->height_cr, img->width_cr);
   }
 
   InitRefbuf (Refbuf11, Refbuf11_P);
@@ -1194,7 +1204,7 @@ int get_mem4global_buffers()
   //byte mref[1152][1408];  */   /* 1/4 pix luma
   //byte mcef[2][352][288]; */   /* pix chroma
   memory_size += get_mem2D(&mref_P, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-  memory_size += get_mem3D(&mcef_P, 2, img->width_cr*2, img->height_cr*2);
+  memory_size += get_mem3D(&mcef_P, 2, img->height_cr, img->width_cr);
 
   if(input->successive_Bframe!=0)
   {
@@ -1602,3 +1612,4 @@ void no_mem_exit(char *where)
    snprintf(errortext, ET_SIZE, "Could not allocate memory: %s",where);
    error (errortext, 100);
 }
+

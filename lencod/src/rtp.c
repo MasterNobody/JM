@@ -423,7 +423,7 @@ int RTPSliceHeader()
   switch (img->type)
   {
     case INTER_IMG:
-	    if (img->types==SP_IMG)
+      if (img->types==SP_IMG)
         RTPSliceType = 2;
       else
         RTPSliceType = 0;

@@ -1193,7 +1193,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
  */
 void decode_one_CopyMB(struct img_par *img,struct inp_par *inp)
 {
-  int i, j, ii, jj, uv, i3=0, j3=0;
+  int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
+  int i, j, ii, jj, uv;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int ref_frame = currMB->ref_frame;
   int mv_mul;
@@ -1204,13 +1205,15 @@ void decode_one_CopyMB(struct img_par *img,struct inp_par *inp)
     mv_mul=4;
 
   // get luma pixel *************************************************
-  for(j=0;j<MB_BLOCK_SIZE;j++)
+  for(j=0;j<MB_BLOCK_SIZE;j+=BLOCK_SIZE)
   {
-    jj=img->pix_y+j;
-    for(i=0;i<MB_BLOCK_SIZE;i++)
+    for(i=0;i<MB_BLOCK_SIZE;i+=BLOCK_SIZE)
     {
-      ii=img->pix_x+i;
-        imgY[jj][ii]=get_pixel(ref_frame,ii*mv_mul,jj*mv_mul,img);
+      get_block(ref_frame,(img->pix_x+i)*mv_mul,(img->pix_y+j)*mv_mul,img,tmp_block);
+
+      for(ii=0;ii<BLOCK_SIZE;ii++)
+        for(jj=0;jj<BLOCK_SIZE;jj++)
+          imgY[img->pix_y+j+jj][img->pix_x+i+ii]=tmp_block[ii][jj];
     }
   }
   if (img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
@@ -1284,6 +1287,7 @@ void decode_one_CopyMB(struct img_par *img,struct inp_par *inp)
  */
 int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 {
+  int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
   int js[2][2];
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
   int js0=0,js1=0,js2=0,js3=0,jf=0;
@@ -1337,18 +1341,14 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       // get motion prediction for INTER_MB
       else if(currMB->mb_imode == INTRA_MB_INTER)
       {
+        vec1_x = i4*4*mv_mul + img->mv[i4+BLOCK_SIZE][j4][0];
+        vec1_y = j4*4*mv_mul + img->mv[i4+4][j4][1];
+
+        get_block(ref_frame,vec1_x,vec1_y,img,tmp_block);
 
         for(ii=0;ii<BLOCK_SIZE;ii++)
-        {
-          vec2_x=(i4*4+ii)*mv_mul;
-          vec1_x=vec2_x+img->mv[i4+BLOCK_SIZE][j4][0];
-          for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          {
-            vec2_y=(j4*4+jj)*mv_mul;
-            vec1_y=vec2_y+img->mv[i4+4][j4][1];
-            img->mpr[ii+ioff][jj+joff]=get_pixel(ref_frame,vec1_x,vec1_y,img);
-          }
-        }
+          for(jj=0;jj<BLOCK_SIZE;jj++)
+            img->mpr[ii+ioff][jj+joff] = tmp_block[ii][jj];
       }
 
       if ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (currMB->mb_imode == INTRA_MB_INTER))

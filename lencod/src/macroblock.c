@@ -1071,7 +1071,6 @@ void write_one_macroblock()
   Slice *currSlice = img->currentSlice;
   DataPartition *dataPart;
   int *partMap = assignSE2partition[input->partition_mode];
-  int save_mb_position = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
 
   // Store imod for further use
   currMB->mb_imode = img->imod;
@@ -1736,12 +1735,10 @@ writeMB_bits_for_DC_chroma (int filtering)
   DataPartition *dataPart;
   int           *partMap   = assignSE2partition[input->partition_mode];
 
-  int m2  = img->mb_x << 1;
-  int jg2 = img->mb_y << 1;
   int cbp = img->mb_data [img->current_mb_nr].cbp;
 
   int level, run;
-  int i=0, j=0, k, uv;
+  int k, uv;
 
 
   if (cbp > 15)  // check if any chroma bits in coded block pattern is set
@@ -1804,8 +1801,6 @@ writeMB_bits_for_AC_chroma (int  filtering)
   DataPartition *dataPart;
   int           *partMap   = assignSE2partition[input->partition_mode];
 
-  int m2  = img->mb_x << 1;
-  int jg2 = img->mb_y << 1;
   int cbp = img->mb_data [img->current_mb_nr].cbp;
 
   int level, run;

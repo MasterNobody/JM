@@ -320,12 +320,11 @@ static int concealByTrial(frame *recfr, byte *predMB,
                           int32 picSizeX, int32 picSizeY, int *yCondition)
 {
   int predMBNum, numMBPerLine,
-    compSplit1, compSplit2, compLeft = 1, comp = 0, compPred, order = 1,
-    fInterNeighborExists, numIntraNeighbours,
-    fZeroMotionChecked, predSplitted = 0,
-    threshold = ERC_BLOCK_OK,
-    minDist, currDist, i, k, bestDir;
-  int shift = (erc_img->mv_res == 1) ? 3:2;   //erc_mvres 1: 1/8, 0: 1/4 pixel motion accuracy
+      compSplit1, compSplit2, compLeft = 1, comp = 0, compPred, order = 1,
+      fInterNeighborExists, numIntraNeighbours,
+      fZeroMotionChecked, predSplitted = 0,
+      threshold = ERC_BLOCK_OK,
+      minDist, currDist, i, k, bestDir;
   int32 regionSize;
   objectBuffer_t *currRegion;
   int32 mvBest[3] , mvPred[3], *mvptr;
@@ -530,8 +529,9 @@ static int concealByTrial(frame *recfr, byte *predMB,
  */
 static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byte *predMB)
 {
+  int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
-  int js0=0,js1=0,js2=0,js3=0,jf=0;
+  int jf=0;
   int uv;
   int vec1_x=0,vec1_y=0,vec2_x=0,vec2_y=0;
   int ioff,joff;
@@ -577,17 +577,15 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
     {
       ioff=i*4;
       i4=img->block_x+i;
+
+      vec1_x = i4*4*mv_mul + mv[0];
+      vec1_y = j4*4*mv_mul + mv[1];
+
+      get_block(ref_frame,vec1_x,vec1_y,img,tmp_block);
+
       for(ii=0;ii<BLOCK_SIZE;ii++)
-      {
-        vec2_x=(i4*4+ii)*mv_mul;
-        vec1_x=vec2_x+mv[0];
         for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-        {
-          vec2_y=(j4*4+jj)*mv_mul;
-          vec1_y=vec2_y+mv[1];
-          img->mpr[ii+ioff][jj+joff]=get_pixel(ref_frame,vec1_x,vec1_y,img);
-        }
-      }
+          img->mpr[ii+ioff][jj+joff]=tmp_block[ii][jj];
     }
   }
 

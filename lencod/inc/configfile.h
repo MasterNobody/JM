@@ -115,6 +115,11 @@ Mapping Map[] = {
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
     {"AdditionalReferenceFrame", &configinput.add_ref_frame,           0},
 #endif
+#ifdef _LEAKYBUCKET_
+    {"NumberofLeakyBuckets",     &configinput.NumberLeakyBuckets,      0},
+    {"LeakyBucketRateFile",     &configinput.LeakyBucketRateFile,     1},
+    {"LeakyBucketParamFile",    &configinput.LeakyBucketParamFile,    1},
+#endif
     {NULL,                       NULL,                                -1}
 };
 

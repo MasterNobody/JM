@@ -273,7 +273,6 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
   int dummy;
   byte *buf = currStream->streamBuffer;
 
-  int code_word_ctr=0;
   int len, info;
   int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
 

@@ -852,6 +852,7 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
     fflush(p_trace);
 #endif
 }
+
 /*!
  ************************************************************************
  * \brief
@@ -864,12 +865,12 @@ void readDquantFromBuffer_CABAC(SyntaxElement *se,
                                 struct img_par *img,
                                 DecodingEnvironmentPtr dep_dp)
 {
-
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   int act_ctx;
   int act_sym;
+  int dquant;
 
   if (currMB->mb_available[1][0] == NULL)
     act_ctx = 0;
@@ -877,20 +878,22 @@ void readDquantFromBuffer_CABAC(SyntaxElement *se,
     act_ctx = ( ((currMB->mb_available[1][0])->delta_quant != 0) ? 1 : 0);
 
   act_sym = biari_decode_symbol(dep_dp,ctx->delta_qp_contexts + act_ctx );
-
   if (act_sym != 0)
   {
-    act_ctx = 1;
+    act_ctx = 2;
     act_sym = unary_bin_decode(dep_dp,ctx->delta_qp_contexts+act_ctx,1);
     act_sym++;
   }
-  se->value1 = act_sym;
+
+  dquant = (act_sym+1)/2;
+  if((act_sym & 0x01)==0)                           // lsb is signed bit
+    dquant = -dquant;
+  se->value1 = dquant;
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%3d\n",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
-
 }
 
 /*!

@@ -139,6 +139,10 @@ SOURCE=.\ldecod\src\ldecod.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\leaky_bucket.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\loopFilter.c
 # End Source File
 # Begin Source File
@@ -220,6 +224,10 @@ SOURCE=.\ldecod\inc\header.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\image.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\leaky_bucket.h
 # End Source File
 # Begin Source File
 

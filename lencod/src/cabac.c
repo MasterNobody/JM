@@ -760,18 +760,25 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  */
 void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
-    MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
+  MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   int act_ctx;
   int act_sym;
+  int dquant = se->value1;
+  int sign=0;
+
+  if (dquant <= 0)
+    sign = 1;
+  act_sym = abs(dquant) << 1;
+
+  act_sym += sign;
+  act_sym --;
 
   if (currMB->mb_available[1][0] == NULL)
     act_ctx = 0;
   else
     act_ctx = ( ((currMB->mb_available[1][0])->delta_qp != 0) ? 1 : 0);
-
-  act_sym = se->value1;
 
   if (act_sym==0)
   {
@@ -780,8 +787,8 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   else
   {
     biari_encode_symbol(eep_dp, 1, ctx->delta_qp_contexts + act_ctx);
-    act_sym--;
     act_ctx=2;
+    act_sym--;
     unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_contexts+act_ctx,1);
   }
 }

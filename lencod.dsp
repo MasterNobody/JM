@@ -123,6 +123,10 @@ SOURCE=.\lencod\src\image.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\leaky_bucket.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\lencod.c
 # End Source File
 # Begin Source File
@@ -204,6 +208,10 @@ SOURCE=.\lencod\inc\header.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\image.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\leaky_bucket.h
 # End Source File
 # Begin Source File
 

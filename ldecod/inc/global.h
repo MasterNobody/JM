@@ -445,6 +445,12 @@ struct inp_par
   int of_mode;                            //<! Specifies the mode of the output file
   int partition_mode;                     //<! Specifies the mode of data partitioning
   int buf_cycle;                          //<! Frame buffer size
+#ifdef _LEAKYBUCKET_
+  unsigned long R_decoder;                //<! Decoder Rate in HRD Model
+  unsigned long B_decoder;                //<! Decoder Buffer size in HRD model
+  unsigned long F_decoder;                //<! Decoder Inital buffer fullness in HRD model
+  char LeakyBucketParamFile[100];     //<! LeakyBucketParamFile 
+#endif
 };
 
 
@@ -517,12 +523,10 @@ int  readSliceUVLC(struct img_par *img, struct inp_par *inp);
 
 
 // Direct interpolation
-byte get_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
-byte get_quarterpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
-byte get_eighthpel_pixel(int ref_frame,int x_pos, int y_pos, struct img_par *img);
+void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
+void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
+void get_eighthpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 void copy2mref(struct img_par *img);
-void copy2mref_1(struct img_par *img);
-void copy2mref_2(struct img_par *img);
 
 int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
 int  PictureHeader(struct img_par *img, struct inp_par *inp);

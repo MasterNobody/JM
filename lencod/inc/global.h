@@ -470,6 +470,11 @@ typedef struct
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
   int add_ref_frame;
 #endif
+#ifdef _LEAKYBUCKET_
+  int NumberLeakyBuckets;
+  char LeakyBucketRateFile[100];
+  char LeakyBucketParamFile[100];
+#endif
 
   int LossRate;
   int NoOfDecoders;
@@ -803,3 +808,4 @@ void  InitializeFastFullIntegerSearch (int);
 void  ClearFastFullIntegerSearch    ();
 void  ResetFastFullIntegerSearch    ();
 #endif
+

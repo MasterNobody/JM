@@ -253,7 +253,8 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
     {
       for (i=0;i< MB_BLOCK_SIZE;i++)
       {
-        img->mpr[i][j]=(iaa+(i-7)*ib +(j-7)*ic + 16)/32;
+        // Clip value to 0-255
+        img->mpr[i][j]=max(0,min((iaa+(i-7)*ib +(j-7)*ic + 16)/32,255));                
       }
     }// store plane prediction
     break;

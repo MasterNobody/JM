@@ -886,7 +886,6 @@ RD_Mode_Decision ()
   RateDistortion  rd;
   int             k1 = 1;
   int             mb_nr           = img->current_mb_nr;
-  int             mb_width        = img->width/16;
   Macroblock     *currMB          = &img->mb_data[mb_nr];
 
 

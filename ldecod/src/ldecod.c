@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     TML 9.0
+ *     TML 9.4
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -115,13 +115,14 @@
 #include "elements.h"
 #include "bitsbuf.h"
 #include "rtp.h"
+#include "leaky_bucket.h"
 
 #if _ERROR_CONCEALMENT_
 #include "erc_api.h"
 #endif
 
 #define TML         "9"
-#define VERSION     "9.00"
+#define VERSION     "9.40"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -130,6 +131,7 @@
 extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
 #endif
+
 
 /*!
  ***********************************************************************
@@ -315,7 +317,16 @@ void init_conf(struct inp_par *inp,
     error(errortext,400);
   }
 
-
+#ifdef _LEAKYBUCKET_
+  fscanf(fd,"%ld,",&inp->R_decoder);             // Decoder rate
+  fscanf(fd, "%*[^\n]");
+  fscanf(fd,"%ld,",&inp->B_decoder);             // Decoder buffer size
+  fscanf(fd, "%*[^\n]");
+  fscanf(fd,"%ld,",&inp->F_decoder);             // Decoder initial delay
+  fscanf(fd, "%*[^\n]"); 
+  fscanf(fd,"%s",inp->LeakyBucketParamFile);    // file where Leaky Bucket params (computed by encoder) are stored
+  fscanf(fd,"%*[^\n]");
+#endif
 #if TRACE
   if ((p_trace=fopen(TRACEFILE,"w"))==0)             // append new statistic at the end
   {
@@ -350,7 +361,14 @@ void init_conf(struct inp_par *inp,
   else
     fprintf(stdout," Input reference file                   : %s \n",inp->reffile);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-
+#ifdef _LEAKYBUCKET_
+  fprintf(stdout," Rate_decoder        : %8ld \n",inp->R_decoder);
+  fprintf(stdout," B_decoder           : %8ld \n",inp->B_decoder);
+  fprintf(stdout," F_decoder           : %8ld \n",inp->F_decoder);
+  fprintf(stdout," LeakyBucketParamFile: %s \n",inp->LeakyBucketParamFile); // Leaky Bucket Param file
+  calc_buffer(inp);
+  fprintf(stdout,"--------------------------------------------------------------------------\n");
+#endif
   fprintf(stdout,"Frame    TR    QP  SnrY    SnrU    SnrV   Time(ms)\n");
 }
 
@@ -1011,3 +1029,4 @@ void no_mem_exit(char *where)
    snprintf(errortext, ET_SIZE, "Could not allocate memory: %s",where);
    error (errortext, 100);
 }
+

@@ -283,7 +283,7 @@ void intrapred_luma_2()
   {
     for (i=0;i< MB_BLOCK_SIZE;i++)
     {
-      img->mprr_2[PLANE_16][j][i]=(iaa+(i-7)*ib +(j-7)*ic + 16)/32;// store plane prediction
+      img->mprr_2[PLANE_16][j][i]=max(0,min(255,(iaa+(i-7)*ib +(j-7)*ic + 16)/32));/* store plane prediction */                              
     }
   }
 }
