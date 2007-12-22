@@ -9,11 +9,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-#include <stdio.h>
-
 #include "global.h"
 #include "elements.h"
 #include "defines.h"
@@ -271,24 +266,24 @@ int RestOfSliceHeader()
   if ( !HI_INTRA_ONLY_PROFILE || (HI_INTRA_ONLY_PROFILE && (input->loopfilter_bitstream==1) ))
   //then read flags and parameters from bistream
   {
-  if (active_pps->deblocking_filter_control_present_flag)
-  {
-    currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
-
-    if (currSlice->LFDisableIdc!=1)
+    if (active_pps->deblocking_filter_control_present_flag)
     {
-      currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
-      currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
+      currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
+
+      if (currSlice->LFDisableIdc!=1)
+      {
+        currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
+        currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
+      }
+      else
+      {
+        currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+      }
     }
     else
     {
-      currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+      currSlice->LFDisableIdc = currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
     }
-  }
-  else
-  {
-    currSlice->LFDisableIdc = currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
-  }
   }
   else //By default the Loop Filter is Off
   { //444_TEMP_NOTE: change made below. 08/07/07
@@ -794,7 +789,8 @@ void decode_poc(struct img_par *img)
  *    none
  ************************************************************************
  */
-int dumppoc(struct img_par *img) {
+int dumppoc(struct img_par *img) 
+{
     printf ("\nPOC locals...\n");
     printf ("toppoc                                %d\n", img->toppoc);
     printf ("bottompoc                             %d\n", img->bottompoc);

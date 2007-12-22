@@ -26,8 +26,10 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
+#include <assert.h>
 
 #include <time.h>
 #include <sys/timeb.h>
@@ -828,7 +830,7 @@ DataPartition *AllocPartition();
 void tracebits2(const char *trace_str, int len, int info);
 
 void init_decoding_engine_IPCM(struct img_par *img);
-void readIPCMBytes_CABAC(SyntaxElement *sym, struct datapartition *dP);
+void readIPCM_CABAC(struct datapartition *dP);
 
 unsigned CeilLog2( unsigned uiVal);
 unsigned CeilLog2_sf( unsigned uiVal);

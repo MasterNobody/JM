@@ -19,8 +19,6 @@
 #ifndef _RC_QUADRATIC_H_
 #define _RC_QUADRATIC_H_
 
-#include "ratectl.h"
-
 #define RC_MODEL_HISTORY 21
 
 typedef struct
@@ -34,8 +32,6 @@ typedef struct
   double TargetBufferLevel;     //LIZG 25/10/2002
   double AveWp;
   double AveWb;
-  int    RC_MAX_QUANT;          //LIZG 28/10/2002
-  int    RC_MIN_QUANT;          //LIZG 28/10/2002
   int    MyInitialQp;
   int    PAverageQp;
   /*LIZG JVT50V2 distortion prediction model*/

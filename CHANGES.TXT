@@ -1,3 +1,27 @@
+Changes in Version JM 13.2 (since JM 13.1)
+------------------------------------------
+- encoder: 4:4:4 chroma mismatch fix (4x4 intra) (KS)
+- encoder: 4:2:2 chroma mismatch fix (THi)
+- encoder: fixes for negative QP (AT)
+- encoder: fix trace file and average qp calculation for slices with fixed byte size (AL)
+- encoder/decoder: various 4:4:4 fixes (HY)
+- decoder: fix temporal direct mode (KS)
+- decoder: implement I_PCM for more than 8bpp (KS)
+
+
+Changes in Version JM 13.1 (since JM 13.0)
+------------------------------------------
+- encoder: 4:4:4 performance fix (4x4 intra) (KS)
+- encoder: always use ChromaMEEnable for 4:4:4 common mode (KS)
+- encoder: 4:2:2 transform fix (AT)
+- decoder: fix slice_group_id allocation (KS)
+- encoder/decoder: fix inline functions for compilers without c99 support (KS)
+- encoder/decoder: makefile updates (LW/KS)
+- encoder/decoder: 4:0:0 fixes (KS)
+- encoder/decoder: further cleanups (AT/KS)
+
+
+
 Changes in Version JM 13.0 (since JM 12.4)
 ------------------------------------------
 Professional Profiles:
@@ -1224,6 +1248,7 @@ GrC     Greg Conklin            gregc@real.com
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
+HY      Haoping Yu              haoping.yu@thomson.net
 HZ      Huipin Zhang            hzhang@mobilygen.com
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com

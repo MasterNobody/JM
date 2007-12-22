@@ -27,7 +27,9 @@
 #define GET_METIME        1       //!< Enables or disables ME computation time
 #define DUMP_DPB          0       //!< Dump DPB for debug purposes
 #define IMGTYPE           1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
-#define ENABLE_FIELD_CTX  1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
+#define ENABLE_FIELD_CTX    1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
+#define ENABLE_HIGH444_CTX  1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
+
 
 #define MAX_RC_MODE              3
 #define RC_MAX_TEMPORAL_LEVELS   5
@@ -89,7 +91,12 @@
 #define CR_8x4          19
 #define CR_4x8          20
 #define CR_4x4          21 
-#define NUM_BLOCK_TYPES 22  
+
+#if (ENABLE_HIGH444_CTX == 1)
+# define NUM_BLOCK_TYPES 22  
+#else
+# define NUM_BLOCK_TYPES 10
+#endif
 
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
@@ -125,8 +132,8 @@
 #define  LAMBDA_ACCURACY_BITS         16
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1<<LAMBDA_ACCURACY_BITS)*lambda+0.5))
 #define  WEIGHTED_COST(factor,bits)   (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
-#define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
-#define  MV_COST_SMP(f,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[cx-px]+mvbits[cy-py]))
+#define  MV_COST(f,s,cx,cy,px,py)    (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
+#define  MV_COST_SMP(f,cx,cy,px,py)  (WEIGHTED_COST(f,mvbits[cx-px]+mvbits[cy-py]))
 #define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)

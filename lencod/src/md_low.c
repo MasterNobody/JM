@@ -9,13 +9,9 @@
  **************************************************************************
  */
 
-#include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <limits.h>
 #include <float.h>
-#include <memory.h>
-#include <string.h>
 
 #include "global.h"
 #include "rdopt_coding_state.h"
@@ -466,6 +462,15 @@ void encode_one_macroblock_low (Macroblock *currMB)
     else
     {
       currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
+      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      {
+        cmp_cbp[1] = curr_cbp[0]; 
+        cmp_cbp[2] = curr_cbp[1]; 
+        currMB->cbp |= cmp_cbp[1];    
+        currMB->cbp |= cmp_cbp[2];    
+        cmp_cbp[1] = currMB->cbp;   
+        cmp_cbp[2] = currMB->cbp;
+      }
     }
   }
 
@@ -531,6 +536,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         cmp_cbp[1] = dct_16x16(currMB, PLANE_U, i16mode);
         select_plane(PLANE_V);
         cmp_cbp[2] = dct_16x16(currMB, PLANE_V, i16mode);   
+
         select_plane(PLANE_Y);
         currMB->cbp |= cmp_cbp[1];    
         currMB->cbp |= cmp_cbp[2];    

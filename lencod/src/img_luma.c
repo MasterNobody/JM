@@ -1,4 +1,3 @@
-
 /*!
 *************************************************************************************
 * \file img_luma.c
@@ -8,16 +7,14 @@
 *
 * \author
 *    Main contributors (see contributors.h for copyright, address and affiliation details)
-*      - Athanasios Leontaris    <aleon@dolby.com>
 *      - Alexis Michael Tourapis <alexis.tourapis@dolby.com>
+*      - Athanasios Leontaris    <aleon@dolby.com>
 *
 *************************************************************************************
 */
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <memory.h>
 #include <limits.h>
 
 #include "global.h"
@@ -277,17 +274,10 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_y
- *    vertical index to sub-image being generated
- * \param dst_x
- *    horizontal index to sub-image being generated
- * \param src_y
- *    vertical index to source sub-image
- * \param src_x
- *    horizontal index to source sub-image
- * \param use_stored_int
- *    use stored shifted integer version of picture to temporary array for
- *    increased fidelity during application of the six tap filter
+ * \param dstImg
+ *    pointer to target image
+ * \param srcImg
+ *    pointer to source image
  ************************************************************************
  */
 void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
@@ -374,17 +364,10 @@ void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_y
- *    vertical index to sub-image being generated
- * \param dst_x
- *    horizontal index to sub-image being generated
- * \param src_y
- *    vertical index to source sub-image
- * \param src_x
- *    horizontal index to source sub-image
- * \param use_stored_int
- *    use stored shifted integer version of picture to temporary array for
- *    increased fidelity during application of the six tap filter
+ * \param dstImg
+ *    pointer to target image
+ * \param srcImg
+ *    pointer to source image
  ************************************************************************
  */
 void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)

@@ -17,10 +17,7 @@
  **************************************************************************
  */
 
-#include <stdlib.h>
 #include <math.h>
-#include <assert.h>
-#include <memory.h>
 #include <limits.h>
 
 #include "global.h"
@@ -66,11 +63,7 @@ void rc_alloc_quadratic( rc_quadratic **prc )
   lprc->FrameQPBuffer = lprc->PAveFrameQP;
   lprc->PAverageQp    = lprc->PAveFrameQP;
   lprc->MyInitialQp   = lprc->PAveFrameQP;
-
-  lprc->RC_MAX_QUANT = img->RCMaxQP;
-  lprc->RC_MIN_QUANT = img->RCMinQP; //-img->bitdepth_luma_qp_scale;//clipping
-
-  lprc->AveWb = 0.0;
+  lprc->AveWb         = 0.0;
 
   lprc->BUPFMAD = (double*) calloc ((rcBufSize), sizeof (double));
   if (NULL==lprc->BUPFMAD)
@@ -485,7 +478,7 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
     // QP is constrained by QP of previous QP
     prc->PAverageQp = iClip3(prc->QPLastGOP - 2, prc->QPLastGOP + 2, prc->PAverageQp);
     // Also clipped within range.
-    prc->PAverageQp = iClip3(prc->RC_MIN_QUANT,  prc->RC_MAX_QUANT,  prc->PAverageQp);
+    prc->PAverageQp = iClip3(img->RCMinQP,  img->RCMaxQP,  prc->PAverageQp);
 
     prc->MyInitialQp = prc->PAverageQp;
     prc->Pm_Qp       = prc->PAverageQp;
@@ -775,7 +768,7 @@ void rc_update_pict(rc_quadratic *prc, int nbits)
  * \brief
  *    update one picture after coding
  *
- * \param nbits
+ * \param bits
  *    number of bits used for picture
  *
  *************************************************************************************
@@ -1299,7 +1292,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
           prc->m_Qc = imin(prc->PrevLastQP, prc->CurrLastQP) + 2;
           prc->m_Qc = imax(prc->m_Qc, imax(prc->PrevLastQP, prc->CurrLastQP));
           prc->m_Qc = imax(prc->m_Qc, prc->CurrLastQP + 1);
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         else
         {
@@ -1330,7 +1323,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
           prc->m_Qc  = prc->PrevLastQP + StepSize;
           prc->m_Qc += iClip3( -2 * (BFrameNumber - 1), 2*(BFrameNumber-1),
             (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(input->successive_Bframe-1));
-          prc->m_Qc  = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc  = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         return prc->m_Qc;
       }
@@ -1365,7 +1358,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
         if(prc->Target < 0)
         {
           prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         else
         {
@@ -1374,7 +1367,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
 
           updateModelQPFrame( prc, m_Bits );
 
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
           prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
         }
 
@@ -1416,7 +1409,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
             prc->m_Qc=prc->PrevLastQP+2;
           else
             prc->m_Qc=(prc->PrevLastQP+prc->CurrLastQP)/2+1;
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         else
         {
@@ -1446,7 +1439,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
           prc->m_Qc=prc->PrevLastQP+StepSize;
           prc->m_Qc +=
             iClip3( -2*(BFrameNumber-1), 2*(BFrameNumber-1), (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(input->successive_Bframe-1) );
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         return prc->m_Qc;
       }
@@ -1569,7 +1562,7 @@ int updateQPRC1(rc_quadratic *prc, int topfield)
         if(prc->Target < 0)
         {
           prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         else
         {
@@ -1578,7 +1571,7 @@ int updateQPRC1(rc_quadratic *prc, int topfield)
 
           updateModelQPFrame( prc, m_Bits );
 
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
           prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
         }
 
@@ -1712,7 +1705,7 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
         }
         else
           prc->m_Qc = prevQP + 2 - img->nal_reference_idc;
-        prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+        prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
 
         return prc->m_Qc;
       }
@@ -1747,7 +1740,7 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
         if(prc->Target < 0)
         {
           prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         else
         {
@@ -1756,7 +1749,7 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
 
           updateModelQPFrame( prc, m_Bits );
 
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
           prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
         }
 
@@ -1812,7 +1805,7 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
       }
       else
         prc->m_Qc = prevQP + 2 - img->nal_reference_idc;
-      prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+      prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
 
       return prc->m_Qc;
 
@@ -1944,7 +1937,7 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
         if(prc->Target < 0)
         {
           prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // Clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         else
         {
@@ -1961,7 +1954,7 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
           }          
           updateModelQPFrame( prc, m_Bits );
 
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
           if ( img->type == P_SLICE )
             prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
         }
@@ -1977,7 +1970,7 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
             prc->m_Qc -= gop_structure[img->b_frame_to_code-1].hierarchy_layer;
           // check bounds
           prc->m_Qc = iClip3(prevqp - (input->HierarchicalCoding ? 0 : 5), prevqp + 5, prc->m_Qc); // control variation
-          prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
+          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
         }
         return prc->m_Qc;
       }
@@ -2174,7 +2167,7 @@ int updateNegativeTarget( rc_quadratic *prc, int topfield, int m_Qp )
   else
     prc->m_Qc=m_Qp+prc->DDquant;//2
 
-  prc->m_Qc = imin(prc->m_Qc, prc->RC_MAX_QUANT);  // clipping
+  prc->m_Qc = imin(prc->m_Qc, img->RCMaxQP);  // clipping
   if(input->basicunit>=prc->MBPerRow)
     prc->m_Qc = imin(prc->m_Qc, prc->PAveFrameQP + 6);
   else
@@ -2267,8 +2260,8 @@ int updateFirstBU( rc_quadratic *prc, int topfield )
   if(prc->Target<=0)
   {
     prc->m_Qc = prc->PAveFrameQP + 2;
-    if(prc->m_Qc > prc->RC_MAX_QUANT)
-      prc->m_Qc = prc->RC_MAX_QUANT;
+    if(prc->m_Qc > img->RCMaxQP)
+      prc->m_Qc = img->RCMaxQP;
 
     if(topfield||(generic_RC->FieldControl==0))
       prc->GOPOverdue=TRUE;
@@ -2372,13 +2365,13 @@ void updateModelQPBU( rc_quadratic *prc, int topfield, int m_Qp )
   else
     prc->m_Qc = imin(prc->PAveFrameQP+3, prc->m_Qc);
 
-  prc->m_Qc = iClip3(m_Qp-prc->DDquant, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
+  prc->m_Qc = iClip3(m_Qp-prc->DDquant, img->RCMaxQP, prc->m_Qc); // clipping
   if(input->basicunit>=prc->MBPerRow)
     prc->m_Qc = imax(prc->PAveFrameQP-6, prc->m_Qc);
   else
     prc->m_Qc = imax(prc->PAveFrameQP-3, prc->m_Qc);
 
-  prc->m_Qc = imax(prc->RC_MIN_QUANT, prc->m_Qc);
+  prc->m_Qc = imax(img->RCMinQP, prc->m_Qc);
 }
 
 void updateQPInterlaceBU( rc_quadratic *prc )
@@ -2578,7 +2571,7 @@ void rc_init_top_field ( void )
   img->BasicUnit = input->basicunit;
   generic_RC->TopFieldFlag = 1;
   rc_init_pict_ptr(quadratic_RC, 0, 1, (input->PicInterlace == FIELD_CODING), 1.0F); 
-  img->qp = updateQP(quadratic_RC, 1);  
+  img->qp = updateQP(quadratic_RC, 1);
 }
 
 void rc_init_bottom_field ( int TopFieldBits )

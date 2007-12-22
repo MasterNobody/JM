@@ -16,12 +16,8 @@
  **************************************************************************
  */
 
-#include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <limits.h>
-#include <memory.h>
-#include <string.h>
 
 #include "global.h"
 
@@ -40,6 +36,7 @@
 #include "fmo.h"
 #include "macroblock.h"
 #include "symbol.h"
+#include "q_offsets.h"
 
 
 imgpel pred[16][16];
@@ -397,7 +394,8 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
             pres_y = iClip3(0, maxold_y, y);
             for (x = x_pos ; x < x_pos + BLOCK_SIZE ; x++)
             {
-              for(xx = -2 ; xx < 4 ; xx++) {
+              for(xx = -2 ; xx < 4 ; xx++) 
+              {
                 pres_x = iClip3(0, maxold_x, x + xx);
                 if (pixel_map[pres_y][pres_x] < ref_frame)
                   return 0;
@@ -411,7 +409,8 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
             for (x=x_pos ; x < x_pos + BLOCK_SIZE ; x++)
             {
               pres_x = iClip3(0,maxold_x,x);
-              for(yy=-2;yy<4;yy++) {
+              for(yy=-2;yy<4;yy++) 
+              {
                 pres_y = iClip3(0,maxold_y, yy + y);
                 if (pixel_map[pres_y][pres_x] < ref_frame)
                   return 0;
@@ -423,9 +422,11 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
           for (y = y_pos ; y < y_pos + BLOCK_SIZE ; y++)
             for (x = x_pos ; x < x_pos + BLOCK_SIZE ; x++)
             {
-              for(yy=-2;yy<4;yy++) {
+              for(yy=-2;yy<4;yy++) 
+              {
                 pres_y = iClip3(0,maxold_y, yy + y);
-                for(xx=-2;xx<4;xx++) {
+                for(xx=-2;xx<4;xx++) 
+                {
                   pres_x = iClip3(0,maxold_x, xx + x);
                   if (pixel_map[pres_y][pres_x] < ref_frame)
                     return 0;
@@ -438,9 +439,11 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
           for (y = y_pos ; y < y_pos + BLOCK_SIZE ; y++)
             for (x = x_pos ; x < x_pos + BLOCK_SIZE ; x++)
             {
-              for(xx=-2;xx<4;xx++) {
+              for(xx=-2;xx<4;xx++) 
+              {
                 pres_x = iClip3(0,maxold_x, xx + x);
-                for(yy=-2;yy<4;yy++) {
+                for(yy=-2;yy<4;yy++) 
+                {
                   pres_y = iClip3(0,maxold_y, yy + y);
                   if (pixel_map[pres_y][pres_x] < ref_frame)
                     return 0;
@@ -637,7 +640,7 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
   int  fixedcost = (int) floor(4 * lambda );
 
   //For residual DPCM
-  Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);  
+  Boolean lossless_qpprime = (Boolean) ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);  
 
 #ifdef BEST_NZ_COEFF
   int best_nz_coeff = 0;
@@ -762,6 +765,7 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
         {
           for (uv = 1; uv < 3; uv++)
           {
+            curr_mpr = img->mpr[uv];
             for (j=0; j<4; j++)
             {
               org_img = &imgUV_org[uv - 1][pic_opix_y+j][pic_opix_x];
@@ -775,26 +779,27 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
               }
             }
           }
+          curr_mpr = img->mpr[0];
         }
 
-          if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))  //For residual DPCM
+        if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))  //For residual DPCM
+        {
+          if((lossless_qpprime)&&(ipmode<2))  
           {
-            if((lossless_qpprime)&&(ipmode<2))  
-            {
-              Residual_DPCM_4x4(ipmode, 0, block_y, block_x);
-              Residual_DPCM_4x4(ipmode, 1, block_y, block_x);
-              Residual_DPCM_4x4(ipmode, 2, block_y, block_x);
-              ipmode_DPCM=ipmode;
-            }
+            Residual_DPCM_4x4(ipmode, PLANE_Y, block_y, block_x);
+            Residual_DPCM_4x4(ipmode, PLANE_U, block_y, block_x);
+            Residual_DPCM_4x4(ipmode, PLANE_V, block_y, block_x);
+            ipmode_DPCM=ipmode;
           }
-          else if ((img->yuv_format == YUV444) && IS_INDEPENDENT(input))
+        }
+        else if ((img->yuv_format == YUV444) && IS_INDEPENDENT(input))
+        {
+          if((lossless_qpprime)&&(ipmode<2))  
           {
-            if((lossless_qpprime)&&(ipmode<2))  
-            {
-              Residual_DPCM_4x4(ipmode, 0, block_y, block_x);
-              ipmode_DPCM=ipmode;
-            }
+            Residual_DPCM_4x4(ipmode, PLANE_Y, block_y, block_x);
+            ipmode_DPCM=ipmode;
           }
+        }
 
         //===== store the coding state =====
         //store_coding_state (currMB, cs_cm);
@@ -854,14 +859,14 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
           {
             for (j = block_y; j < block_y + 4; j++)
               memcpy(&fadjust4x4[j][block_x],&img->fadjust4x4[1][j][block_x], BLOCK_SIZE * sizeof(int));
-              if(img->yuv_format == YUV444 && !IS_INDEPENDENT(input))
+            if(img->yuv_format == YUV444 && !IS_INDEPENDENT(input))
+            {
+              for (j=0; j<4; j++)
               {
-                for (j=0; j<4; j++)
-                {
-                  memcpy(&fadjust4x4Cr[0][block_y+j][block_x],&img->fadjust4x4Cr[0][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
-                  memcpy(&fadjust4x4Cr[1][block_y+j][block_x],&img->fadjust4x4Cr[1][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
-                }
+                memcpy(&fadjust4x4Cr[0][block_y+j][block_x],&img->fadjust4x4Cr[0][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
+                memcpy(&fadjust4x4Cr[1][block_y+j][block_x],&img->fadjust4x4Cr[1][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
               }
+            }
           }
         }
 
@@ -902,12 +907,12 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
       ipmode_DPCM=best_ipmode;  
       if((best_ipmode<2))
       {
-        Residual_DPCM_4x4(best_ipmode, 0, block_y, block_x);
+        Residual_DPCM_4x4(best_ipmode, PLANE_Y, block_y, block_x);
       }
     }
 
     select_dct(currMB);
-    nonzero = pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
+    nonzero = cr_cbp[0] =pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
 
     if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
     {
@@ -941,26 +946,20 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
   {
     if( (img->yuv_format==YUV444) && !IS_INDEPENDENT(input) )
     {
-      select_plane(PLANE_U);
-      for (j=0; j<4; j++)
+      ColorPlane k;
+      for (k = PLANE_U; k <= PLANE_V; k++)
       {
-        for (i=0; i<4; i++)
+        select_plane(k);
+        for (j=0; j<4; j++)
         {
-          img->mpr[1][block_y+j][block_x+i]  = img->mpr_4x4[1][best_ipmode][j][i];
-          img->m7[1][block_y+j][block_x+i]   = imgUV_org[0][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[1][best_ipmode][j][i];
+          for (i=0; i<4; i++)
+          {
+            img->mpr[k][block_y+j][block_x+i]  = img->mpr_4x4[k][best_ipmode][j][i];
+            img->m7[k][block_y+j][block_x+i]   = pImgOrg[k][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[k][best_ipmode][j][i];
+          }
         }
+        cr_cbp[k] = pDCT_4x4(currMB, k, block_x,block_y,&dummy,1);
       }
-      cr_cbp[1] = pDCT_4x4(currMB, PLANE_U, block_x,block_y,&dummy,1);
-      select_plane(PLANE_V);
-      for (j=0; j<4; j++)
-      {
-        for (i=0; i<4; i++)
-        {
-          img->mpr[2][block_y+j][block_x+i]  = img->mpr_4x4[2][best_ipmode][j][i];
-          img->m7[2][block_y+j][block_x+i]   = imgUV_org[1][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[2][best_ipmode][j][i];
-        }
-      }
-      cr_cbp[2]  = pDCT_4x4(currMB, PLANE_V,block_x,block_y,&dummy,1);
       select_plane(PLANE_Y);
     }
     //===== restore coefficients =====
@@ -1024,32 +1023,29 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
  *    Mode Decision for an 8x8 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,double *cost, int non_zero[2])
+int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,double *cost, int non_zero[3])
 {
-  int  nonzero = 0, b4;
+  int  b4;
   double  cost4x4;
   int CbCr_cbp[3]={0, 0, 0};
-  non_zero[0] = 0;
-  non_zero[1] = 0;
+
+  memset(non_zero, 0, 3 * sizeof(int));
 
   *cost = (int)floor(6.0 * lambda + 0.4999);
 
   for (b4=0; b4<4; b4++)
   {
-    if (Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp))
-    {
-      nonzero = 1;
-    }
-    *cost += cost4x4;
+    non_zero[0] |= Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp);
+    non_zero[1] |= CbCr_cbp[1];
+    non_zero[2] |= CbCr_cbp[2];
 
-    non_zero[0] = (CbCr_cbp[1] != 0);
-    non_zero[1] = (CbCr_cbp[2] != 0);
+    *cost += cost4x4;
   }
 #ifdef RESET_STATE
   //reset_coding_state (currMB, cs_cm);
 #endif
 
-  return nonzero;
+  return non_zero[0];
 }
 
 /*!
@@ -1062,7 +1058,7 @@ int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  do
 {
   int  cbp=0, b8;
   double cost8x8;
-  int non_zero[2] = {0, 0};
+  int non_zero[3] = {0, 0, 0};
   
   cmp_cbp[1] = cmp_cbp[2] = 0;
 
@@ -1073,14 +1069,14 @@ int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  do
       cbp |= (1<<b8);
     }
     *cost += cost8x8;
-    if (non_zero[0])
+    if (non_zero[1])
     {
       cmp_cbp[1] |= (1<<b8);
       cbp |= cmp_cbp[1];
       cmp_cbp[1] = cbp;
       cmp_cbp[2] = cbp;
     }
-    if (non_zero[1])
+    if (non_zero[2])
     {
       cmp_cbp[2] |= (1<<b8);
       cbp |= cmp_cbp[2];
@@ -1737,7 +1733,7 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
         {
           for (k = 0; k<4; k++)
             for (j = 0; j<2; j++)
-              memcpy (img->cofAC[4+block+uv*4][k][j],cofAC8x8ts[uv][block][k][j], 65 * sizeof(int));
+              memcpy (img->cofAC[4+block+uv*4][k][j],cofAC8x8ts[uv + 1][block][k][j], 65 * sizeof(int));
         }
       }
     }
