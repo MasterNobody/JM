@@ -609,7 +609,6 @@ void write_frame_picture(VideoParameters *p_Vid)
 #else
 void write_frame_picture(VideoParameters *p_Vid)
 {
-  InputParameters *p_Inp = p_Vid->p_Inp;
   if (p_Vid->fld_flag)            // field mode (use field when fld_flag=1 only)
   {
     p_Vid->structure = TOP_FIELD;
