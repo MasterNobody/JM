@@ -957,7 +957,9 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
 {
   VideoParameters *p_Vid = p_Dpb->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
+#if (MVC_EXTENSION_ENABLE)
   unsigned int profile_idc = p_Vid->active_sps->profile_idc;
+#endif
 
 #if (MVC_EXTENSION_ENABLE)
   if ( (p_Inp->PicInterlace == ADAPTIVE_CODING) && ((p_Dpb->layer_id == 0 ) || !is_MVC_profile(profile_idc)))
