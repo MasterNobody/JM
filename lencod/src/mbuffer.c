@@ -1197,7 +1197,9 @@ if (p_Vid->is_hme == 0)
  */
 void init_lists_b_slice(Slice *currSlice)
 {
+#if (MVC_EXTENSION_ENABLE)
   VideoParameters *p_Vid = currSlice->p_Vid;
+#endif
   DecodedPictureBuffer *p_Dpb = currSlice->p_Dpb;
 
   unsigned int i;
