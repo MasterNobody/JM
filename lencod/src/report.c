@@ -50,7 +50,7 @@ void report_frame_statistic(VideoParameters *p_Vid, InputParameters *p_Inp)
   int bitcounter;
   StatParameters *cur_stats = &p_Vid->enc_picture->stats;
 
-#ifndef WIN32
+#ifndef _MSC_VER
   time_t now;
   struct tm *l_time;
   char string[1000];
@@ -92,7 +92,7 @@ void report_frame_statistic(VideoParameters *p_Vid, InputParameters *p_Inp)
   //report
   fprintf(p_stat_frm, "|%4s/%s", VERSION, EXT_VERSION);
 
-#ifdef WIN32
+#ifdef _MSC_VER
   _strdate( timebuf );
   fprintf(p_stat_frm, "| %1.5s |", timebuf);
 
@@ -489,7 +489,7 @@ void report_log(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *
   FILE *p_log = p_Vid->p_log;
   char name[40];
   int i;
-#ifndef WIN32
+#ifndef _MSC_VER
   time_t now;
   struct tm *l_time;
   char string[1000];
@@ -525,7 +525,7 @@ void report_log(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *
   }
   fprintf(p_log,"|%5s/%-5s", VERSION, EXT_VERSION);
 
-#ifdef WIN32
+#ifdef _MSC_VER
   _strdate( timebuf );
   fprintf(p_log,"| %1.5s |", timebuf );
 
@@ -1382,7 +1382,7 @@ void report_log_mode(VideoParameters *p_Vid, InputParameters *p_Inp, StatParamet
   FILE *p_stat;                    //!< status file for the last encoding session
   int i;
   char name[40];
-#ifndef WIN32
+#ifndef _MSC_VER
   time_t now;
   struct tm *l_time;
   char string[1000];
@@ -1419,7 +1419,7 @@ void report_log_mode(VideoParameters *p_Vid, InputParameters *p_Inp, StatParamet
   //report
   fprintf(p_stat, "|%4s/%s", VERSION, EXT_VERSION);
 
-#ifdef WIN32
+#ifdef _MSC_VER
   _strdate( timebuf );
   fprintf(p_stat, "| %1.5s |", timebuf);
 

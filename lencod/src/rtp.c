@@ -11,7 +11,7 @@
  *    Stephan Wenger    stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <Winsock2.h>
 #else
 #include <netinet/in.h>

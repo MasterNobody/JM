@@ -493,7 +493,7 @@ static void Report(VideoParameters *p_Vid)
   char string[OUTSTRING_SIZE];
   FILE *p_log;
 
-#ifndef WIN32
+#ifndef _MSC_VER
   time_t  now;
   struct tm *l_time;
 #else
@@ -551,7 +551,7 @@ static void Report(VideoParameters *p_Vid)
 
   fprintf(p_log,"|%s/%-4s", VERSION, EXT_VERSION);
 
-#ifdef WIN32
+#ifdef _MSC_VER
   _strdate( timebuf );
   fprintf(p_log,"| %1.5s |",timebuf );
 

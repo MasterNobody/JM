@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
-#if defined(WIN32) || defined(WIN64)
+#if defined(_WIN32)
 #include <Winsock2.h>
 #else
 #include <netinet/in.h>
@@ -64,9 +64,9 @@ int main(int argc, char* argv[])
     memcpy (&temp16, &buf[2], 2);
     printf ("Sequence Number: %d\n", ntohs(temp16));
     memcpy (&temp32, &buf[4], 4);
-    printf ("Timestamp: %d\n", ntohl(temp32));
+    printf ("Timestamp: %d\n", (int)ntohl(temp32));
     memcpy (&temp32, &buf[8], 4);
-    printf ("SSRC: %d\n", ntohl(temp32));
+    printf ("SSRC: %d\n", (int)ntohl(temp32));
 
     printf ("First Byte: 0x%x\n", buf[12]);
   }

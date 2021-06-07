@@ -1205,7 +1205,7 @@ int GenerateSEImessage_rbsp (InputParameters *p_Inp, int id, byte *rbsp)
     len+=write_u_v (8,"SEI: last_payload_size_byte",message_size, bitstream);
 
     // Lets randomize uuid based on time
-#ifdef _WIN32
+#ifdef _MSC_VER
     len+=write_u_v (32,"SEI: uuid_iso_iec_11578",(int) start_time.HighPart, bitstream);
     len+=write_u_v (32,"SEI: uuid_iso_iec_11578",(int) start_time.QuadPart, bitstream);
 #else

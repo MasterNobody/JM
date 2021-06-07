@@ -9,6 +9,10 @@
 
 NAME=   ldecod
 
+ifeq ($(origin CC),default)
+CC = gcc
+endif
+
 ### include debug information: 1=yes, 0=no
 DBG?= 0
 ### Generate 32 bit executable : 1=yes, 0=no
@@ -42,7 +46,7 @@ else
 STATIC= 
 endif
 
-LIBS=   -lm $(STATIC)
+LIBS=   -lm -lws2_32 $(STATIC)
 CFLAGS+=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char $(STATIC)
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 

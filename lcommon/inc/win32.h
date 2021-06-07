@@ -25,7 +25,7 @@
 # define NUM_THREADS 8
 #endif
 
-#if defined(WIN32) || defined (WIN64)
+#if defined(_MSC_VER)
 # include <io.h>
 # include <sys/types.h>
 # include <sys/stat.h>
@@ -50,11 +50,11 @@ typedef int   intptr_t;
 # define  lseek    _lseeki64
 # define  fsync    _commit
 # define  tell     _telli64
-# define  TIMEB    _timeb
-# define  TIME_T    LARGE_INTEGER
 # define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
 # define  OPEN_PERMISSIONS _S_IREAD | _S_IWRITE
 # define  OPENFLAGS_READ  _O_RDONLY|_O_BINARY
+# define  TIMEB    _timeb
+# define  TIME_T    LARGE_INTEGER
 # define  inline   _inline
 # define  forceinline __forceinline
 #else
@@ -67,12 +67,29 @@ typedef int   intptr_t;
 # include <omp.h>
 #endif
 
-# define  TIMEB    timeb
-# define  TIME_T   struct timeval
+#if defined(_WIN32)
+# define  open     _open
+# define  close    _close
+# define  read     _read
+# define  write    _write
+# undef   lseek
+# define  lseek    _lseeki64
+# define  fsync    _commit
+# undef   tell
+# define  tell     _telli64
+# define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
+# define  OPEN_PERMISSIONS _S_IREAD | _S_IWRITE
+# define  OPENFLAGS_READ  _O_RDONLY|_O_BINARY
+#else
+# undef   tell
 # define  tell(fd) lseek(fd, 0, SEEK_CUR)
 # define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
 # define  OPENFLAGS_READ  O_RDONLY
 # define  OPEN_PERMISSIONS S_IRUSR | S_IWUSR
+#endif
+
+# define  TIMEB    timeb
+# define  TIME_T   struct timeval
 
 # if __STDC_VERSION__ >= 199901L
    /* "inline" is a keyword */
@@ -82,7 +99,7 @@ typedef int   intptr_t;
 # define  forceinline inline
 #endif
 
-#if (defined(WIN32) || defined(WIN64)) && !defined(__GNUC__)
+#if defined(_MSC_VER) && !defined(__GNUC__)
 typedef __int64   int64;
 typedef unsigned __int64   uint64;
 # define FORMAT_OFF_T "I64d"
@@ -92,7 +109,11 @@ typedef unsigned __int64   uint64;
 #else
 typedef long long int64;
 typedef unsigned long long  uint64;
+#if defined(_WIN32)
+# define FORMAT_OFF_T "I64d"
+#else
 # define FORMAT_OFF_T "lld"
+#endif
 # ifndef INT64_MIN
 #  define INT64_MIN        (-9223372036854775807LL - 1LL)
 # endif

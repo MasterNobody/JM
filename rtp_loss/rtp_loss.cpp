@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
-#ifdef WIN32
+#ifdef _WIN32
 #include <Winsock2.h>
 #else
 #include <netinet/in.h>

@@ -7,6 +7,10 @@
 
 SUBDIRS := lencod ldecod rtpdump rtp_loss
 
+ifeq ($(origin CC),default)
+CC = gcc
+endif
+
 ### include debug information: 1=yes, 0=no
 DBG?= 0
 ### enforce 32-bit build : 1=yes, 0=no

@@ -9,6 +9,10 @@
 
 NAME=   rtp_loss
 
+ifeq ($(origin CC),default)
+CC = gcc
+endif
+
 ### include debug information: 1=yes, 0=no
 DBG?= 0
 ### enforce 32-bit build : 1=yes, 0=no
@@ -22,7 +26,7 @@ SRCDIR= .
 OBJDIR= obj
 
 
-LIBS=   -lm
+LIBS=   -lm -lws2_32
 AFLAGS=  
 CFLAGS+=  -ffloat-store -fsigned-char
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64

@@ -17,7 +17,7 @@
 #ifndef _IFUNCTIONS_H_
 #define _IFUNCTIONS_H_
 
-# if !(defined(WIN32) || defined(WIN64)) && (__STDC_VERSION__ < 199901L)
+# if !defined(_MSC_VER) && (__STDC_VERSION__ < 199901L)
   #define static
   #define inline
 #endif
@@ -372,7 +372,7 @@ static inline int is_intra_mb(short mb_type)
   return (mb_type==SI4MB || mb_type==I4MB || mb_type==I16MB || mb_type==I8MB || mb_type==IPCM);
 }
 
-# if !(defined(WIN32) || defined(WIN64)) && (__STDC_VERSION__ < 199901L)
+# if !defined(_MSC_VER) && (__STDC_VERSION__ < 199901L)
   #undef static
   #undef inline
 #endif
