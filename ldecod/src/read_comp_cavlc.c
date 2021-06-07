@@ -747,6 +747,10 @@ static void read_comp_coeff_4x4_CAVLC (Macroblock *currMB, ColorPlane pl, int (*
 
                 currSlice->cof[pl][j + j0][i + i0]= rshift_rnd_sf((levarr[k] * InvLevelScale4x4[j0][i0])<<qp_per, 4);
                 //currSlice->fcf[pl][j + j0][i + i0]= levarr[k];
+#if (TRACE == 3)
+                fprintf (p_Dec->p_trace, "%d coef[%d, %d]=%d run=%d lev=%d\n", k, j + j0, i + i0, currSlice->cof[pl][j + j0][i + i0], runarr[k], levarr[k]);
+                fflush (p_Dec->p_trace);
+#endif
               }
             }
           }
@@ -830,6 +834,10 @@ static void read_comp_coeff_4x4_CAVLC_ls (Macroblock *currMB, ColorPlane pl, int
                 *cur_cbp |= i64_power2((j<<2) + i);
                 currSlice->cof[pl][(j<<2) + j0][(i<<2) + i0]= levarr[k];
                 //currSlice->fcf[pl][(j<<2) + j0][(i<<2) + i0]= levarr[k];
+#if (TRACE == 3)
+                fprintf (p_Dec->p_trace, "%d coef[%d, %d]=%d run=%d lev=%d\n", k, j + j0, i + i0, currSlice->cof[pl][j + j0][i + i0], runarr[k], levarr[k]);
+                fflush (p_Dec->p_trace);
+#endif
               }
             }
           }
@@ -1167,6 +1175,10 @@ static void read_CBP_and_coeffs_from_NAL_CAVLC_400(Macroblock *currMB)
 
           currSlice->cof[0][j0][i0] = levarr[k];// add new intra DC coeff
           //currSlice->fcf[0][j0][i0] = levarr[k];// add new intra DC coeff
+#if (TRACE == 3)
+          fprintf (p_Dec->p_trace, "%d coef[%d, %d]=%d run=%d lev=%d\n", k, j0, i0, currSlice->cof[0][j0][i0], runarr[k], levarr[k]);
+          fflush (p_Dec->p_trace);
+#endif
         }
       }
 
@@ -1351,6 +1363,10 @@ static void read_CBP_and_coeffs_from_NAL_CAVLC_422(Macroblock *currMB)
 
           currSlice->cof[0][j0][i0] = levarr[k];// add new intra DC coeff
           //currSlice->fcf[0][j0][i0] = levarr[k];// add new intra DC coeff
+#if (TRACE == 3)
+          fprintf (p_Dec->p_trace, "%d coef[%d, %d]=%d run=%d lev=%d\n", k, j0, i0, currSlice->cof[0][j0][i0], runarr[k], levarr[k]);
+          fflush (p_Dec->p_trace);
+#endif
         }
       }
 
@@ -1694,6 +1710,10 @@ static void read_CBP_and_coeffs_from_NAL_CAVLC_444(Macroblock *currMB)
 
           currSlice->cof[0][j0][i0] = levarr[k];// add new intra DC coeff
           //currSlice->fcf[0][j0][i0] = levarr[k];// add new intra DC coeff
+#if (TRACE == 3)
+          fprintf (p_Dec->p_trace, "%d coef[%d, %d]=%d run=%d lev=%d\n", k, j0, i0, currSlice->cof[0][j0][i0], runarr[k], levarr[k]);
+          fflush (p_Dec->p_trace);
+#endif
         }
       }
 
@@ -1933,6 +1953,10 @@ static void read_CBP_and_coeffs_from_NAL_CAVLC_420(Macroblock *currMB)
 
           currSlice->cof[0][j0][i0] = levarr[k];// add new intra DC coeff
           //currSlice->fcf[0][j0][i0] = levarr[k];// add new intra DC coeff
+#if (TRACE == 3)
+          fprintf (p_Dec->p_trace, "%d coef[%d, %d]=%d run=%d lev=%d\n", k, j0, i0, currSlice->cof[0][j0][i0], runarr[k], levarr[k]);
+          fflush (p_Dec->p_trace);
+#endif
         }
       }
 
