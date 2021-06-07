@@ -14,7 +14,7 @@
 #include "q_matrix.h"
 #include "q_offsets.h"
 
-extern char *GetConfigFileContent (char *Filename, int error_type);
+extern char *GetConfigFileContent (char *Filename);
 
 #define MAX_ITEMS_TO_PARSE  2000
 
@@ -468,8 +468,8 @@ void init_qoffset (VideoParameters *p_Vid)
   {
     printf ("Parsing Quantization Offset Matrix file %s ",
       p_Inp->QOffsetMatrixFile);
-    content = GetConfigFileContent (p_Inp->QOffsetMatrixFile, 0);
-    if (content != '\0')
+    content = GetConfigFileContent (p_Inp->QOffsetMatrixFile);
+    if (content != NULL)
       ParseQOffsetMatrix (p_Vid->p_Quant, content, (int) strlen (content));
     else
     {

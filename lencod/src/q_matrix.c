@@ -13,7 +13,7 @@
 #include "memalloc.h"
 #include "q_matrix.h"
 
-extern char *GetConfigFileContent (char *Filename, int error_type);
+extern char *GetConfigFileContent (char *Filename);
 
 #define MAX_ITEMS_TO_PARSE  1000
 
@@ -547,8 +547,8 @@ void init_qmatrix (VideoParameters *p_Vid, InputParameters *p_Inp)
   if(p_Inp->ScalingMatrixPresentFlag)
   {
     printf ("Parsing QMatrix file %s ", p_Inp->QmatrixFile);
-    content = GetConfigFileContent(p_Inp->QmatrixFile, 0);
-    if(content!='\0')
+    content = GetConfigFileContent(p_Inp->QmatrixFile);
+    if(content != NULL)
       ParseMatrix(p_Vid, content, (int) strlen (content));
     else
       printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
