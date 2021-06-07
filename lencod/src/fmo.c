@@ -189,7 +189,7 @@ static int FmoGenerateMBAmap (VideoParameters * p_Vid, seq_parameter_set_rbsp_t*
         p_Vid->MBAmap[i] = p_Vid->MapUnitToSliceGroupMap [(i/(2*p_Vid->PicWidthInMbs))*p_Vid->PicWidthInMbs+(i%p_Vid->PicWidthInMbs)];
       }
     }
-    return 0;
+  return 0;
 }
 
 

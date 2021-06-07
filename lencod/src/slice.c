@@ -1863,66 +1863,66 @@ void init_slice_lite (VideoParameters *p_Vid, Slice **currSlice, int start_mb_ad
     setup_open_gop_lists(p_Vid, *currSlice);
 
 
-    (*currSlice)->max_num_references = (short) p_Vid->max_num_references;
+  (*currSlice)->max_num_references = (short) p_Vid->max_num_references;
 
-    if (p_Vid->mb_aff_frame_flag)
-      init_mbaff_lists(*currSlice);
+  if (p_Vid->mb_aff_frame_flag)
+    init_mbaff_lists(*currSlice);
 
-    // assign luma common reference picture pointers to be used for ME/sub-pel interpolation
-    for(i = 0; i < active_ref_lists; i++)
+  // assign luma common reference picture pointers to be used for ME/sub-pel interpolation
+  for(i = 0; i < active_ref_lists; i++)
+  {
+    for(j = 0; j < (*currSlice)->listXsize[i]; j++)
     {
-      for(j = 0; j < (*currSlice)->listXsize[i]; j++)
+      if( (*currSlice)->listX[i][j] )
       {
-        if( (*currSlice)->listX[i][j] )
-        {
-          (*currSlice)->listX[i][j]->p_curr_img     = (*currSlice)->listX[i][j]->p_img    [(short) p_Vid->colour_plane_id];
-          (*currSlice)->listX[i][j]->p_curr_img_sub = (*currSlice)->listX[i][j]->p_img_sub[(short) p_Vid->colour_plane_id];
-        }
+        (*currSlice)->listX[i][j]->p_curr_img     = (*currSlice)->listX[i][j]->p_img    [(short) p_Vid->colour_plane_id];
+        (*currSlice)->listX[i][j]->p_curr_img_sub = (*currSlice)->listX[i][j]->p_img_sub[(short) p_Vid->colour_plane_id];
       }
     }
+  }
 
-    (*currSlice)->estBitsCabac = NULL;
-    nullify_rddata(&((*currSlice)->rddata_trellis_curr));
-    nullify_rddata(&((*currSlice)->rddata_trellis_best));
+  (*currSlice)->estBitsCabac = NULL;
+  nullify_rddata(&((*currSlice)->rddata_trellis_curr));
+  nullify_rddata(&((*currSlice)->rddata_trellis_best));
 
-    if(p_Vid->mb_aff_frame_flag)
+  if(p_Vid->mb_aff_frame_flag)
+  {
+    nullify_rddata(&((*currSlice)->rddata_top_frame_mb));
+    nullify_rddata(&((*currSlice)->rddata_bot_frame_mb));
+    if ( p_Inp->MbInterlace != FRAME_MB_PAIR_CODING )
     {
-      nullify_rddata(&((*currSlice)->rddata_top_frame_mb));
-      nullify_rddata(&((*currSlice)->rddata_bot_frame_mb));
-      if ( p_Inp->MbInterlace != FRAME_MB_PAIR_CODING )
-      {
-        nullify_rddata(&((*currSlice)->rddata_top_field_mb));
-        nullify_rddata(&((*currSlice)->rddata_bot_field_mb));
-      }
+      nullify_rddata(&((*currSlice)->rddata_top_field_mb));
+      nullify_rddata(&((*currSlice)->rddata_bot_field_mb));
     }
+  }
 
-    (*currSlice)->all_mv    = NULL;  
-    (*currSlice)->bipred_mv = NULL;
+  (*currSlice)->all_mv    = NULL;
+  (*currSlice)->bipred_mv = NULL;
 
-    (*currSlice)->tmp_mv8      = NULL;
-    (*currSlice)->motion_cost8 = NULL;
-    (*currSlice)->tmp_mv4      = NULL;
-    (*currSlice)->motion_cost4 = NULL;
-    (*currSlice)->p_EPZS       = NULL;
+  (*currSlice)->tmp_mv8      = NULL;
+  (*currSlice)->motion_cost8 = NULL;
+  (*currSlice)->tmp_mv4      = NULL;
+  (*currSlice)->motion_cost4 = NULL;
+  (*currSlice)->p_EPZS       = NULL;
 
-    (*currSlice)->mb_pred   = NULL;
-    (*currSlice)->mb_rres   = NULL;
-    (*currSlice)->mb_ores   = NULL;
-    (*currSlice)->mpr_4x4   = NULL;
-    (*currSlice)->mpr_8x8   = NULL;
-    (*currSlice)->mpr_16x16 = NULL;
+  (*currSlice)->mb_pred   = NULL;
+  (*currSlice)->mb_rres   = NULL;
+  (*currSlice)->mb_ores   = NULL;
+  (*currSlice)->mpr_4x4   = NULL;
+  (*currSlice)->mpr_8x8   = NULL;
+  (*currSlice)->mpr_16x16 = NULL;
 
-    (*currSlice)->cofAC = NULL;
-    (*currSlice)->cofDC = NULL;
+  (*currSlice)->cofAC = NULL;
+  (*currSlice)->cofDC = NULL;
 
-    (*currSlice)->tblk4x4 = NULL;
-    (*currSlice)->tblk16x16 = NULL;
-    (*currSlice)->i16blk4x4 = NULL;
+  (*currSlice)->tblk4x4 = NULL;
+  (*currSlice)->tblk16x16 = NULL;
+  (*currSlice)->i16blk4x4 = NULL;
 
-    (*currSlice)->direct_ref_idx = NULL;
-    (*currSlice)->direct_pdir = NULL;   
+  (*currSlice)->direct_ref_idx = NULL;
+  (*currSlice)->direct_pdir = NULL;
 
-    init_coding_state_methods(*currSlice);
+  init_coding_state_methods(*currSlice);
 }
 
 /*!

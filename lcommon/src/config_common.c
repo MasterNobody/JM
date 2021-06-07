@@ -409,7 +409,7 @@ int DisplayParams(Mapping *Map, char *message)
       printf("Parameter %s = ""%s""\n",Map[i].TokenName,(char *)  (Map[i].Place));
     else if (Map[i].Type == 2)
       printf("Parameter %s = %.2f\n",Map[i].TokenName,* (double *) (Map[i].Place));
-      i++;
+    i++;
   }
   printf("******************************************************\n");
   return i;

@@ -220,7 +220,7 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
           ui8 = (unsigned char) (imgX[i][j]);
           buf[(j-crop_left+((i-crop_top)*iOutStride))] = ui8;
         }
-        break;
+      break;
     }
   case 2:
     {
@@ -231,7 +231,7 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
           ui16  = (uint16) ((tmp16 >> 8) | ((tmp16&0xFF)<<8));
           memcpy(buf+((j-crop_left+((i-crop_top)*iOutStride))*2),&(ui16), 2);
         }
-        break;
+      break;
     }
   case 4:
     {
@@ -242,7 +242,7 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
           ui32  = (unsigned long) (((tmp32&0xFF00)<<8) | ((tmp32&0xFF)<<24) | ((tmp32&0xFF0000)>>8) | ((tmp32&0xFF000000)>>24));
           memcpy(buf+((j-crop_left+((i-crop_top)*iOutStride))*4),&(ui32), 4);
         }
-        break;
+      break;
     }
   default:
     {

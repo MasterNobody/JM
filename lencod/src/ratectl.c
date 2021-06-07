@@ -303,11 +303,11 @@ void rc_init_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
 
-  // update the number of MBs in the basic unit for MBAFF coding
-  if( (p_Inp->MbInterlace) && (p_Inp->basicunit < p_Vid->FrameSizeInMbs) && (p_Vid->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && p_Vid->number) ) )
-    p_Vid->BasicUnit = p_Inp->basicunit << 1;
-  else
-    p_Vid->BasicUnit = p_Inp->basicunit;
+    // update the number of MBs in the basic unit for MBAFF coding
+    if( (p_Inp->MbInterlace) && (p_Inp->basicunit < p_Vid->FrameSizeInMbs) && (p_Vid->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && p_Vid->number) ) )
+      p_Vid->BasicUnit = p_Inp->basicunit << 1;
+    else
+      p_Vid->BasicUnit = p_Inp->basicunit;
 
     if ( p_Inp->RDPictureDecision )
     {    

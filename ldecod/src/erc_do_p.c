@@ -286,17 +286,17 @@ static void copyBetweenFrames (frame *recfr, int currYBlockNum, int picSizeX, in
       recfr->yptr[location] = refPic->imgY[j][k];
     }
 
-    for (j = ymin >> uv_div[1][dec_picture->chroma_format_idc]; j < (ymin + regionSize) >> uv_div[1][dec_picture->chroma_format_idc]; j++)
-      for (k = xmin >> uv_div[0][dec_picture->chroma_format_idc]; k < (xmin + regionSize) >> uv_div[0][dec_picture->chroma_format_idc]; k++)
-      {
-//        location = j * picSizeX / 2 + k;
-        location = ((j * picSizeX) >> uv_div[0][dec_picture->chroma_format_idc]) + k;
+  for (j = ymin >> uv_div[1][dec_picture->chroma_format_idc]; j < (ymin + regionSize) >> uv_div[1][dec_picture->chroma_format_idc]; j++)
+    for (k = xmin >> uv_div[0][dec_picture->chroma_format_idc]; k < (xmin + regionSize) >> uv_div[0][dec_picture->chroma_format_idc]; k++)
+    {
+//      location = j * picSizeX / 2 + k;
+      location = ((j * picSizeX) >> uv_div[0][dec_picture->chroma_format_idc]) + k;
 
-//th        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
-//th        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
-        recfr->uptr[location] = refPic->imgUV[0][j][k];
-        recfr->vptr[location] = refPic->imgUV[1][j][k];
-      }
+//th      recfr->uptr[location] = dec_picture->imgUV[0][j][k];
+//th      recfr->vptr[location] = dec_picture->imgUV[1][j][k];
+      recfr->uptr[location] = refPic->imgUV[0][j][k];
+      recfr->vptr[location] = refPic->imgUV[1][j][k];
+    }
 }
 
 /*!

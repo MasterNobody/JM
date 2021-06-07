@@ -459,7 +459,7 @@ void buf2img_bitshift ( imgpel** imgX,            //!< Pointer to image plane
           {
             imgX[j][i]= (imgpel) rshift_rnd(buf[i + j*size_x], bitshift);
           }
-          break;
+        break;
       }
     case 2:
       {
@@ -470,7 +470,7 @@ void buf2img_bitshift ( imgpel** imgX,            //!< Pointer to image plane
             ui16  = (tmp16 >> 8) | ((tmp16 & 0xFF) << 8);
             imgX[j][i] = (imgpel) rshift_rnd(ui16, bitshift);
           }
-          break;
+        break;
       }
     case 4:
       {
@@ -481,6 +481,7 @@ void buf2img_bitshift ( imgpel** imgX,            //!< Pointer to image plane
             ui32  = ((tmp32 & 0xFF00) << 8) | ((tmp32 & 0xFF)<<24) | ((tmp32 & 0xFF0000)>>8) | ((tmp32 & 0xFF000000)>>24);
             imgX[j][i] = (imgpel) rshift_rnd(ui32, bitshift);
           }
+        break;
       }
     default:
       {

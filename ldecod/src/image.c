@@ -917,11 +917,11 @@ int decode_one_frame(DecoderParams *pDecoder)
        ppSliceList[p_Vid->iSliceNumOfCurrPic-1]->end_mb_nr_plus1 = p_Vid->FrameSizeInMbs/2;
       else
        ppSliceList[p_Vid->iSliceNumOfCurrPic-1]->end_mb_nr_plus1 = p_Vid->FrameSizeInMbs/(1+ppSliceList[p_Vid->iSliceNumOfCurrPic-1]->field_pic_flag);
-       p_Vid->newframe = 1;
-       currSlice->current_slice_nr = 0;
-       //keep it in currentslice;
-       ppSliceList[p_Vid->iSliceNumOfCurrPic] = p_Vid->pNextSlice;
-       p_Vid->pNextSlice = currSlice; 
+      p_Vid->newframe = 1;
+      currSlice->current_slice_nr = 0;
+      //keep it in currentslice;
+      ppSliceList[p_Vid->iSliceNumOfCurrPic] = p_Vid->pNextSlice;
+      p_Vid->pNextSlice = currSlice;
     }
 
     copy_slice_info(currSlice, p_Vid->old_slice);

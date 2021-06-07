@@ -394,15 +394,15 @@ void RDOQ_update_mode(Slice *currSlice, RD_PARAMS *enc_mb)
   for(i=0; i<MAXMODE; i++)
     enc_mb->valid[i] = 0;
 
-    enc_mb->valid[mb_type] = 1;  
+  enc_mb->valid[mb_type] = 1;
 
-    if(mb_type  == P8x8)
-    {            
-      enc_mb->valid[4] = (short) (InterSearch[4]);
-      enc_mb->valid[5] = (short) (InterSearch[5] && !(p_Inp->Transform8x8Mode==2));
-      enc_mb->valid[6] = (short) (InterSearch[6] && !(p_Inp->Transform8x8Mode==2));
-      enc_mb->valid[7] = (short) (InterSearch[7] && !(p_Inp->Transform8x8Mode==2));
-    }
+  if(mb_type  == P8x8)
+  {
+    enc_mb->valid[4] = (short) (InterSearch[4]);
+    enc_mb->valid[5] = (short) (InterSearch[5] && !(p_Inp->Transform8x8Mode==2));
+    enc_mb->valid[6] = (short) (InterSearch[6] && !(p_Inp->Transform8x8Mode==2));
+    enc_mb->valid[7] = (short) (InterSearch[7] && !(p_Inp->Transform8x8Mode==2));
+  }
 }
 
 void copy_rddata_trellis (Macroblock *currMB, RD_DATA *dest, RD_DATA *src)

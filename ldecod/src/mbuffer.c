@@ -2923,40 +2923,40 @@ void append_interview_list(DecodedPictureBuffer *p_Dpb,
   else
     fld_idx = 0;
 
-    if(currPicStructure==FRAME)
-    {
-      pic_avail = (fs->is_used == 3);
-      if (pic_avail)
-        poc = fs->frame->poc;
-    }
-    else if(currPicStructure==TOP_FIELD)
-    {
-      pic_avail = fs->is_used & 1;
-      if (pic_avail)
-        poc = fs->top_field->poc;
-    }
-    else if(currPicStructure==BOTTOM_FIELD)
-    {
-      pic_avail = fs->is_used & 2;
-      if (pic_avail)
-        poc = fs->bottom_field->poc;
-    }
-    else
-      pic_avail =0;
+  if(currPicStructure==FRAME)
+  {
+    pic_avail = (fs->is_used == 3);
+    if (pic_avail)
+      poc = fs->frame->poc;
+  }
+  else if(currPicStructure==TOP_FIELD)
+  {
+    pic_avail = fs->is_used & 1;
+    if (pic_avail)
+      poc = fs->top_field->poc;
+  }
+  else if(currPicStructure==BOTTOM_FIELD)
+  {
+    pic_avail = fs->is_used & 2;
+    if (pic_avail)
+      poc = fs->bottom_field->poc;
+  }
+  else
+    pic_avail =0;
 
-    if(pic_avail && fs->inter_view_flag[fld_idx])
+  if(pic_avail && fs->inter_view_flag[fld_idx])
+  {
+    if(poc == currPOC)
     {
-      if(poc == currPOC)
+      if(is_view_id_in_ref_view_list(fs->view_id, ref_view_id, num_ref_views))
       {
-        if(is_view_id_in_ref_view_list(fs->view_id, ref_view_id, num_ref_views))
-        {
-          //add one inter-view reference;
-          list[*listXsize] = fs; 
-          //next;
-          (*listXsize)++;
-        }
+        //add one inter-view reference;
+        list[*listXsize] = fs;
+        //next;
+        (*listXsize)++;
       }
     }
+  }
 }
 
 #endif
