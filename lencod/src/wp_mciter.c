@@ -724,8 +724,8 @@ int TestWPBSliceAlg2(Slice *currSlice, int select_method)
   {
     int active_refs[2];
 
-    active_refs[0] = (p_Inp->B_List0_refs == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs[view_id], currSlice->listXsize[0]));
-    active_refs[1] = (p_Inp->B_List1_refs == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs[view_id], currSlice->listXsize[1]));
+    active_refs[0] = (p_Inp->B_List0_refs[view_id] == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs[view_id], currSlice->listXsize[0]));
+    active_refs[1] = (p_Inp->B_List1_refs[view_id] == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs[view_id], currSlice->listXsize[1]));
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
