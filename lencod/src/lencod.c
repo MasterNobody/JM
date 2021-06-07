@@ -114,6 +114,7 @@ static const int mb_width_cr[4] = {0, 8, 8,16};
 static const int mb_height_cr[4]= {0, 8,16,16};
 
 EncoderParams   *p_Enc = NULL;
+char errortext[ET_SIZE];
 
 static void set_level_indices   (VideoParameters *p_Vid);
 static void chroma_mc_setup     (VideoParameters *p_Vid);

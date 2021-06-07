@@ -20,10 +20,10 @@
 #define PROFILE_IDC     88
 #define LEVEL_IDC       21
 
+#ifdef INCLUDED_BY_CONFIGFILE_C
+
 InputParameters cfgparams;
 
-
-#ifdef INCLUDED_BY_CONFIGFILE_C
 // Mapping_Map Syntax:
 // {NAMEinConfigFile,  &cfgparams.VariableName, Type, InitialValue, LimitType, MinLimit, MaxLimit, CharSize}
 // Types : {0:int, 1:text, 2: double}
@@ -627,6 +627,7 @@ Mapping MapView1[] = {
 #endif
 
 #ifndef INCLUDED_BY_CONFIGFILE_C
+extern InputParameters cfgparams;
 extern Mapping Map[];
 extern Mapping MapView1[];
 #endif
